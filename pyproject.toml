@@ -1,0 +1,19 @@
+[project]
+name = "quantlab"
+version = "0.1.0"
+description = "Laboratorio cuantitativo personal: datos, estrategias, backtesting y (futuro) ejecución."
+requires-python = ">=3.10"
+dependencies = [
+  "pandas>=2.2",
+  "numpy>=2.0",
+  "yfinance>=0.2",
+  "matplotlib>=3.9",
+  "ta>=0.11",
+  "python-dotenv>=1.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
