@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 import pandas as pd
+
+from quantlab.backtest.costs import slippage_fixed, slippage_atr, exec_price
 
 
 @dataclass
 class Trade:
     timestamp: pd.Timestamp
     side: str              # "BUY" | "SELL"
-    price: float
+    close: float
+    exec_price: float
     qty: float
     fee: float
     equity_after: float
+    slippage: float
     reason: str = ""
 
 
@@ -21,65 +25,63 @@ def run_paper_broker(
     signals: pd.Series,
     initial_cash: float = 1000.0,
     fee_rate: float = 0.002,
+    slippage_bps: float = 8.0,
+    slippage_mode: str = "fixed",   # "fixed" | "atr"
+    k_atr: float = 0.05,
 ) -> pd.DataFrame:
-    """
-    Paper broker simple:
-      - Estado: cash + position_qty
-      - Compra: invierte TODO el cash en el activo (market al close) cuando signal==1
-      - Venta: liquida TODA la posición cuando signal==-1
-      - Fee: proporcional al notional de cada operación
-      - Log: devuelve DataFrame de trades
-    """
     if df.empty:
         raise ValueError("df está vacío")
     if "close" not in df.columns:
         raise ValueError("df debe tener columna 'close'")
 
-    # Alinea señales al índice del df
     signals = signals.reindex(df.index).fillna(0).astype(int)
 
     cash = float(initial_cash)
     qty = 0.0
     trades: List[Trade] = []
 
-    for ts, row in df.iterrows():
-        price = float(row["close"])
+    for i, (ts, row) in enumerate(df.iterrows()):
+        close = float(row["close"])
         s = int(signals.loc[ts])
 
-        # BUY (si estás fuera)
+        if slippage_mode == "atr":
+            slip = slippage_atr(df, i, k_atr=k_atr)
+        else:
+            slip = slippage_fixed(slippage_bps)
+
+        # BUY
         if s == 1 and qty == 0.0 and cash > 0.0:
+            px = exec_price(close, "BUY", slip)
             notional = cash
             fee = notional * fee_rate
             spend = notional - fee
-            buy_qty = spend / price
+            buy_qty = spend / px
 
             qty = buy_qty
             cash = 0.0
+            equity = cash + qty * close  # mark-to-market al close
 
-            equity = cash + qty * price
-            trades.append(Trade(ts, "BUY", price, qty, fee, equity, reason="signal=1"))
+            trades.append(Trade(ts, "BUY", close, px, qty, fee, equity, slip, reason="signal=1"))
 
-        # SELL (si estás dentro)
+        # SELL
         elif s == -1 and qty > 0.0:
-            notional = qty * price
+            px = exec_price(close, "SELL", slip)
+            notional = qty * px
             fee = notional * fee_rate
             proceeds = notional - fee
 
             cash = proceeds
             qty = 0.0
-
             equity = cash
-            trades.append(Trade(ts, "SELL", price, 0.0, fee, equity, reason="signal=-1"))
 
-    # Trade log a DataFrame
-    trades_df = pd.DataFrame([t.__dict__ for t in trades])
-    return trades_df
+            trades.append(Trade(ts, "SELL", close, px, 0.0, fee, equity, slip, reason="signal=-1"))
+
+    return pd.DataFrame([t.__dict__ for t in trades])
 
 
 def save_trades_csv(trades_df: pd.DataFrame, path: str) -> None:
+    cols = ["timestamp", "side", "close", "exec_price", "qty", "fee", "equity_after", "slippage", "reason"]
     if trades_df is None or trades_df.empty:
-        # Crea CSV vacío con columnas estándar para que sea predecible
-        cols = ["timestamp", "side", "price", "qty", "fee", "equity_after", "reason"]
         pd.DataFrame(columns=cols).to_csv(path, index=False)
         return
     trades_df.to_csv(path, index=False)

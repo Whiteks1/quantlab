@@ -1,38 +1,77 @@
+import numpy as np
 import pandas as pd
 
-def run_backtest(df: pd.DataFrame, signals: pd.Series, fee_rate: float = 0.002) -> pd.DataFrame:
+from quantlab.backtest.costs import slippage_fixed, slippage_atr
+
+
+def run_backtest(
+    df: pd.DataFrame,
+    signals: pd.Series,
+    fee_rate: float = 0.002,
+    slippage_bps: float = 8.0,
+    slippage_mode: str = "fixed",  # "fixed" | "atr"
+    k_atr: float = 0.05,
+) -> pd.DataFrame:
     """
-    Backtest simplificado:
-    - Posición: 1 cuando entra, 0 cuando sale.
-    - Ejecuta al cierre del día (simplificación).
-    - Aplica comisión al entrar y al salir.
+    Backtest simplificado (CoW-safe para pandas 3.x):
+      - position se construye en un array y luego se asigna 1 vez
+      - fees/slippage se aplican el día del trade como penalización
     """
     out = df.copy()
-    out["signal"] = signals
-    out["position"] = 0
 
+    # Señales alineadas
+    sig = signals.reindex(out.index).fillna(0).astype(int).to_numpy()
+    out["signal"] = sig
+
+    n = len(out)
+    positions = np.zeros(n, dtype=int)
+
+    # Construir posición (estado)
     pos = 0
-    for i in range(len(out)):
-        s = int(out["signal"].iloc[i])
+    for i in range(n):
+        s = int(sig[i])
         if s == 1 and pos == 0:
             pos = 1
-            out.iloc[i, out.columns.get_loc("position")] = pos
         elif s == -1 and pos == 1:
             pos = 0
-            out.iloc[i, out.columns.get_loc("position")] = pos
-        else:
-            out.iloc[i, out.columns.get_loc("position")] = pos
+        positions[i] = pos
 
-    # Returns
+    out["position"] = positions
+
+    # Returns close-to-close
     out["ret"] = out["close"].pct_change().fillna(0.0)
-    out["strategy_ret"] = out["ret"] * out["position"].shift(1).fillna(0)
 
-    # Comisiones: cuando cambia position (entry/exit)
-    out["trade"] = out["position"].diff().fillna(out["position"])
-    out["fees"] = 0.0
-    out.loc[out["trade"].abs() > 0, "fees"] = fee_rate
+    # Retorno estrategia usa position(t-1)
+    pos_shift = pd.Series(positions, index=out.index).shift(1).fillna(0).to_numpy()
+    out["strategy_ret"] = out["ret"].to_numpy() * pos_shift
 
-    out["strategy_ret_net"] = out["strategy_ret"] - out["fees"]
+    # Trades: entry/exit
+    trade = np.diff(positions, prepend=positions[0])
+    out["trade"] = trade
+
+    # Costes
+    fees = np.zeros(n, dtype=float)
+    slip_cost = np.zeros(n, dtype=float)
+
+    for i in range(n):
+        if trade[i] == 0:
+            continue
+
+        # comisión (aprox) como penalización fija en el día del trade
+        fees[i] = float(fee_rate)
+
+        # slippage (fixed o atr) como penalización adicional en el día del trade
+        if slippage_mode == "atr":
+            slip = slippage_atr(out, i, k_atr=k_atr)
+        else:
+            slip = slippage_fixed(slippage_bps)
+
+        slip_cost[i] = slip
+
+    out["fees"] = fees
+    out["slip_cost"] = slip_cost
+
+    out["strategy_ret_net"] = out["strategy_ret"] - out["fees"] - out["slip_cost"]
     out["equity"] = (1.0 + out["strategy_ret_net"]).cumprod()
 
     return out

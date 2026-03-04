@@ -1,4 +1,5 @@
 import argparse
+from email import parser
 import os
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
@@ -35,6 +36,11 @@ def main() -> None:
     # Paper broker
     parser.add_argument("--paper", action="store_true", help="Ejecuta paper broker + CSV de trades")
     parser.add_argument("--initial_cash", type=float, default=1000.0, help="Cash inicial para paper broker")
+    
+    # Slippage
+    parser.add_argument("--slippage_bps", type=float, default=8.0, help="Slippage fijo en bps (10bps=0.10%)")
+    parser.add_argument("--slippage_mode", default="fixed", choices=["fixed", "atr"])
+    parser.add_argument("--k_atr", type=float, default=0.05, help="Sensibilidad slippage ATR (si slippage_mode=atr)")
 
     args = parser.parse_args()
 
@@ -62,8 +68,16 @@ def main() -> None:
     os.makedirs(args.outdir, exist_ok=True)
 
     # 4) Backtest (equity curve “vectorizada”)
-    bt = run_backtest(df, signals, fee_rate=args.fee)
+    bt = run_backtest(
+        df=df,
+        signals=signals,
+        fee_rate=args.fee,
+        slippage_bps=args.slippage_bps,
+        slippage_mode=args.slippage_mode,
+        k_atr=args.k_atr,)
     metrics = compute_metrics(bt)
+    
+ 
 
     print("\n=== BACKTEST METRICS ===")
     for k, v in metrics.items():
@@ -106,7 +120,11 @@ def main() -> None:
             signals=signals,
             initial_cash=args.initial_cash,
             fee_rate=args.fee,
+            slippage_bps=args.slippage_bps,
+            slippage_mode=args.slippage_mode,
+            k_atr=args.k_atr,
         )
+        
         trades_path = os.path.join(args.outdir, "trades.csv")
         save_trades_csv(trades_df, trades_path)
 
