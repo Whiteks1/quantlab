@@ -21,4 +21,6 @@ build/
 data/
 outputs/
 *.log
-*.pngout*.txt
+*.png
+*.out
+*.txt
