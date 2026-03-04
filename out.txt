@@ -1,0 +1,46 @@
+Traceback (most recent call last):
+  File "C:\Users\marce\Documents\QUANT LAB PERSONAL\quant_lab\main.py", line 212, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\marce\Documents\QUANT LAB PERSONAL\quant_lab\main.py", line 111, in main
+    args = parser.parse_args()
+  File "C:\Users\marce\AppData\Local\Programs\Python\Python313\Lib\argparse.py", line 1889, in parse_args
+    args, argv = self.parse_known_args(args, namespace)
+                 ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\marce\AppData\Local\Programs\Python\Python313\Lib\argparse.py", line 1899, in parse_known_args
+    return self._parse_known_args2(args, namespace, intermixed=False)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\marce\AppData\Local\Programs\Python\Python313\Lib\argparse.py", line 1928, in _parse_known_args2
+    namespace, args = self._parse_known_args(args, namespace, intermixed)
+                      ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\marce\AppData\Local\Programs\Python\Python313\Lib\argparse.py", line 2179, in _parse_known_args
+    start_index = consume_optional(start_index)
+  File "C:\Users\marce\AppData\Local\Programs\Python\Python313\Lib\argparse.py", line 2103, in consume_optional
+    take_action(action, args, option_string)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\marce\AppData\Local\Programs\Python\Python313\Lib\argparse.py", line 2004, in take_action
+    action(self, namespace, argument_values, option_string)
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\marce\AppData\Local\Programs\Python\Python313\Lib\argparse.py", line 1121, in __call__
+    parser.print_help()
+    ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\marce\AppData\Local\Programs\Python\Python313\Lib\argparse.py", line 2616, in print_help
+    self._print_message(self.format_help(), file)
+                        ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\marce\AppData\Local\Programs\Python\Python313\Lib\argparse.py", line 2600, in format_help
+    return formatter.format_help()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\marce\AppData\Local\Programs\Python\Python313\Lib\argparse.py", line 284, in format_help
+    help = self._root_section.format_help()
+  File "C:\Users\marce\AppData\Local\Programs\Python\Python313\Lib\argparse.py", line 215, in format_help
+    item_help = join([func(*args) for func, args in self.items])
+                      ~~~~^^^^^^^
+  File "C:\Users\marce\AppData\Local\Programs\Python\Python313\Lib\argparse.py", line 215, in format_help
+    item_help = join([func(*args) for func, args in self.items])
+                      ~~~~^^^^^^^
+  File "C:\Users\marce\AppData\Local\Programs\Python\Python313\Lib\argparse.py", line 509, in _format_action
+    help_text = self._expand_help(action)
+  File "C:\Users\marce\AppData\Local\Programs\Python\Python313\Lib\argparse.py", line 599, in _expand_help
+    return self._get_help_string(action) % params
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~
+ValueError: unsupported format character ')' (0x29) at index 33

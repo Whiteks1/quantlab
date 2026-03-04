@@ -1,0 +1,18 @@
+# Grid Search Experiment Configuration
+# ETH-USD 2023 grid
+
+# Global settings
+ticker: "ETH-USD"
+start: "2023-01-01"
+end: "2024-01-01"
+interval: "1d"
+fee: 0.002
+slippage_mode: "fixed"
+slippage_bps: 8.0
+k_atr: 0.05
+
+# Strategy Parameter Grid
+param_grid:
+  rsi_buy_max: [55.0, 60.0, 65.0]
+  rsi_sell_min: [70.0, 75.0, 80.0]
+  cooldown_days: [0, 2, 5]

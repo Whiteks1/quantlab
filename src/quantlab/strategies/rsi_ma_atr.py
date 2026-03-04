@@ -30,6 +30,9 @@ class RsiMaAtrStrategy(Strategy):
         self.cooldown_days = int(cooldown_days)
 
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+        if df.empty:
+            return pd.Series(dtype=int)
+
         required = {"close", "ma20", "rsi"}
         missing = required - set(df.columns)
         if missing:
@@ -56,17 +59,17 @@ class RsiMaAtrStrategy(Strategy):
         for i in range(len(df)):
             if cooldown > 0:
                 cooldown -= 1
-                signals.iat[i] = 0
+                signals.iloc[i] = 0
                 continue
 
             if not in_position:
-                if bool(buy_cond.iat[i]):
-                    signals.iat[i] = 1
+                if bool(buy_cond.iloc[i]):
+                    signals.iloc[i] = 1
                     in_position = True
                     cooldown = self.cooldown_days
             else:
-                if bool(sell_cond.iat[i]):
-                    signals.iat[i] = -1
+                if bool(sell_cond.iloc[i]):
+                    signals.iloc[i] = -1
                     in_position = False
                     cooldown = self.cooldown_days
 
