@@ -12,7 +12,7 @@ from quantlab.backtest.engine import run_backtest
 from quantlab.backtest.metrics import compute_metrics
 from quantlab.execution.paper import run_paper_broker, save_trades_csv
 from quantlab.reporting import write_report
-from quantlab.experiments import run_experiments
+from quantlab.experiments import run_sweep
 
 
 def _plot_equity(bt, out_path: str, ticker: str, strategy_name: str) -> None:
@@ -116,6 +116,12 @@ def main() -> None:
     args = parser.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
 
+    # --- SWEEP MODE (exits early) ---
+    if args.sweep:
+        from quantlab.experiments import run_sweep
+        run_sweep(args.sweep)
+        return
+
     # 1) Datos
     df = fetch_ohlc(args.ticker, args.start, args.end, interval=args.interval)
 
@@ -212,24 +218,6 @@ def main() -> None:
         )
         print(f"\nSaved: {report_path}")
     
-    # 7) Sweep / Experiments (opcional)
-    if args.sweep:
-        res_df = run_experiments(args.sweep)
-        
-        # Leaderboard
-        print("\n=== EXPERIMENT LEADERBOARD (Top 10 by Sharpe) ===")
-        # Sort by Sharpe des, then Return des
-        top = res_df.sort_values(["sharpe_simple", "total_return"], ascending=False).head(10)
-        
-        cols_to_show = [
-            "rsi_buy_max", "rsi_sell_min", "cooldown_days",
-            "sharpe_simple", "total_return", "max_drawdown", "trades"
-        ]
-        # Only show what we have
-        show = [c for c in cols_to_show if c in top.columns]
-        print(top[show].to_string(index=False))
-        return
-
 
 if __name__ == "__main__":
     main()
