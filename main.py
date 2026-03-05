@@ -114,13 +114,13 @@ def main() -> None:
     parser.add_argument("--sweep", help="Path a .yaml de configuración para grid search (ej: configs/experiments/eth_2023_grid.yaml)")
 
     args = parser.parse_args()
-    os.makedirs(args.outdir, exist_ok=True)
 
     # --- SWEEP MODE (exits early) ---
     if args.sweep:
-        from quantlab.experiments import run_sweep
         run_sweep(args.sweep)
         return
+
+    os.makedirs(args.outdir, exist_ok=True)
 
     # 1) Datos
     df = fetch_ohlc(args.ticker, args.start, args.end, interval=args.interval)

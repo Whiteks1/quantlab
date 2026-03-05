@@ -271,10 +271,10 @@ def run_walkforward(
 
         print(
             f"Summary split={split_name} | "
+            f"n_train={len(runs)}, n_sel={len(selected_df)}, n_test={len(test_df)} | "
             f"train_best_sharpe={best_train_sharpe:.4f} | "
             f"test_best_sharpe={best_test_sharpe:.4f} | "
-            f"test_best_return={best_test_ret:.4f} | "
-            f"selected={len(selected_df)}"
+            f"test_best_return={best_test_ret:.4f}"
         )
 
     final_df = pd.concat(all_results, ignore_index=True)
@@ -298,7 +298,16 @@ def run_sweep(config_path: str) -> pd.DataFrame:
     """
     config = load_experiment_config(config_path)
     if is_walkforward_config(config):
-        return run_walkforward(config)
+        df = run_walkforward(config)
+        
+        # Print FINAL test leaderboard (Top 10 by sharpe_simple)
+        test_results = df[df["phase"] == "test"]
+        if not test_results.empty:
+            print("\n" + "="*50)
+            print("WALKFORWARD FINAL TEST LEADERBOARD (OOS)")
+            _print_grid_leaderboard(test_results, top=10)
+        return df
+        
     return run_experiments_grid(config)
 
 
