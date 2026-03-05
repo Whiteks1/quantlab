@@ -6,5 +6,9 @@ from .trade_analytics import (
 from .report import (
     build_report_payload,
     render_report_md,
+    write_report as write_trade_report
+)
+from .run_report import (
+    build_report,
     write_report
 )

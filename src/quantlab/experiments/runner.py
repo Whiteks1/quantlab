@@ -18,6 +18,7 @@ from quantlab.backtest.engine import run_backtest
 from quantlab.backtest.metrics import compute_metrics
 from quantlab.execution.paper import run_paper_broker
 from quantlab.reporting.trade_analytics import compute_round_trips, aggregate_trade_metrics
+from quantlab.reporting.run_report import write_report as write_run_report
 
 
 def _ensure_parent_dir(path: str) -> None:
@@ -301,6 +302,10 @@ def run_experiments_grid(config: Dict[str, Any], out_dir: Optional[str] = None, 
         config_path=config_path,
         extra_meta={"n_runs": len(runs)},
     )
+    try:
+        write_run_report(str(out_dir_path))
+    except Exception as e:
+        print(f"Warning: Failed to generate run report: {e}")
     print(f"Run directory: {out_dir_path}")
 
     return res_df
@@ -461,6 +466,10 @@ def run_walkforward(config: Dict[str, Any], out_dir: Optional[str] = None, confi
             "n_test_runs": total_test,
         },
     )
+    try:
+        write_run_report(str(out_dir_path))
+    except Exception as e:
+        print(f"Warning: Failed to generate run report: {e}")
 
     print(f"\nWalkforward results saved to: {out_dir_path}")
     return final_df

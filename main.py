@@ -11,7 +11,8 @@ from quantlab.strategies.rsi_ma_atr import RsiMaAtrStrategy
 from quantlab.backtest.engine import run_backtest
 from quantlab.backtest.metrics import compute_metrics
 from quantlab.execution.paper import run_paper_broker, save_trades_csv
-from quantlab.reporting import write_report
+from quantlab.reporting.report import write_report as write_trade_report
+from quantlab.reporting.run_report import write_report as write_run_report
 from quantlab.experiments import run_sweep
 
 
@@ -61,7 +62,7 @@ def _generate_report(
     report_md = os.path.join(outdir, "report.md")
     report_json = os.path.join(outdir, "report.json")
     
-    payload = write_report(
+    payload = write_trade_report(
         trades_csv_path=trades_path,
         out_md_path=report_md,
         out_json_path=report_json,
@@ -109,7 +110,7 @@ def main() -> None:
     parser.add_argument("--k_atr", type=float, default=0.05, help="Sensibilidad slippage ATR (si slippage_mode=atr)")
 
     # Reporting
-    parser.add_argument("--report", action="store_true", help="Genera outputs/report.md usando trades (paper o CSV)")
+    parser.add_argument("--report", nargs="?", const=True, help="Genera report para un run (pasa el path) o para la ejecución actual (sin path)")
     parser.add_argument("--trades_csv", default=None, help="Path a trades.csv si quieres regenerar report sin --paper")
     parser.add_argument("--sweep", help="Path a .yaml de configuración para grid search (ej: configs/experiments/eth_2023_grid.yaml)")
     parser.add_argument("--sweep_outdir", default=None, help="Manual override for sweep output directory")
@@ -199,7 +200,17 @@ def main() -> None:
 
     # 6) Report (opcional)
     if args.report:
-        # Si no hicimos paper en esta ejecución, cargamos CSV existente
+        # Si args.report es un string, es un path a un run_dir
+        if isinstance(args.report, str):
+            if os.path.isdir(args.report):
+                write_run_report(args.report)
+                print(f"\nStandardized run report generated for: {args.report}")
+                return
+            else:
+                print(f"\nError: {args.report} is not a valid directory.")
+                return
+
+        # Comportamiento legacy: report de trade de la ejecución actual
         if trades_df is None:
             csv_path = args.trades_csv or trades_path
             if not os.path.exists(csv_path):
