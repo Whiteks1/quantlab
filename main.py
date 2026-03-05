@@ -96,7 +96,7 @@ def main() -> None:
     parser.add_argument("--cooldown_days", type=int, default=0)
 
     # Output
-    parser.add_argument("--outdir", default="outputs")
+    parser.add_argument("--outdir", default=None, help="Output directory (default: outputs)")
     parser.add_argument("--save_price_plot", action="store_true")
 
     # Paper broker
@@ -112,15 +112,20 @@ def main() -> None:
     parser.add_argument("--report", action="store_true", help="Genera outputs/report.md usando trades (paper o CSV)")
     parser.add_argument("--trades_csv", default=None, help="Path a trades.csv si quieres regenerar report sin --paper")
     parser.add_argument("--sweep", help="Path a .yaml de configuración para grid search (ej: configs/experiments/eth_2023_grid.yaml)")
+    parser.add_argument("--sweep_outdir", default=None, help="Manual override for sweep output directory")
 
     args = parser.parse_args()
 
     # --- SWEEP MODE (exits early) ---
     if args.sweep:
-        run_sweep(args.sweep)
+        # If sweep_outdir is set, use it. Otherwise, if outdir is set, use it.
+        # If both are None, run_sweep will create a unique dir in outputs/runs/
+        out_dir = args.sweep_outdir or args.outdir
+        run_sweep(args.sweep, out_dir=out_dir)
         return
 
-    os.makedirs(args.outdir, exist_ok=True)
+    outdir = args.outdir or "outputs"
+    os.makedirs(outdir, exist_ok=True)
 
     # 1) Datos
     df = fetch_ohlc(args.ticker, args.start, args.end, interval=args.interval)
@@ -158,18 +163,18 @@ def main() -> None:
     for k, v in metrics.items():
         print(f"{k}: {v}")
 
-    equity_path = os.path.join(args.outdir, "equity.png")
+    equity_path = os.path.join(outdir, "equity.png")
     _plot_equity(bt, equity_path, args.ticker, strat.name)
     print(f"\nSaved: {equity_path}")
 
     if args.save_price_plot:
-        price_path = os.path.join(args.outdir, "price_signals.png")
+        price_path = os.path.join(outdir, "price_signals.png")
         _plot_price_signals(df, signals, price_path, args.ticker, strat.name)
         print(f"Saved: {price_path}")
 
     # 5) Paper broker (opcional)
     trades_df = None
-    trades_path = os.path.join(args.outdir, "trades.csv")
+    trades_path = os.path.join(outdir, "trades.csv")
 
     if args.paper:
         trades_df = run_paper_broker(
@@ -210,7 +215,7 @@ def main() -> None:
             return
 
         report_path = _generate_report(
-            outdir=args.outdir,
+            outdir=outdir,
             ticker=args.ticker,
             strategy_name=strat.name,
             backtest_metrics=metrics,

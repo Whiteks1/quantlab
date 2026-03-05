@@ -1,6 +1,11 @@
 import os
 import itertools
-from typing import List, Dict, Any
+import datetime
+import hashlib
+import json
+import sys
+from typing import List, Dict, Any, Optional
+from pathlib import Path
 
 import yaml
 import pandas as pd
@@ -23,6 +28,61 @@ def _ensure_parent_dir(path: str) -> None:
 def load_experiment_config(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def _get_git_commit() -> str:
+    try:
+        import subprocess
+
+        return subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("utf-8").strip()
+    except Exception:
+        return "unknown"
+
+
+def make_run_dir(base: str = "outputs/runs", mode: str = "grid", config_path: str = "config.yaml") -> Path:
+    """
+    Generate a unique run directory: <base>/YYYYMMDD_HHMMSS_mode_shortsha
+    """
+    now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Hash of config content for uniqueness
+    try:
+        with open(config_path, "rb") as f:
+            config_bytes = f.read()
+            config_hash = hashlib.sha1(config_bytes).hexdigest()[:7]
+    except Exception:
+        config_hash = "unknown"
+
+    run_id = f"{now}_{mode}_{config_hash}"
+
+    path = Path(base) / run_id
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def fetch_ohlc_cached(
+    ticker: str, start: str, end: str, interval: str = "1d", cache_dir: str = "data/cache"
+) -> pd.DataFrame:
+    """
+    Fetch OHLC data with parquet caching.
+    """
+    safe_ticker = ticker.replace("-", "_").replace("/", "_").replace(" ", "_")
+    cache_key = f"{safe_ticker}_{start}_{end}_{interval}".replace(":", "_")
+    os.makedirs(cache_dir, exist_ok=True)
+    cache_file = Path(cache_dir) / f"{cache_key}.parquet"
+
+    if cache_file.exists():
+        df = pd.read_parquet(cache_file)
+        return df
+
+    df = fetch_ohlc(ticker, start, end, interval=interval)
+
+    # Ensure deterministic index and sort
+    df.index.name = "timestamp"
+    df = df.sort_index()
+
+    df.to_parquet(cache_file)
+    return df
 
 
 def expand_grid(config: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -52,7 +112,7 @@ def run_one(config: Dict[str, Any]) -> Dict[str, Any]:
     Run a single configuration through the pipeline.
     """
     # 1) Data
-    df = fetch_ohlc(config["ticker"], config["start"], config["end"], interval=config["interval"])
+    df = fetch_ohlc_cached(config["ticker"], config["start"], config["end"], interval=config["interval"])
 
     # 2) Indicators
     df = add_indicators(df)
@@ -132,12 +192,64 @@ def _print_grid_leaderboard(df: pd.DataFrame, top: int = 10) -> None:
 
     lb = df.sort_values(sort_cols, ascending=[False] * len(sort_cols)).head(top)
 
-    cols = [c for c in ["rsi_buy_max", "rsi_sell_min", "cooldown_days", "sharpe_simple", "total_return", "max_drawdown", "trades"] if c in lb.columns]
+    cols = [
+        c
+        for c in [
+            "rsi_buy_max",
+            "rsi_sell_min",
+            "cooldown_days",
+            "sharpe_simple",
+            "total_return",
+            "max_drawdown",
+            "trades",
+        ]
+        if c in lb.columns
+    ]
     print(f"\n=== EXPERIMENT LEADERBOARD (Top {top} by Sharpe) ===")
     print(lb[cols].to_string(index=False))
 
 
-def run_experiments_grid(config: Dict[str, Any], out_csv: str = "outputs/experiments.csv") -> pd.DataFrame:
+def _save_reproducibility_pack(
+    out_dir: Path,
+    config: Dict[str, Any],
+    mode: str,
+    metrics_summary: List[Dict[str, Any]],
+    config_path: str = "unknown",
+    extra_meta: Optional[Dict[str, Any]] = None,
+) -> None:
+    """
+    Save meta.json and config_resolved.yaml to the run directory.
+    """
+    # config_hash of the actual resolved config
+    config_json = json.dumps(config, sort_keys=True)
+    config_hash = hashlib.sha1(config_json.encode()).hexdigest()
+
+    meta = {
+        "run_id": out_dir.name,
+        "mode": mode,
+        "created_at": datetime.datetime.now().isoformat(),
+        "git_commit": _get_git_commit(),
+        "python_executable": sys.executable,
+        "python_version": sys.version,
+        "config_path": config_path,
+        "config_hash": config_hash,
+        "top10": metrics_summary[:10],
+    }
+    if extra_meta:
+        meta.update(extra_meta)
+
+    with open(out_dir / "meta.json", "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2)
+
+    with open(out_dir / "config_resolved.yaml", "w", encoding="utf-8") as f:
+        yaml.dump(config, f, default_flow_style=False)
+
+
+def run_experiments_grid(config: Dict[str, Any], out_dir: Optional[str] = None, config_path: str = "unknown") -> pd.DataFrame:
+    base = out_dir if out_dir else "outputs/runs"
+    out_dir_path = make_run_dir(base=base, mode="grid", config_path=config_path)
+
+    out_csv = out_dir_path / "experiments.csv"
     runs = expand_grid(config)
 
     results: List[Dict[str, Any]] = []
@@ -152,22 +264,42 @@ def run_experiments_grid(config: Dict[str, Any], out_csv: str = "outputs/experim
 
     res_df = pd.DataFrame(results)
 
-    _ensure_parent_dir(out_csv)
     res_df.to_csv(out_csv, index=False)
     print(f"Saved all results to: {out_csv}")
 
+    # Leaderboard
+    sort_cols = [c for c in ["sharpe_simple", "total_return"] if c in res_df.columns]
+    lb_df = res_df.sort_values(sort_cols, ascending=[False] * len(sort_cols)) if sort_cols else res_df
+    lb_csv = out_dir_path / "leaderboard.csv"
+    lb_df.to_csv(lb_csv, index=False)
+
     _print_grid_leaderboard(res_df, top=10)
+
+    summary_data = lb_df.head(10).to_dict(orient="records")
+    _save_reproducibility_pack(
+        out_dir=out_dir_path,
+        config=config,
+        mode="grid",
+        metrics_summary=summary_data,
+        config_path=config_path,
+        extra_meta={"n_runs": len(runs)},
+    )
+    print(f"Run directory: {out_dir_path}")
+
     return res_df
 
 
-def run_walkforward(
-    config: Dict[str, Any],
-    out_csv: str = "outputs/walkforward.csv",
-    summary_csv: str = "outputs/walkforward_summary.csv",
-) -> pd.DataFrame:
+def run_walkforward(config: Dict[str, Any], out_dir: Optional[str] = None, config_path: str = "unknown") -> pd.DataFrame:
     """
     Execute walkforward validation: train -> select -> test for each split.
     """
+    base = out_dir if out_dir else "outputs/runs"
+    out_dir_path = make_run_dir(base=base, mode="walkforward", config_path=config_path)
+
+    out_csv = out_dir_path / "walkforward.csv"
+    summary_csv = out_dir_path / "walkforward_summary.csv"
+    oos_lb_csv = out_dir_path / "oos_leaderboard.csv"
+
     splits = config.get("splits", [])
     selection = config.get("selection", {})
     sort_by = selection.get("sort_by", ["sharpe_simple", "total_return"])
@@ -279,46 +411,71 @@ def run_walkforward(
 
     final_df = pd.concat(all_results, ignore_index=True)
 
-    _ensure_parent_dir(out_csv)
     final_df.to_csv(out_csv, index=False)
 
     summary_df = pd.DataFrame(summary_records)
-    _ensure_parent_dir(summary_csv)
     summary_df.to_csv(summary_csv, index=False)
 
-    print(f"\nWalkforward combined results saved to: {out_csv}")
-    print(f"Walkforward summary saved to: {summary_csv}")
+    # OOS Leaderboard
+    test_results = final_df[final_df["phase"] == "test"]
+    oos_lb = pd.DataFrame()
+    if not test_results.empty:
+        sort_cols = [c for c in ["sharpe_simple", "total_return"] if c in test_results.columns]
+        oos_lb = test_results.sort_values(sort_cols, ascending=[False] * len(sort_cols)) if sort_cols else test_results
+        oos_lb.to_csv(oos_lb_csv, index=False)
+        print(f"OOS Leaderboard saved to: {oos_lb_csv}")
 
+    # Repro pack
+    lb_summary = oos_lb.head(10).to_dict(orient="records") if not oos_lb.empty else []
+
+    total_train = sum(r["n_train_runs"] for r in summary_records)
+    total_sel = sum(r["n_selected"] for r in summary_records)
+    total_test = sum(r["n_test_runs"] for r in summary_records)
+
+    _save_reproducibility_pack(
+        out_dir=out_dir_path,
+        config=config,
+        mode="walkforward",
+        metrics_summary=lb_summary,
+        config_path=config_path,
+        extra_meta={
+            "n_train_runs": total_train,
+            "n_selected": total_sel,
+            "n_test_runs": total_test,
+        },
+    )
+
+    print(f"\nWalkforward results saved to: {out_dir_path}")
     return final_df
-
-
-def run_sweep(config_path: str) -> pd.DataFrame:
+def run_sweep(config_path: str, out_dir: Optional[str] = None) -> pd.DataFrame:
     """
     Unified entry point: loads YAML and dispatches to grid or walkforward.
+
+    If out_dir is provided (e.g. outputs/sweeps), we create a unique run
+    directory INSIDE it to avoid overwriting artifacts.
     """
     config = load_experiment_config(config_path)
     if is_walkforward_config(config):
-        df = run_walkforward(config)
-        
-        # Print FINAL test leaderboard (Top 10 by sharpe_simple)
-        test_results = df[df["phase"] == "test"]
-        if not test_results.empty:
-            print("\n" + "="*50)
-            print("WALKFORWARD FINAL TEST LEADERBOARD (OOS)")
-            _print_grid_leaderboard(test_results, top=10)
-        return df
-        
-    return run_experiments_grid(config)
-
+        return run_walkforward(config, out_dir=out_dir, config_path=config_path)
+    return run_experiments_grid(config, out_dir=out_dir, config_path=config_path)
 
 # Backwards-compat alias (if main.py or other code still calls run_experiments)
 def run_experiments(config_path: str, out_csv: str = "outputs/experiments.csv") -> pd.DataFrame:
     """
     Backward compatible:
-    - If config is walkforward -> outputs/walkforward*.csv
+    - If config is walkforward -> outputs/walkforward*.csv (under outputs/)
     - Else grid -> outputs/experiments.csv (or provided out_csv)
+
+    IMPORTANT:
+    - This function preserves the older behavior of writing directly into the directory
+      implied by out_csv (not into a unique run dir).
     """
     config = load_experiment_config(config_path)
+
+    # If out_csv is a file, we use its parent as out_dir
+    out_dir = os.path.dirname(out_csv) if out_csv else None
+
     if is_walkforward_config(config):
-        return run_walkforward(config)
-    return run_experiments_grid(config, out_csv=out_csv)
+        return run_walkforward(config, out_dir=out_dir, config_path=config_path)
+
+    return run_experiments_grid(config, out_dir=out_dir, config_path=config_path)

@@ -1,8 +1,13 @@
 import pytest
 import pandas as pd
+from pathlib import Path
 
 import quantlab.experiments.runner as runner
 
+def newest_run_dir(base: Path) -> Path:
+    dirs = [p for p in base.iterdir() if p.is_dir()]
+    assert dirs, f"No run directories created under {base}"
+    return max(dirs, key=lambda p: p.stat().st_mtime)
 
 def test_walkforward_selection_and_constraints(monkeypatch, tmp_path):
     """
@@ -84,10 +89,9 @@ def test_walkforward_selection_and_constraints(monkeypatch, tmp_path):
         "constraints": {"min_trade_trades": 3},
     }
 
-    out_csv = tmp_path / "walkforward.csv"
-    summary_csv = tmp_path / "walkforward_summary.csv"
+    out_base = tmp_path / "wf_runs"
 
-    df = runner.run_walkforward(config, out_csv=str(out_csv), summary_csv=str(summary_csv))
+    df = runner.run_walkforward(config, out_dir=str(out_base), config_path="wf_config.yaml")
 
     # Sanity
     assert not df.empty
@@ -116,6 +120,7 @@ def test_walkforward_selection_and_constraints(monkeypatch, tmp_path):
         assert te["cooldown_days"] == tr["cooldown_days"]
 
     # Summary file existe y tiene n_selected=2, n_test_runs=2
-    s = pd.read_csv(summary_csv)
+    run_dir = newest_run_dir(out_base)
+    s = pd.read_csv(run_dir / "walkforward_summary.csv")
     assert int(s.loc[0, "n_selected"]) == 2
     assert int(s.loc[0, "n_test_runs"]) == 2
