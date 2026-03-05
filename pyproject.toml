@@ -16,6 +16,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
+  "pyarrow>=23.0.0",
 ]
 
 [tool.setuptools]
