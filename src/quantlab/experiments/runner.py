@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 
 import yaml
+import math
 import pandas as pd
 
 from quantlab.data.sources import fetch_ohlc
@@ -209,6 +210,20 @@ def _print_grid_leaderboard(df: pd.DataFrame, top: int = 10) -> None:
     print(lb[cols].to_string(index=False))
 
 
+def _sanitize_for_json(obj: Any) -> Any:
+    """
+    Recursively convert non-finite floats (NaN, Inf) to None for strict JSON.
+    """
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_sanitize_for_json(x) for x in obj]
+    elif isinstance(obj, float):
+        if not math.isfinite(obj):
+            return None
+    return obj
+
+
 def _save_reproducibility_pack(
     out_dir: Path,
     config: Dict[str, Any],
@@ -238,8 +253,10 @@ def _save_reproducibility_pack(
     if extra_meta:
         meta.update(extra_meta)
 
+    meta = _sanitize_for_json(meta)
+
     with open(out_dir / "meta.json", "w", encoding="utf-8") as f:
-        json.dump(meta, f, indent=2)
+        json.dump(meta, f, indent=2, ensure_ascii=False, allow_nan=False)
 
     with open(out_dir / "config_resolved.yaml", "w", encoding="utf-8") as f:
         yaml.dump(config, f, default_flow_style=False)

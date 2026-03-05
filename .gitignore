@@ -35,9 +35,12 @@ env/
 # Experiment artifacts
 # =========================
 outputs/
-data/
+data/cache/
+*.parquet
 *.log
 out*.txt
+test_out*.txt
+test_wf_fail.txt
 *.png
 
 # =========================
@@ -56,3 +59,8 @@ outputs/*.csv
 # =========================
 *.local.yaml
 *.local.yml
+logs/
+
+
+logs/
+
