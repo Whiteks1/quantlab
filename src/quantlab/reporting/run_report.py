@@ -133,6 +133,16 @@ def render_report_md(report: Dict[str, Any]) -> str:
         ""
     ])
     
+    config_resolved = report.get("config_resolved")
+    if config_resolved:
+        lines.extend([
+            "## Config",
+            "```yaml",
+            json.dumps(config_resolved, indent=2) if isinstance(config_resolved, dict) else str(config_resolved),
+            "```",
+            ""
+        ])
+    
     if h.get("mode") == "grid":
         lines.append("## Top 10 Results (Grid Search)")
         results = report.get("results", [])
@@ -176,8 +186,8 @@ def write_report(run_dir: str) -> Tuple[str, str]:
     report = build_report(run_dir)
     run_path = Path(run_dir)
     
-    md_path = run_path / "report.md"
-    json_path = run_path / "report.json"
+    md_path = run_path / "run_report.md"
+    json_path = run_path / "run_report.json"
     
     md_content = render_report_md(report)
     with open(md_path, "w", encoding="utf-8") as f:

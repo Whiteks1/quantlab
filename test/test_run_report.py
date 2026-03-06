@@ -33,7 +33,9 @@ def test_run_report_grid(tmp_path):
     
     # Assert
     assert os.path.exists(md_path)
+    assert os.path.basename(md_path) == "run_report.md"
     assert os.path.exists(json_path)
+    assert os.path.basename(json_path) == "run_report.json"
     
     with open(json_path, "r") as f:
         report = json.load(f)
@@ -76,7 +78,9 @@ def test_run_report_walkforward(tmp_path):
     
     # Assert
     assert os.path.exists(md_path)
+    assert os.path.basename(md_path) == "run_report.md"
     assert os.path.exists(json_path)
+    assert os.path.basename(json_path) == "run_report.json"
     
     with open(json_path, "r") as f:
         report = json.load(f)
@@ -93,6 +97,46 @@ def test_run_report_walkforward(tmp_path):
     with open(json_path2, "r") as f:
         report2 = json.load(f)
     assert report2["config_resolved"]["key"] == "value"
+
+def test_run_report_markdown_headings(tmp_path):
+    """Verify that report.md contains expected headings and key fields."""
+    run_dir = tmp_path / "20230305_230000_grid_head01"
+    run_dir.mkdir()
+
+    meta = {
+        "run_id": "20230305_230000_grid_head01",
+        "mode": "grid",
+        "created_at": "2023-03-05T23:00:00",
+        "git_commit": "deadbeef",
+        "python_version": "3.13.0 (default)",
+        "config_path": "configs/test.yaml",
+        "config_hash": "headhash",
+    }
+    with open(run_dir / "meta.json", "w") as f:
+        json.dump(meta, f)
+
+    experiments_data = [
+        {"rsi_buy_max": 55, "rsi_sell_min": 72, "sharpe_simple": 1.3, "total_return": 0.18},
+    ]
+    pd.DataFrame(experiments_data).to_csv(run_dir / "experiments.csv", index=False)
+
+    md_path, _ = write_report(str(run_dir))
+
+    with open(md_path, "r", encoding="utf-8") as f:
+        md_content = f.read()
+
+    # Required headings
+    assert "# Run Report" in md_content, "Missing top-level heading"
+    assert "## Metadata" in md_content, "Missing ## Metadata heading"
+    assert "## Reproduce" in md_content, "Missing ## Reproduce heading"
+    assert "## Top 10 Results" in md_content, "Missing ## Top 10 Results heading"
+    assert "## Artifacts" in md_content, "Missing ## Artifacts heading"
+
+    # Key fields
+    assert "20230305_230000_grid_head01" in md_content, "run_id missing from report"
+    assert "grid" in md_content, "mode missing from report"
+    assert "deadbeef" in md_content, "git_commit missing from report"
+
 
 def test_run_report_strict_json(tmp_path):
     run_dir = tmp_path / "strict_json"
