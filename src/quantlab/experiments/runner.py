@@ -188,6 +188,70 @@ def run_one(config: Dict[str, Any]) -> Dict[str, Any]:
     return res
 
 
+def run_one_with_timeseries(config: Dict[str, Any]):
+    """
+    Run a single configuration and return both the summary dict and the
+    per-bar backtest DataFrame.
+
+    Returns
+    -------
+    tuple[dict, pd.DataFrame]
+        (metrics_dict, bt_dataframe)
+    """
+    df = fetch_ohlc_cached(config["ticker"], config["start"], config["end"], interval=config["interval"])
+    df = add_indicators(df)
+
+    strat = RsiMaAtrStrategy(
+        rsi_buy_max=config.get("rsi_buy_max", 60.0),
+        rsi_sell_min=config.get("rsi_sell_min", 75.0),
+        cooldown_days=config.get("cooldown_days", 0),
+    )
+
+    raw_signals = strat.generate_signals(df)
+    signals = pd.Series(raw_signals, index=df.index, dtype="int64")
+
+    bt = run_backtest(
+        df=df,
+        signals=signals,
+        fee_rate=config.get("fee", 0.002),
+        slippage_bps=config.get("slippage_bps", 8.0),
+        slippage_mode=config.get("slippage_mode", "fixed"),
+        k_atr=config.get("k_atr", 0.05),
+    )
+    bt_metrics = compute_metrics(bt)
+
+    trades_df = run_paper_broker(
+        df=df,
+        signals=signals,
+        initial_cash=config.get("initial_cash", 1000.0),
+        fee_rate=config.get("fee", 0.002),
+        slippage_bps=config.get("slippage_bps", 8.0),
+        slippage_mode=config.get("slippage_mode", "fixed"),
+        k_atr=config.get("k_atr", 0.05),
+    )
+
+    trade_metrics: Dict[str, Any] = {}
+    if not trades_df.empty:
+        rt = compute_round_trips(trades_df)
+        trade_metrics = aggregate_trade_metrics(rt)
+
+    res = config.copy()
+    res.update({
+        "total_return": bt_metrics.get("total_return", 0.0),
+        "max_drawdown": bt_metrics.get("max_drawdown", 0.0),
+        "sharpe_simple": bt_metrics.get("sharpe_simple", 0.0),
+        "trades": bt_metrics.get("trades", 0),
+        "trade_trades": trade_metrics.get("trades", 0),
+        "win_rate_trades": trade_metrics.get("win_rate_trades", 0.0),
+        "profit_factor": trade_metrics.get("profit_factor", 0.0),
+        "expectancy_net": trade_metrics.get("expectancy_net", 0.0),
+        "avg_holding_days": trade_metrics.get("avg_holding_days", 0.0),
+        "exposure": trade_metrics.get("exposure", 0.0),
+    })
+
+    return res, bt
+
+
 def is_walkforward_config(config: Dict[str, Any]) -> bool:
     splits = config.get("splits", None)
     return isinstance(splits, list) and len(splits) > 0
@@ -299,35 +363,38 @@ def _persist_walkforward_rich_artifacts(
     out_dir: Path,
     final_df: pd.DataFrame,
     summary_records: List[Dict[str, Any]],
+    oos_timeseries_frames: Optional[List[pd.DataFrame]] = None,
 ) -> None:
     """
     Persist additional analysis-ready artifacts for walkforward runs.
 
     Writes:
-    - ``oos_equity_curve.csv``   – stitched OOS equity across splits (normalised)
-    - ``selected_configs.csv``  – one row per split per selected config
-    - ``split_metrics.csv``     – summary per split (alias kept for legacy)
-
-    The OOS equity is computed from the mean total_return of the selected
-    (phase=test) configs per split, stitched chronologically into a
-    cumulative equity series starting at 1.0.
+    - ``oos_equity_timeseries.csv``  – per-bar stitched OOS time series (Stage K.2)
+    - ``oos_equity_curve.csv``       – per-split cumulative equity (Stage K.1 compat.)
+    - ``selected_configs.csv``       – one row per split per selected config
+    - ``split_metrics.csv``          – summary per split
     """
     try:
+        # --- per-bar OOS timeseries (Stage K.2) ---
+        if oos_timeseries_frames:
+            ts_frames = [f for f in oos_timeseries_frames if f is not None and not f.empty]
+            if ts_frames:
+                oos_ts = pd.concat(ts_frames, ignore_index=True)
+                oos_ts.to_csv(out_dir / "oos_equity_timeseries.csv", index=False)
+
         # --- selected configs ---
         if not final_df.empty and "phase" in final_df.columns:
             sel = final_df[(final_df["phase"] == "test") & final_df.get("selected", True)].copy()
             sel.to_csv(out_dir / "selected_configs.csv", index=False)
 
-            # --- OOS equity curve ---
+            # --- OOS equity curve (per-split summary, K.1 backward compat) ---
             if "split_name" in sel.columns and "total_return" in sel.columns:
-                # Average total_return per split (handles top_k > 1)
                 avg_ret = (
                     sel.groupby("split_name", sort=False)["total_return"]
                     .mean()
                     .reset_index()
                     .rename(columns={"total_return": "avg_test_return"})
                 )
-                # Stitch equity: start = 1.0
                 equity = 1.0
                 equity_rows = []
                 for _, row in avg_ret.iterrows():
@@ -339,7 +406,7 @@ def _persist_walkforward_rich_artifacts(
                     })
                 pd.DataFrame(equity_rows).to_csv(out_dir / "oos_equity_curve.csv", index=False)
 
-        # --- split_metrics (convenience copy of summary_records) ---
+        # --- split_metrics ---
         if summary_records:
             pd.DataFrame(summary_records).to_csv(out_dir / "split_metrics.csv", index=False)
 
@@ -418,6 +485,7 @@ def run_walkforward(config: Dict[str, Any], out_dir: Optional[str] = None, confi
 
     all_results = []
     summary_records = []
+    oos_timeseries_frames: List[Optional[pd.DataFrame]] = []
 
     for split in splits:
         split_name = split["name"]
@@ -458,25 +526,53 @@ def run_walkforward(config: Dict[str, Any], out_dir: Optional[str] = None, confi
 
         # d) TEST only selected
         test_results = []
+        oos_bt_frame: Optional[pd.DataFrame] = None  # best-rank-1 OOS bar data
         if not selected_df.empty:
             print(f"TEST phase: evaluating {len(selected_df)} selected configs...")
             grid_keys = list(config.get("param_grid", {}).keys())
 
             for i, (_, row) in enumerate(selected_df.iterrows()):
                 test_run_config = config.copy()
-                test_run_config.pop("param_grid", None)  # IMPORTANT: keep schema consistent
+                test_run_config.pop("param_grid", None)
                 test_run_config.update(test_win)
 
                 for k in grid_keys:
                     if k in row:
                         test_run_config[k] = row[k]
 
-                res = run_one(test_run_config)
+                try:
+                    res, bt_df = run_one_with_timeseries(test_run_config)
+                except Exception as exc:
+                    print(f"Warning: run_one_with_timeseries failed, falling back: {exc}")
+                    res = run_one(test_run_config)
+                    bt_df = None
+
                 res["split_name"] = split_name
                 res["phase"] = "test"
                 res["selected"] = True
                 res["rank_in_train"] = i + 1
                 test_results.append(res)
+
+                # Keep the rank-1 bar data for OOS timeseries
+                if i == 0 and bt_df is not None:
+                    try:
+                        ts = bt_df[["close", "signal", "position",
+                                    "strategy_ret_net", "equity"]].copy()
+                        ts.index.name = "timestamp"
+                        ts = ts.reset_index()
+                        ts["split_name"] = split_name
+                        ts["period_return"] = ts["strategy_ret_net"]
+                        ts["cumulative_return"] = ts["equity"] - 1.0
+                        oos_bt_frame = ts[[
+                            "timestamp", "split_name",
+                            "equity", "period_return", "cumulative_return",
+                            "close", "signal", "position",
+                        ]]
+                    except Exception as exc:
+                        print(f"Warning: Could not extract OOS timeseries for {split_name}: {exc}")
+
+        oos_timeseries_frames.append(oos_bt_frame)
+
 
         test_df = pd.DataFrame(test_results)
 
@@ -555,7 +651,10 @@ def run_walkforward(config: Dict[str, Any], out_dir: Optional[str] = None, confi
         write_run_report(str(out_dir_path))
     except Exception as e:
         print(f"Warning: Failed to generate run report: {e}")
-    _persist_walkforward_rich_artifacts(out_dir_path, final_df, summary_records)
+    _persist_walkforward_rich_artifacts(
+        out_dir_path, final_df, summary_records,
+        oos_timeseries_frames=oos_timeseries_frames,
+    )
 
     print(f"\nWalkforward results saved to: {out_dir_path}")
     return final_df

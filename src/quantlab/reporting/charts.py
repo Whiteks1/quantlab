@@ -297,21 +297,23 @@ def generate_charts(run_dir: str | Path, out_dir: Optional[str | Path] = None) -
     equity: Optional[pd.Series] = None
     rt: Optional[pd.DataFrame] = None
 
-    # Load equity from trades.csv if available
+    # Load equity using the full priority chain (oos_equity_timeseries → curve → trades)
+    try:
+        from quantlab.reporting.advanced_metrics import _load_equity_from_artifacts
+        equity = _load_equity_from_artifacts(run_path)
+    except Exception as exc:
+        warnings.warn(f"[charts] Could not load equity: {exc}")
+
+    # Load round-trip trades only from trades.csv (paper-broker output)
     trades_path = run_path / "trades.csv"
     if trades_path.exists():
         try:
             from quantlab.reporting.trade_analytics import load_trades_csv, compute_round_trips
             raw = load_trades_csv(str(trades_path))
-            if "equity_after" in raw.columns and len(raw) > 1:
-                eq = raw["equity_after"].dropna()
-                eq = eq / eq.iloc[0]
-                if "timestamp" in raw.columns:
-                    eq.index = pd.to_datetime(raw["timestamp"], errors="coerce")
-                equity = eq
             rt = compute_round_trips(raw)
         except Exception as exc:
             warnings.warn(f"[charts] Could not load trades.csv: {exc}")
+
 
     generated: List[str] = []
 

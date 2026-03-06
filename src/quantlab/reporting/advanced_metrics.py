@@ -300,24 +300,37 @@ def _load_equity_from_artifacts(run_path: Path) -> Optional[pd.Series]:
     Try to reconstruct a normalised equity series from available artifacts.
 
     Resolution order (newer / richer artifacts preferred):
-    1. ``oos_equity_curve.csv``  — walkforward stitched OOS equity (Stage K.1)
-    2. ``equity_curve.csv``      — generic persisted equity (Stage K.1)
-    3. ``trades.csv`` → ``equity_after`` column (existing paper-broker log)
+    1. ``oos_equity_timeseries.csv``  — per-bar stitched OOS (Stage K.2)
+    2. ``oos_equity_curve.csv``       — per-split cumulative (Stage K.1)
+    3. ``equity_curve.csv``           — generic persisted equity
+    4. ``trades.csv`` → ``equity_after``  — existing paper-broker log
     """
-    # 1) Walkforward OOS stitched equity
+    # 1) Per-bar OOS timeseries (Stage K.2 — highest fidelity)
+    oos_ts_path = run_path / "oos_equity_timeseries.csv"
+    if oos_ts_path.exists():
+        try:
+            df = pd.read_csv(oos_ts_path)
+            if "equity" in df.columns and len(df) >= 2:
+                eq = df["equity"].dropna()
+                if "timestamp" in df.columns:
+                    eq.index = pd.to_datetime(df["timestamp"], errors="coerce")
+                return eq
+        except Exception:
+            pass
+
+    # 2) Per-split cumulative equity (Stage K.1)
     oos_eq_path = run_path / "oos_equity_curve.csv"
     if oos_eq_path.exists():
         try:
             df = pd.read_csv(oos_eq_path)
             if "cumulative_equity" in df.columns and len(df) >= 2:
                 eq = df["cumulative_equity"].dropna()
-                # Prepend 1.0 as the start point so the series begins at initial capital
                 eq = pd.concat([pd.Series([1.0]), eq.reset_index(drop=True)], ignore_index=True)
                 return eq
         except Exception:
             pass
 
-    # 2) Generic equity_curve.csv
+    # 3) Generic equity_curve.csv
     eq_path = run_path / "equity_curve.csv"
     if eq_path.exists():
         try:
@@ -333,7 +346,7 @@ def _load_equity_from_artifacts(run_path: Path) -> Optional[pd.Series]:
         except Exception:
             pass
 
-    # 3) trades.csv -> equity_after (existing behaviour)
+    # 4) trades.csv -> equity_after (legacy)
     trades_path = run_path / "trades.csv"
     if trades_path.exists():
         try:
