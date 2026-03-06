@@ -215,3 +215,132 @@ def test_resume_short_segment_after_short_fresh(sample_df, candidate, tmp_path):
     # Verify chronological order
     eq_final["timestamp"] = pd.to_datetime(eq_final["timestamp"])
     assert eq_final["timestamp"].is_monotonic_increasing
+
+def test_resume_segment_metrics(sample_df, candidate, tmp_path):
+    """Verify that segment vs total metrics are correctly tracked across resume."""
+    from quantlab.reporting.forward_report import build_forward_report
+    
+    out_dir = tmp_path / "metrics_session"
+    out_dir.mkdir()
+    
+    # 1. Fresh (indices 200-210) = 11 bars evaluated
+    eval_start_1 = str(sample_df.index[200].date())
+    eval_end_1 = str(sample_df.index[210].date())
+    
+    # Simulate fetch of 250 bars total (11 eval + 239 lookback)
+    df_fresh = sample_df.iloc[0:211] # 0 to 210 = 211 bars
+    
+    result1 = run_forward_evaluation(
+        candidate=candidate,
+        df=df_fresh,
+        eval_start=eval_start_1,
+        eval_end=eval_end_1,
+        initial_cash=1000.0
+    )
+    write_forward_eval_artifacts(result1, out_dir)
+    
+    payload1 = build_forward_report(out_dir)
+    w1 = payload1["warmup"]
+    assert w1["bars_fetched_segment"] == 211
+    assert w1["bars_evaluated_segment"] == 11
+    assert w1["bars_fetched_total"] == 211
+    assert w1["bars_evaluated_total"] == 11
+    
+    # 2. Resume (indices 211-215) = 5 bars evaluated
+    session_data = load_forward_session(out_dir)
+    initial_historical = {
+        "historic_trades": session_data["historic_trades"],
+        "historic_equity": session_data["historic_equity"]
+    }
+    
+    eval_end_2 = str(sample_df.index[215].date())
+    # Provide 150 bars total (segment is index 211..215)
+    # 216 - 150 = 66
+    df_resume = sample_df.iloc[66:216] # 150 bars
+    
+    result2 = run_forward_evaluation(
+        candidate=candidate,
+        df=df_resume,
+        eval_end=eval_end_2,
+        initial_state=session_data["portfolio_state"]
+    )
+    write_forward_eval_artifacts(result2, out_dir, initial_historical=initial_historical)
+    
+    payload2 = build_forward_report(out_dir)
+    w2 = payload2["warmup"]
+    
+    # segment should reflect the 150 bars we "fetched" and the 5 bars we evaluated in this move
+    assert w2["bars_fetched_segment"] == 150
+    assert w2["bars_evaluated_segment"] == 5
+    
+    # total should be cumulative
+    assert w2["bars_fetched_total"] == 211 + 150
+    assert w2["bars_evaluated_total"] == 11 + 5
+    
+    #MD rendering check
+    from quantlab.reporting.forward_report import render_forward_report_md
+    md = render_forward_report_md(payload2)
+    assert "**Bars Fetched (Latest Segment):** 150" in md
+    assert "**Bars Evaluated (Latest Segment):** 5" in md
+    assert "**Total Bars Processed (All Segments):** 16" in md
+
+
+def test_resume_noop_does_not_increment_resume_count(sample_df, candidate, tmp_path):
+    """Verificar que repeated no-op resumes NO incrementan resume_count."""
+    out_dir = tmp_path / "noop_count_session"
+    out_dir.mkdir()
+    
+    # 1. Fresh (150 bars)
+    df_fresh = sample_df.iloc[:150]
+    eval_end_1 = str(df_fresh.index[-1].isoformat())
+    result1 = run_forward_evaluation(candidate, df_fresh, eval_end=eval_end_1)
+    write_forward_eval_artifacts(result1, out_dir)
+    assert result1["portfolio_state"].resume_count == 0
+    
+    # 2. No-op 1
+    session_data = load_forward_session(out_dir)
+    result2 = run_forward_evaluation(candidate, df_fresh, eval_end=eval_end_1, initial_state=session_data["portfolio_state"])
+    assert result2["portfolio_state"].resume_count == 0
+    write_forward_eval_artifacts(result2, out_dir)
+    
+    # 3. No-op 2
+    session_data_2 = load_forward_session(out_dir)
+    result3 = run_forward_evaluation(candidate, df_fresh, eval_end=eval_end_1, initial_state=session_data_2["portfolio_state"])
+    assert result3["portfolio_state"].resume_count == 0
+    assert result3["portfolio_state"].resume_attempt_count == 2
+
+
+def test_resume_noop_keeps_state_stable(sample_df, candidate, tmp_path):
+    """Verificar que un no-op resume mantiene estable el estado."""
+    from quantlab.reporting.forward_report import build_forward_report, render_forward_report_md
+    
+    out_dir = tmp_path / "noop_stable_session"
+    out_dir.mkdir()
+    
+    df_fresh = sample_df.iloc[:200]
+    eval_end_1 = str(df_fresh.index[-1].isoformat())
+    result1 = run_forward_evaluation(candidate, df_fresh, eval_end=eval_end_1)
+    write_forward_eval_artifacts(result1, out_dir)
+    state_orig = result1["portfolio_state"]
+    
+    # No-op resume
+    session_data = load_forward_session(out_dir)
+    result2 = run_forward_evaluation(candidate, df_fresh, eval_end=eval_end_1, initial_state=session_data["portfolio_state"])
+    state_noop = result2["portfolio_state"]
+    
+    # Stability checks
+    assert state_noop.is_noop is True
+    assert state_noop.total_bars_evaluated == state_orig.total_bars_evaluated
+    assert state_noop.last_timestamp == state_orig.last_timestamp
+    assert state_noop.last_segment_bars_evaluated == 0
+    
+    # Report check
+    payload = build_forward_report(out_dir)
+    # Note: the payload is built from DISK. We need to write the no-op result to disk first to verify report logic.
+    write_forward_eval_artifacts(result2, out_dir)
+    payload_disk = build_forward_report(out_dir)
+    assert payload_disk["is_noop"] is True
+    
+    md = render_forward_report_md(payload_disk)
+    assert "> [!NOTE]" in md
+    assert "processed 0 new bars" in md

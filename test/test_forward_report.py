@@ -80,6 +80,14 @@ class TestBuildForwardReport:
         assert "portfolio_state" in payload
         assert "summary" in payload
         assert "artifacts" in payload
+        assert "warmup" in payload
+        warmup = payload["warmup"]
+        assert "bars_fetched_segment" in warmup
+        assert "warmup_bars_segment" in warmup
+        assert "bars_evaluated_segment" in warmup
+        assert "bars_fetched_total" in warmup
+        assert "warmup_bars_total" in warmup
+        assert "bars_evaluated_total" in warmup
 
     def test_payload_strict_json(self, tmp_path):
         out = _make_forward_artifacts(tmp_path)
@@ -119,6 +127,38 @@ class TestBuildForwardReport:
         assert "forward_trades.csv" in names
         assert "forward_equity_curve.csv" in names
 
+    def test_build_forward_report_fallback_resumed(self, tmp_path):
+        """
+        Verify that in a resumed session with missing last_segment fields,
+        the report does NOT misleadingly show total bars as segment bars.
+        """
+        out_dir = tmp_path / "legacy_resume"
+        out_dir.mkdir()
+        
+        # 1. State with resume_count but NO last_segment fields
+        state = {
+            "session_id": "legacy_123",
+            "resume_count": 1,
+            "total_bars_evaluated": 100,
+            "bars_fetched": 500,
+            "warmup_bars": 100
+        }
+        with open(out_dir / "portfolio_state.json", "w") as f:
+            json.dump(state, f)
+            
+        # 2. Equity curve with 100 rows
+        pd.DataFrame({
+            "timestamp": pd.date_range("2024-01-01", periods=100),
+            "equity": [1.0] * 100
+        }).to_csv(out_dir / "forward_equity_curve.csv", index=False)
+        
+        payload = build_forward_report(out_dir)
+        w = payload["warmup"]
+        
+        # Should NOT fallback to 100 (total) for segment if it's a resume but info is missing
+        assert w["bars_evaluated_segment"] == 0
+        assert w["bars_evaluated_total"] == 100
+
 
 # ---------------------------------------------------------------------------
 # render_forward_report_md
@@ -136,6 +176,8 @@ class TestRenderForwardReportMd:
         assert "## Closed Trade Summary" in md
         assert "## Charts" in md
         assert "## Artifacts" in md
+        assert "Latest Segment" in md
+        assert "Bars Fetched (Latest Segment)" in md
 
     def test_open_position_section_rendered(self, tmp_path):
         """Verify Open Position section appears only when has_open_position is True."""
@@ -145,7 +187,11 @@ class TestRenderForwardReportMd:
             "portfolio_state": {"has_open_position": False},
             "summary": {"n_trades": 0},
             "performance": {},
-            "warmup": {},
+            "warmup": {
+                "bars_fetched_segment": 0,
+                "warmup_bars_segment": 0,
+                "bars_evaluated_segment": 0
+            },
             "charts": [],
             "artifacts": [],
         }

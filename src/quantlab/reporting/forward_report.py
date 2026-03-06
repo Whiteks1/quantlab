@@ -206,6 +206,7 @@ def build_forward_report(out_dir: str | Path) -> Dict[str, Any]:
         "summary": summary,
         "artifacts": artifacts,
         "charts": [],
+        "is_noop": state.get("is_noop", False),
         # Stage L.1
         "performance": {
             "starting_cash": state.get("starting_cash", initial_cash),
@@ -215,15 +216,20 @@ def build_forward_report(out_dir: str | Path) -> Dict[str, Any]:
             "total_pnl": state.get("current_equity", 0.0) - state.get("starting_cash", initial_cash),
         },
         "warmup": {
-            "bars_fetched": state.get("bars_fetched", 0),
-            "warmup_bars": state.get("warmup_bars", 0),
-            "bars_evaluated": state.get("bars_evaluated", summary.get("n_bars", 0)),
+            "bars_fetched_segment": state.get("last_segment_bars_fetched", 0),
+            "warmup_bars_segment": state.get("last_segment_warmup_bars", 0),
+            "bars_evaluated_segment": state.get("last_segment_bars_evaluated") if state.get("last_segment_bars_evaluated") is not None else (summary.get("n_bars", 0) if state.get("resume_count", 0) == 0 else 0),
+            # Cumulative totals
+            "bars_fetched_total": state.get("bars_fetched", 0),
+            "warmup_bars_total": state.get("warmup_bars", 0),
+            "bars_evaluated_total": state.get("total_bars_evaluated", summary.get("n_bars", 0)),
         },
         "continuity": {
             "is_resumed": (state.get("resume_count", 0) > 0),
             "original_start": state.get("original_eval_start", ""),
             "latest_update": state.get("eval_end", ""),
             "resume_count": state.get("resume_count", 0),
+            "resume_attempt_count": state.get("resume_attempt_count", 0),
             "total_bars": state.get("total_bars_evaluated", 0),
             "last_ts": state.get("last_timestamp", ""),
         }
@@ -259,6 +265,7 @@ def render_forward_report_md(payload: Dict[str, Any]) -> str:
     eval_end = payload.get("eval_end") or "—"
     created = payload.get("created_at") or "—"
 
+    warmup = payload.get("warmup", {})
     lines = [
         f"# Forward Evaluation Report",
         "",
@@ -267,22 +274,29 @@ def render_forward_report_md(payload: Dict[str, Any]) -> str:
         f"- **Created At:** {created}",
         "",
         "### Session Bounds",
-        f"- **Bars Fetched:** {payload.get('warmup', {}).get('bars_fetched', '—')}",
-        f"- **Warmup Bars Skipped:** {payload.get('warmup', {}).get('warmup_bars', '—')}",
-        f"- **Bars Evaluated (Last Segment):** {payload.get('warmup', {}).get('bars_evaluated', '—')}",
+        f"- **Bars Fetched (Latest Segment):** {warmup.get('bars_fetched_segment', '—')}",
+        f"- **Warmup Bars Skipped (Latest Segment):** {warmup.get('warmup_bars_segment', '—')}",
+        f"- **Bars Evaluated (Latest Segment):** {warmup.get('bars_evaluated_segment', '—')}",
         "",
     ]
 
+    if payload.get("is_noop"):
+        lines += [
+            "> [!NOTE]",
+            "> This evaluation segment processed 0 new bars. No changes were made to the portfolio history.",
+            "",
+        ]
+
     # --- Session Continuity ---
     cont = payload.get("continuity", {})
-    if cont.get("is_resumed") or cont.get("resume_count", 0) > 0:
+    if cont.get("is_resumed") or cont.get("resume_count", 0) > 0 or payload.get("is_noop"):
         lines += [
             "## Session Continuity",
             "",
             f"- **Session Type:** Resumed (Count: {cont.get('resume_count')})",
             f"- **Original Start:** {cont.get('original_start', '—')}",
             f"- **Latest Evaluation End:** {cont.get('latest_update', '—')}",
-            f"- **Total Bars Processed:** {cont.get('total_bars', '—')}",
+            f"- **Total Bars Processed (All Segments):** {cont.get('total_bars', '—')}",
             f"- **Last Record Timestamp:** `{cont.get('last_ts', '—')}`",
             "",
         ]
