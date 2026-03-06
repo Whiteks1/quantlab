@@ -13,6 +13,8 @@ from quantlab.backtest.metrics import compute_metrics
 from quantlab.execution.paper import run_paper_broker, save_trades_csv
 from quantlab.reporting.report import write_report as write_trade_report
 from quantlab.reporting.run_report import write_report as write_run_report
+from quantlab.reporting.run_index import write_runs_index, build_runs_index
+from quantlab.reporting.compare_runs import write_comparison
 from quantlab.experiments import run_sweep
 
 
@@ -115,6 +117,16 @@ def main() -> None:
     parser.add_argument("--sweep", help="Path a .yaml de configuración para grid search (ej: configs/experiments/eth_2023_grid.yaml)")
     parser.add_argument("--sweep_outdir", default=None, help="Manual override for sweep output directory")
 
+    # Stage J: Run Registry & Comparison
+    parser.add_argument("--list-runs", metavar="ROOT_DIR", default=None,
+                        help="Scan ROOT_DIR for completed runs and write runs_index.{csv,json,md}")
+    parser.add_argument("--best-from", metavar="ROOT_DIR", default=None,
+                        help="Print the best run in ROOT_DIR by --metric")
+    parser.add_argument("--metric", default="sharpe_simple",
+                        help="Metric used by --best-from (default: sharpe_simple)")
+    parser.add_argument("--compare", nargs="+", metavar="RUN_DIR",
+                        help="Compare two or more run directories and write compare_report.{json,md}")
+
     args = parser.parse_args()
 
     # --- REPORT-ONLY MODE (exits early, no pipeline side effects) ---
@@ -123,6 +135,40 @@ def main() -> None:
     if isinstance(args.report, str) and os.path.isdir(args.report):
         write_run_report(args.report)
         print(f"Standardized run report generated for: {args.report}")
+        return
+
+    # --- LIST-RUNS MODE ---
+    if args.list_runs:
+        csv_p, json_p, md_p = write_runs_index(args.list_runs)
+        print(f"Runs index written:")
+        print(f"  CSV : {csv_p}")
+        print(f"  JSON: {json_p}")
+        print(f"  MD  : {md_p}")
+        return
+
+    # --- BEST-FROM MODE ---
+    if args.best_from:
+        payload = build_runs_index(args.best_from)
+        runs = payload.get("runs", [])
+        metric = args.metric
+        valid = [r for r in runs if r.get(metric) is not None]
+        if not valid:
+            print(f"No runs with metric '{metric}' found in {args.best_from}")
+            return
+        best = max(valid, key=lambda r: float(r[metric]) if r[metric] is not None else float("-inf"))
+        print(f"Best run by '{metric}':")
+        print(f"  run_id : {best.get('run_id')}")
+        print(f"  {metric:12s}: {best.get(metric)}")
+        print(f"  path   : {best.get('path')}")
+        return
+
+    # --- COMPARE MODE ---
+    if args.compare:
+        out_dir = args.outdir or "."
+        json_p, md_p = write_comparison(args.compare, out_path=out_dir, sort_by=args.metric)
+        print(f"Comparison report written:")
+        print(f"  JSON: {json_p}")
+        print(f"  MD  : {md_p}")
         return
 
     # --- SWEEP MODE (exits early) ---

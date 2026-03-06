@@ -12,3 +12,5 @@ from .run_report import (
     build_report,
     write_report
 )
+from .run_index import write_runs_index, build_runs_index
+from .compare_runs import write_comparison
