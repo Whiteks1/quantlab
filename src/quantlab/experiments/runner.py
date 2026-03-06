@@ -21,6 +21,17 @@ from quantlab.reporting.trade_analytics import compute_round_trips, aggregate_tr
 from quantlab.reporting.run_report import write_report as write_run_report
 
 
+def _sanitize_for_json(obj):
+    """Recursively convert non-finite floats to None for strict JSON."""
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize_for_json(x) for x in obj]
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return None
+    return obj
+
+
 def _ensure_parent_dir(path: str) -> None:
     parent = os.path.dirname(path)
     if parent:
@@ -263,6 +274,79 @@ def _save_reproducibility_pack(
         yaml.dump(config, f, default_flow_style=False)
 
 
+def _persist_grid_rich_artifacts(
+    out_dir: Path,
+    lb_df: pd.DataFrame,
+) -> None:
+    """
+    Persist additional analysis-ready artifacts for grid runs.
+
+    Writes:
+    - ``best_config.json`` – the top-ranked config and its metrics
+    """
+    if lb_df.empty:
+        return
+    try:
+        best_row = lb_df.iloc[0].to_dict()
+        best_row = _sanitize_for_json(best_row)
+        with open(out_dir / "best_config.json", "w", encoding="utf-8") as fh:
+            json.dump(best_row, fh, indent=2, ensure_ascii=False, allow_nan=False)
+    except Exception as exc:  # noqa: BLE001
+        print(f"Warning: Could not persist grid rich artifacts: {exc}")
+
+
+def _persist_walkforward_rich_artifacts(
+    out_dir: Path,
+    final_df: pd.DataFrame,
+    summary_records: List[Dict[str, Any]],
+) -> None:
+    """
+    Persist additional analysis-ready artifacts for walkforward runs.
+
+    Writes:
+    - ``oos_equity_curve.csv``   – stitched OOS equity across splits (normalised)
+    - ``selected_configs.csv``  – one row per split per selected config
+    - ``split_metrics.csv``     – summary per split (alias kept for legacy)
+
+    The OOS equity is computed from the mean total_return of the selected
+    (phase=test) configs per split, stitched chronologically into a
+    cumulative equity series starting at 1.0.
+    """
+    try:
+        # --- selected configs ---
+        if not final_df.empty and "phase" in final_df.columns:
+            sel = final_df[(final_df["phase"] == "test") & final_df.get("selected", True)].copy()
+            sel.to_csv(out_dir / "selected_configs.csv", index=False)
+
+            # --- OOS equity curve ---
+            if "split_name" in sel.columns and "total_return" in sel.columns:
+                # Average total_return per split (handles top_k > 1)
+                avg_ret = (
+                    sel.groupby("split_name", sort=False)["total_return"]
+                    .mean()
+                    .reset_index()
+                    .rename(columns={"total_return": "avg_test_return"})
+                )
+                # Stitch equity: start = 1.0
+                equity = 1.0
+                equity_rows = []
+                for _, row in avg_ret.iterrows():
+                    equity = equity * (1 + float(row["avg_test_return"]))
+                    equity_rows.append({
+                        "split_name": row["split_name"],
+                        "avg_test_return": float(row["avg_test_return"]),
+                        "cumulative_equity": equity,
+                    })
+                pd.DataFrame(equity_rows).to_csv(out_dir / "oos_equity_curve.csv", index=False)
+
+        # --- split_metrics (convenience copy of summary_records) ---
+        if summary_records:
+            pd.DataFrame(summary_records).to_csv(out_dir / "split_metrics.csv", index=False)
+
+    except Exception as exc:  # noqa: BLE001
+        print(f"Warning: Could not persist walkforward rich artifacts: {exc}")
+
+
 def run_experiments_grid(config: Dict[str, Any], out_dir: Optional[str] = None, config_path: str = "unknown") -> pd.DataFrame:
     base = out_dir if out_dir else "outputs/runs"
     out_dir_path = make_run_dir(base=base, mode="grid", config_path=config_path)
@@ -306,6 +390,7 @@ def run_experiments_grid(config: Dict[str, Any], out_dir: Optional[str] = None, 
         write_run_report(str(out_dir_path))
     except Exception as e:
         print(f"Warning: Failed to generate run report: {e}")
+    _persist_grid_rich_artifacts(out_dir_path, lb_df)
     print(f"Run directory: {out_dir_path}")
 
     return res_df
@@ -470,6 +555,7 @@ def run_walkforward(config: Dict[str, Any], out_dir: Optional[str] = None, confi
         write_run_report(str(out_dir_path))
     except Exception as e:
         print(f"Warning: Failed to generate run report: {e}")
+    _persist_walkforward_rich_artifacts(out_dir_path, final_df, summary_records)
 
     print(f"\nWalkforward results saved to: {out_dir_path}")
     return final_df

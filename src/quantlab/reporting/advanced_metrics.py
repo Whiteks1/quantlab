@@ -297,29 +297,56 @@ def compute_time_window_metrics(equity: pd.Series) -> Dict[str, Any]:
 
 def _load_equity_from_artifacts(run_path: Path) -> Optional[pd.Series]:
     """
-    Try to reconstruct an equity series from available artifacts.
+    Try to reconstruct a normalised equity series from available artifacts.
 
-    Resolution order:
-    1. walkforward.csv → equity_after column (trade log)
-    2. experiments.csv / leaderboard.csv → not enough (skip)
-    3. trades.csv in parent outputs/ directory (best effort)
+    Resolution order (newer / richer artifacts preferred):
+    1. ``oos_equity_curve.csv``  — walkforward stitched OOS equity (Stage K.1)
+    2. ``equity_curve.csv``      — generic persisted equity (Stage K.1)
+    3. ``trades.csv`` → ``equity_after`` column (existing paper-broker log)
     """
-    # Try trades.csv in the run dir first
-    for fname in ("trades.csv",):
-        p = run_path / fname
-        if p.exists():
-            try:
-                df = pd.read_csv(p)
-                if "equity_after" in df.columns and len(df) > 1:
-                    eq = df["equity_after"].dropna()
-                    eq = eq / eq.iloc[0]  # normalise to start at 1
-                    if "timestamp" in df.columns:
-                        eq.index = pd.to_datetime(df["timestamp"], errors="coerce")
-                    return eq
-            except Exception:
-                pass
+    # 1) Walkforward OOS stitched equity
+    oos_eq_path = run_path / "oos_equity_curve.csv"
+    if oos_eq_path.exists():
+        try:
+            df = pd.read_csv(oos_eq_path)
+            if "cumulative_equity" in df.columns and len(df) >= 2:
+                eq = df["cumulative_equity"].dropna()
+                # Prepend 1.0 as the start point so the series begins at initial capital
+                eq = pd.concat([pd.Series([1.0]), eq.reset_index(drop=True)], ignore_index=True)
+                return eq
+        except Exception:
+            pass
 
-    # Fallback: outputs/equity via run_report.json header cues (can't rebuild — skip)
+    # 2) Generic equity_curve.csv
+    eq_path = run_path / "equity_curve.csv"
+    if eq_path.exists():
+        try:
+            df = pd.read_csv(eq_path)
+            col = next((c for c in ("equity", "cumulative_equity", "equity_after") if c in df.columns), None)
+            if col and len(df) >= 2:
+                eq = df[col].dropna()
+                eq = eq / eq.iloc[0]
+                if "timestamp" in df.columns or "date" in df.columns:
+                    ts_col = "timestamp" if "timestamp" in df.columns else "date"
+                    eq.index = pd.to_datetime(df[ts_col], errors="coerce")
+                return eq
+        except Exception:
+            pass
+
+    # 3) trades.csv -> equity_after (existing behaviour)
+    trades_path = run_path / "trades.csv"
+    if trades_path.exists():
+        try:
+            df = pd.read_csv(trades_path)
+            if "equity_after" in df.columns and len(df) > 1:
+                eq = df["equity_after"].dropna()
+                eq = eq / eq.iloc[0]
+                if "timestamp" in df.columns:
+                    eq.index = pd.to_datetime(df["timestamp"], errors="coerce")
+                return eq
+        except Exception:
+            pass
+
     return None
 
 
