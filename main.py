@@ -15,6 +15,7 @@ from quantlab.reporting.report import write_report as write_trade_report
 from quantlab.reporting.run_report import write_report as write_run_report
 from quantlab.reporting.run_index import write_runs_index, build_runs_index
 from quantlab.reporting.compare_runs import write_comparison
+from quantlab.reporting.advanced_report import write_advanced_report
 from quantlab.experiments import run_sweep
 
 
@@ -127,14 +128,24 @@ def main() -> None:
     parser.add_argument("--compare", nargs="+", metavar="RUN_DIR",
                         help="Compare two or more run directories and write compare_report.{json,md}")
 
+    # Stage K: Advanced Metrics & Charts
+    parser.add_argument("--advanced-report", metavar="RUN_DIR", default=None,
+                        help="Generate advanced_report.json + advanced_report.md + charts for a run directory")
+
     args = parser.parse_args()
 
-    # --- REPORT-ONLY MODE (exits early, no pipeline side effects) ---
-    # If --report is given a path to an existing run directory, regenerate
-    # run_report.md / run_report.json for that directory and exit immediately.
+    # --- REPORT-ONLY MODE (Stage I) ---
     if isinstance(args.report, str) and os.path.isdir(args.report):
         write_run_report(args.report)
         print(f"Standardized run report generated for: {args.report}")
+        return
+
+    # --- ADVANCED REPORT MODE (Stage K) ---
+    if args.advanced_report:
+        json_p, md_p = write_advanced_report(args.advanced_report)
+        print(f"Advanced report generated for: {args.advanced_report}")
+        print(f"  JSON: {json_p}")
+        print(f"  MD  : {md_p}")
         return
 
     # --- LIST-RUNS MODE ---

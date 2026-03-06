@@ -14,3 +14,4 @@ from .run_report import (
 )
 from .run_index import write_runs_index, build_runs_index
 from .compare_runs import write_comparison
+from .advanced_report import write_advanced_report
