@@ -25,6 +25,28 @@ from quantlab.reporting.charts import generate_charts
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _fmt(val: Any, fmt: str) -> str:
+    """
+    Format *val* using *fmt* spec, returning ``'N/A'`` for ``None`` and
+    falling back gracefully on type errors.
+    """
+    if val is None:
+        return "N/A"
+    try:
+        return format(val, fmt)
+    except (TypeError, ValueError):
+        return str(val)
+
+
+def _fmt_pct(val: Any) -> str:
+    """Format a ratio as a percentage string, or 'N/A'."""
+    return _fmt(val, ".1%")
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -72,6 +94,11 @@ def render_advanced_report_md(payload: Dict[str, Any]) -> str:
     """
     Render the advanced report payload as a Markdown document.
 
+    Unreliable metrics (``None``) are shown as ``N/A`` rather than
+    being omitted or displayed as raw non-finite floats.  The time-window
+    section renders an informational note for insufficient data rather than
+    producing a misleading or empty section.
+
     Parameters
     ----------
     payload:
@@ -102,8 +129,8 @@ def render_advanced_report_md(payload: Dict[str, Any]) -> str:
         lines += [
             "## Core Metrics",
             "",
-            f"| Metric | Value |",
-            f"|--------|-------|",
+            "| Metric | Value |",
+            "|--------|-------|",
         ]
         metric_labels = [
             ("Total Return", "total_return", ".2%"),
@@ -115,10 +142,10 @@ def render_advanced_report_md(payload: Dict[str, Any]) -> str:
         ]
         for label, key, fmt in metric_labels:
             val = em.get(key)
-            try:
-                formatted = format(val, fmt) if val is not None else "N/A"
-            except (TypeError, ValueError):
-                formatted = str(val) if val is not None else "N/A"
+            formatted = _fmt(val, fmt)
+            # Annotate ratios that are N/A so reader knows why
+            if val is None and key in ("sortino", "sharpe"):
+                formatted = "N/A *(insufficient data)*"
             lines.append(f"| {label} | {formatted} |")
         lines.append("")
 
@@ -140,10 +167,9 @@ def render_advanced_report_md(payload: Dict[str, Any]) -> str:
         ]
         for label, key, fmt in dd_labels:
             val = dm.get(key)
-            try:
-                formatted = format(val, fmt) if val is not None else "N/A"
-            except (TypeError, ValueError):
-                formatted = str(val) if val is not None else "N/A"
+            formatted = _fmt(val, fmt)
+            if val is None and key == "calmar":
+                formatted = "N/A *(drawdown too small)*"
             lines.append(f"| {label} | {formatted} |")
         lines.append("")
 
@@ -170,11 +196,7 @@ def render_advanced_report_md(payload: Dict[str, Any]) -> str:
         ]
         for label, key, fmt in trade_labels:
             val = td.get(key)
-            try:
-                formatted = format(val, fmt) if val is not None else "N/A"
-            except (TypeError, ValueError):
-                formatted = str(val) if val is not None else "N/A"
-            lines.append(f"| {label} | {formatted} |")
+            lines.append(f"| {label} | {_fmt(val, fmt)} |")
         lines.append("")
 
     # Time window
@@ -183,16 +205,28 @@ def render_advanced_report_md(payload: Dict[str, Any]) -> str:
         lines += [
             "## Time Window Analysis",
             "",
-            f"- **Best month:** {tw.get('best_month', 'N/A')}",
-            f"- **Worst month:** {tw.get('worst_month', 'N/A')}",
-            f"- **Positive months:** {tw.get('positive_months_pct', 'N/A')}",
-            "",
         ]
-        monthly = tw.get("monthly_returns", [])
-        if monthly:
-            df_m = pd.DataFrame(monthly)
-            lines.append(df_m.to_markdown(index=False))
-            lines.append("")
+        if tw.get("insufficient_data"):
+            note = tw.get("note", "Insufficient monthly data for statistics.")
+            lines += [
+                f"> ⚠️ **Note:** {note}",
+                "",
+            ]
+        else:
+            best = _fmt_pct(tw.get("best_month"))
+            worst = _fmt_pct(tw.get("worst_month"))
+            pos_pct = _fmt_pct(tw.get("positive_months_pct"))
+            lines += [
+                f"- **Best month:** {best}",
+                f"- **Worst month:** {worst}",
+                f"- **Positive months:** {pos_pct}",
+                "",
+            ]
+            monthly = tw.get("monthly_returns", [])
+            if monthly:
+                df_m = pd.DataFrame(monthly)
+                lines.append(df_m.to_markdown(index=False))
+                lines.append("")
 
     # Charts
     charts = payload.get("charts", [])

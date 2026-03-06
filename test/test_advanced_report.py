@@ -1,4 +1,4 @@
-"""Tests for advanced_report.py (Stage K)."""
+"""Tests for advanced_report.py (Stage K / K.3)."""
 
 import json
 import sys
@@ -38,8 +38,41 @@ def _make_run_dir(tmp_path: Path, include_report_json: bool = True) -> Path:
     return run_dir
 
 
+def _minimal_payload(
+    sortino: float | None = 1.5,
+    calmar: float | None = 2.0,
+    tw: dict | None = None,
+) -> dict:
+    """Return a minimal payload dict for render_advanced_report_md tests."""
+    return {
+        "run_id": "test_render",
+        "mode": "grid",
+        "created_at": "2023-01-01T00:00:00",
+        "equity_metrics": {
+            "total_return": 0.2,
+            "cagr": 0.18,
+            "sharpe": 1.2,
+            "sortino": sortino,
+            "annualized_volatility": 0.15,
+            "n_days": 252,
+        },
+        "drawdown_metrics": {
+            "max_drawdown": -0.12,
+            "avg_drawdown": -0.04,
+            "calmar": calmar,
+            "longest_dd_days": 30,
+            "n_drawdown_periods": 5,
+        },
+        "trade_distribution": {"n_trades": 0},
+        "time_window_metrics": tw if tw is not None else {},
+        "charts": [],
+        "artifacts": [],
+        "top_result_summary": {},
+    }
+
+
 # ---------------------------------------------------------------------------
-# Tests
+# Pre-existing tests (kept for regression)
 # ---------------------------------------------------------------------------
 
 def test_write_advanced_report_creates_artifacts(tmp_path):
@@ -115,3 +148,123 @@ def test_cli_advanced_report_early_exit(tmp_path, monkeypatch):
     main_module.main()
 
     mock_write.assert_called_once_with(str(run_dir))
+
+
+# ---------------------------------------------------------------------------
+# K.3: Markdown rendering of None / unavailable metrics
+# ---------------------------------------------------------------------------
+
+class TestRenderNoneMetrics:
+    """render_advanced_report_md must handle None metrics gracefully."""
+
+    def test_sortino_none_shows_na(self):
+        """Sortino=None → Markdown should contain 'N/A'."""
+        payload = _minimal_payload(sortino=None)
+        md = render_advanced_report_md(payload)
+        assert "N/A" in md, "Expected 'N/A' in Markdown when sortino is None"
+
+    def test_calmar_none_shows_na(self):
+        """Calmar=None → Markdown should contain 'N/A'."""
+        payload = _minimal_payload(calmar=None)
+        md = render_advanced_report_md(payload)
+        assert "N/A" in md, "Expected 'N/A' in Markdown when calmar is None"
+
+    def test_sortino_none_annotated(self):
+        """Sortino=None should carry an explanatory annotation in the table."""
+        payload = _minimal_payload(sortino=None)
+        md = render_advanced_report_md(payload)
+        assert "insufficient data" in md.lower(), (
+            "Expected annotation explaining why sortino is N/A"
+        )
+
+    def test_calmar_none_annotated(self):
+        """Calmar=None should carry an explanatory annotation in the table."""
+        payload = _minimal_payload(calmar=None)
+        md = render_advanced_report_md(payload)
+        assert "drawdown too small" in md.lower() or "insufficient" in md.lower(), (
+            "Expected annotation explaining why calmar is N/A"
+        )
+
+    def test_sortino_finite_shows_number(self):
+        """When sortino has a real value it should appear as a formatted number."""
+        payload = _minimal_payload(sortino=2.345)
+        md = render_advanced_report_md(payload)
+        assert "2.345" in md, "Expected formatted sortino value in Markdown"
+
+    def test_calmar_finite_shows_number(self):
+        """When calmar has a real value it should appear as a formatted number."""
+        payload = _minimal_payload(calmar=3.142)
+        md = render_advanced_report_md(payload)
+        assert "3.142" in md, "Expected formatted calmar value in Markdown"
+
+
+class TestRenderInsufficientMonthly:
+    """Time-window section must render a note for insufficient monthly data."""
+
+    def test_insufficient_data_renders_note(self):
+        """insufficient_data=True → note block rendered, no misleading table."""
+        tw = {
+            "n_months": 1,
+            "min_months_required": 3,
+            "monthly_returns": [],
+            "insufficient_data": True,
+            "note": "Only 1 complete monthly period(s) available; at least 3 are needed.",
+        }
+        payload = _minimal_payload(tw=tw)
+        md = render_advanced_report_md(payload)
+        assert "insufficient" in md.lower() or "Only 1" in md, (
+            "Expected note about insufficient monthly data"
+        )
+        # Should NOT show best_month / worst_month values
+        assert "best_month" not in md
+        assert "worst_month" not in md
+
+    def test_sufficient_data_renders_table(self):
+        """When n_months >= _MIN_MONTHS the full table should appear."""
+        tw = {
+            "n_months": 5,
+            "best_month": 0.05,
+            "worst_month": -0.03,
+            "positive_months_pct": 0.6,
+            "monthly_returns": [
+                {"month": "2023-01", "return": 0.05},
+                {"month": "2023-02", "return": -0.02},
+            ],
+        }
+        payload = _minimal_payload(tw=tw)
+        md = render_advanced_report_md(payload)
+        # Best/worst months should appear formatted as %
+        assert "5.0%" in md or "5%" in md, "Expected best_month formatted as %"
+
+    def test_monthly_best_worst_formatted_as_pct(self):
+        """Best/worst month values must be % formatted, not raw floats."""
+        tw = {
+            "n_months": 6,
+            "best_month": 0.0432,
+            "worst_month": -0.0218,
+            "positive_months_pct": 0.667,
+            "monthly_returns": [],
+        }
+        payload = _minimal_payload(tw=tw)
+        md = render_advanced_report_md(payload)
+        # Raw float e.g. "0.0432" should NOT appear; "4.3%" should
+        assert "0.0432" not in md, "best_month must not appear as raw float"
+        assert "%" in md, "best/worst month must be formatted as percentage"
+
+
+class TestRenderStrictJson:
+    """build_advanced_report and write_advanced_report must stay JSON-safe."""
+
+    def test_payload_survives_allow_nan_false(self, tmp_path):
+        run_dir = _make_run_dir(tmp_path)
+        payload = build_advanced_report(run_dir)
+        serialised = json.dumps(payload, allow_nan=False)
+        data = json.loads(serialised)
+        assert "run_id" in data
+
+    def test_written_json_no_nan(self, tmp_path):
+        run_dir = _make_run_dir(tmp_path)
+        json_p, _ = write_advanced_report(run_dir)
+        content = Path(json_p).read_text(encoding="utf-8")
+        data = json.loads(content)  # raises if NaN/Inf present
+        assert isinstance(data, dict)
