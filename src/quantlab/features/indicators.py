@@ -7,6 +7,10 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     close = out["close"].squeeze()  # 👈 clave (garantiza 1D)
     out["close"] = close            # deja la columna normalizada
 
+    if len(out) < 100:
+        # Return empty with same columns to represent failure gracefully
+        return pd.DataFrame(columns=out.columns)
+
     out["rsi"] = ta.momentum.RSIIndicator(close=close, window=14).rsi()
     out["ma20"] = close.rolling(20).mean()
     out["ma100"] = close.rolling(100).mean()

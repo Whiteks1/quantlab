@@ -16,6 +16,12 @@ from quantlab.reporting.run_report import write_report as write_run_report
 from quantlab.reporting.run_index import write_runs_index, build_runs_index
 from quantlab.reporting.compare_runs import write_comparison
 from quantlab.reporting.advanced_report import write_advanced_report
+from quantlab.reporting.forward_report import write_forward_report
+from quantlab.execution.forward_eval import (
+    load_candidate_from_run,
+    run_forward_evaluation,
+    write_forward_eval_artifacts,
+)
 from quantlab.experiments import run_sweep
 
 
@@ -82,6 +88,131 @@ def _generate_report(
     return report_md
 
 
+def _run_forward_mode(args) -> None:
+    """
+    Stage L: orchestrate a forward evaluation session from CLI args.
+
+    Loads the best candidate from an existing run directory, fetches OHLC data
+    for the forward period, runs the paper portfolio simulation, persists all
+    artifacts, and generates a JSON + Markdown report.
+    """
+    import datetime as _dt
+    from quantlab.execution.forward_eval import (
+        load_candidate_from_run, 
+        run_forward_evaluation, 
+        write_forward_eval_artifacts,
+        load_forward_session
+    )
+    from quantlab.reporting.forward_report import write_forward_report
+    from quantlab.data.sources import fetch_ohlc
+
+    resume_dir = getattr(args, "resume_forward", None)
+    run_dir = getattr(args, "forward_eval", None)
+    
+    if resume_dir:
+        print(f"\n=== STAGE L.2: RESUMING FORWARD SESSION ===")
+        print(f"  Session dir: {resume_dir}")
+        try:
+            session_data = load_forward_session(resume_dir)
+        except ValueError as e:
+            print(f"ERROR: {e}")
+            return
+        except Exception as e:
+            print(f"ERROR: Could not load session: {e}")
+            return
+
+        candidate = session_data["candidate"]
+        initial_state = session_data["portfolio_state"]
+        out_dir = resume_dir
+        initial_historical = {
+            "historic_trades": session_data["historic_trades"],
+            "historic_equity": session_data["historic_equity"]
+        }
+    else:
+        print(f"\n=== STAGE L: FORWARD EVALUATION ===")
+        print(f"  Source run : {run_dir}")
+        candidate = None
+        initial_state = None
+        
+        # Determine output directory
+        out_dir = args.forward_outdir
+        if out_dir is None:
+            session_tag = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+            out_dir = os.path.join("outputs", "forward_runs", f"fwd_{session_tag}")
+        # os.makedirs(out_dir, exist_ok=True)  # <-- MOVED LATER
+        initial_historical = None
+
+    fwd_start = getattr(args, "forward_start", None)
+    fwd_end = getattr(args, "forward_end", None)
+    
+    if not candidate:
+        metric = getattr(args, "forward_metric", "sharpe_simple")
+        print(f"\n[1/4] Loading candidate (metric={metric})...")
+        candidate = load_candidate_from_run(run_dir, metric=metric)
+        
+    print(f"  Strategy  : {candidate.strategy_name}")
+    print(f"  Source ID : {candidate.source_run_id}")
+    print(f"  Params    : {candidate.params}")
+
+    # Derive ticker from candidate or CLI fallback
+    ticker = candidate.ticker or args.ticker
+    interval = candidate.interval or args.interval
+
+    # Fetch data
+    # Determine forward period
+    today = _dt.date.today().isoformat()
+    # For resume, we fallback to original_eval_start if forward_start not specified
+    # to ensure we fetch enough data for indicators (run_forward_evaluation handles the skip)
+    active_start = fwd_start or (initial_state.original_eval_start if initial_state else today)
+    active_end = fwd_end or today
+
+    # Lookback prefetch for all runs (fresh and resume)
+    fetch_start = active_start
+    try:
+        start_dt = _dt.datetime.strptime(active_start, "%Y-%m-%d")
+        # Fetch 400 days to ensure ~200+ trading bars for warm-up
+        fetch_start = (start_dt - _dt.timedelta(days=400)).strftime("%Y-%m-%d")
+    except:
+        pass
+
+    print(f"\n[2/4] Fetching OHLC data ({ticker}, {fetch_start} → {active_end}, {interval})...")
+    df = fetch_ohlc(ticker, fetch_start, active_end, interval=interval)
+    print(f"  Bars fetched: {len(df)}")
+
+    # 3) Run forward evaluation
+    print(f"\n[3/4] Running forward paper evaluation...")
+    try:
+        result = run_forward_evaluation(
+            candidate=candidate,
+            df=df,
+            initial_cash=args.initial_cash,
+            eval_start=active_start,
+            eval_end=active_end,
+            initial_state=initial_state
+        )
+    except Exception as e:
+        print(f"ERROR: Forward evaluation failed: {e}")
+        # Clean up out_dir only if we JUST created it and it's empty
+        # Actually since we didn't create it yet, we just return
+        return
+    
+    ps = result["portfolio_state"]
+    print(f"  Bars evaluated : {result['bars_evaluated']}")
+    print(f"  Trades (segment): {len(result['trades'])}")
+    print(f"  Ending equity  : {ps.current_equity:,.4f}")
+
+    # 4) Write artifacts + report
+    print(f"\n[4/4] Writing artifacts to {out_dir}...")
+    os.makedirs(out_dir, exist_ok=True) # Now we create it
+    written_files = write_forward_eval_artifacts(result, out_dir, initial_historical=initial_historical)
+    # The merged equity/trades are now in result for the report
+    json_p, md_p = write_forward_report(out_dir)
+    written_files += [json_p, md_p]
+
+    for f in written_files:
+        print(f"  → {f}")
+
+
 def main() -> None:
     load_dotenv()
 
@@ -132,6 +263,22 @@ def main() -> None:
     parser.add_argument("--advanced-report", metavar="RUN_DIR", default=None,
                         help="Generate advanced_report.json + advanced_report.md + charts for a run directory")
 
+    # Stage L: Forward Evaluation / Paper Portfolio
+    parser.add_argument("--forward-eval", metavar="RUN_DIR", default=None,
+                        help="Run forward paper evaluation using candidate from RUN_DIR")
+    parser.add_argument("--forward-start", metavar="YYYY-MM-DD", default=None,
+                        help="Forward evaluation period start date")
+    parser.add_argument("--forward-end", metavar="YYYY-MM-DD", default=None,
+                        help="Forward evaluation period end date")
+    parser.add_argument("--forward-outdir", metavar="DIR", default=None,
+                        help="Output directory for forward evaluation artifacts")
+    parser.add_argument("--initial-cash", type=float, default=10_000.0,
+                        help="Starting cash for forward paper portfolio (default: 10000)")
+    parser.add_argument("--forward-metric", default="sharpe_simple",
+                        help="Metric used to select the best candidate from run (default: sharpe_simple)")
+    parser.add_argument("--resume-forward", metavar="SESSION_DIR", default=None,
+                        help="Resume an existing forward evaluation session from its directory")
+
     args = parser.parse_args()
 
     # --- REPORT-ONLY MODE (Stage I) ---
@@ -146,6 +293,11 @@ def main() -> None:
         print(f"Advanced report generated for: {args.advanced_report}")
         print(f"  JSON: {json_p}")
         print(f"  MD  : {md_p}")
+        return
+
+    # --- FORWARD EVALUATION MODE (Stage L) ---
+    if args.forward_eval or args.resume_forward:
+        _run_forward_mode(args)
         return
 
     # --- LIST-RUNS MODE ---
