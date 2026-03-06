@@ -117,6 +117,14 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # --- REPORT-ONLY MODE (exits early, no pipeline side effects) ---
+    # If --report is given a path to an existing run directory, regenerate
+    # run_report.md / run_report.json for that directory and exit immediately.
+    if isinstance(args.report, str) and os.path.isdir(args.report):
+        write_run_report(args.report)
+        print(f"Standardized run report generated for: {args.report}")
+        return
+
     # --- SWEEP MODE (exits early) ---
     if args.sweep:
         # If sweep_outdir is set, use it. Otherwise, if outdir is set, use it.
@@ -198,21 +206,11 @@ def main() -> None:
             print("\nLast trades (paper broker):")
             print(trades_df.tail(5))
 
-    # 6) Report (opcional)
+    # 6) Report — classic trade-level report (legacy boolean mode)
+    # Note: --report <run_dir> is handled early above and never reaches here.
     if args.report:
-        # Si args.report es un string, es un path a un run_dir
-        if isinstance(args.report, str):
-            if os.path.isdir(args.report):
-                write_run_report(args.report)
-                print(f"\nStandardized run report generated for: {args.report}")
-                return
-            else:
-                print(f"\nError: {args.report} is not a valid directory.")
-                return
-
-        # Comportamiento legacy: report de trade de la ejecución actual
+        csv_path = args.trades_csv or trades_path
         if trades_df is None:
-            csv_path = args.trades_csv or trades_path
             if not os.path.exists(csv_path):
                 raise FileNotFoundError(
                     f"No existe trades.csv para report. Esperado en: {csv_path}. "
@@ -230,7 +228,7 @@ def main() -> None:
             ticker=args.ticker,
             strategy_name=strat.name,
             backtest_metrics=metrics,
-            trades_path=csv_path if trades_df is None else trades_path,
+            trades_path=trades_path,
         )
         print(f"\nSaved: {report_path}")
     
