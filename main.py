@@ -278,6 +278,10 @@ def main() -> None:
                         help="Metric used to select the best candidate from run (default: sharpe_simple)")
     parser.add_argument("--resume-forward", metavar="SESSION_DIR", default=None,
                         help="Resume an existing forward evaluation session from its directory")
+    
+    # Stage M: Portfolio Aggregation
+    parser.add_argument("--portfolio-report", metavar="ROOT_DIR", default=None,
+                        help="Aggregate all forward sessions in ROOT_DIR into a portfolio report")
 
     args = parser.parse_args()
 
@@ -298,6 +302,34 @@ def main() -> None:
     # --- FORWARD EVALUATION MODE (Stage L) ---
     if args.forward_eval or args.resume_forward:
         _run_forward_mode(args)
+        return
+
+    # --- PORTFOLIO REPORT MODE (Stage M) ---
+    if args.portfolio_report:
+        from quantlab.reporting.portfolio_report import write_portfolio_report
+        root = Path(args.portfolio_report)
+        if not root.exists():
+            print(f"ERROR: Portfolio root directory not found: {root}")
+            return
+            
+        print(f"\n=== STAGE M: PORTFOLIO AGGREGATION ===")
+        print(f"  Scanning: {root}")
+        
+        # Identify subdirs with portfolio_state.json
+        sessions = []
+        for d in root.iterdir():
+            if d.is_dir() and (d / "portfolio_state.json").exists():
+                sessions.append(d)
+        
+        if not sessions:
+            print(f"  No valid forward sessions found in {root}")
+            return
+            
+        print(f"  Found {len(sessions)} sessions.")
+        json_p, md_p = write_portfolio_report(sessions, root)
+        print(f"  Portfolio report generated:")
+        print(f"    → {json_p}")
+        print(f"    → {md_p}")
         return
 
     # --- LIST-RUNS MODE ---
