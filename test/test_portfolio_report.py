@@ -61,7 +61,7 @@ def test_aggregate_portfolio_multiple(mock_session_dirs):
     
     # Check contribution
     eth_cand = next(c for c in payload["candidates"] if c["ticker"] == "ETH-USD")
-    assert eth_cand["total_pnl"] == 500.0
+    assert eth_cand["total_pnl"] == pytest.approx(500.0)
     assert pytest.approx(eth_cand["contribution_pct"]) == 500.0 / 700.0
 
 def test_aggregate_portfolio_single(mock_session_dirs):

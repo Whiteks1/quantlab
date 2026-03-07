@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -281,9 +282,12 @@ def main() -> None:
     parser.add_argument("--resume-forward", metavar="SESSION_DIR", default=None,
                         help="Resume an existing forward evaluation session from its directory")
     
-    # Stage M: Portfolio Aggregation
     parser.add_argument("--portfolio-report", metavar="ROOT_DIR", default=None,
                         help="Aggregate all forward sessions in ROOT_DIR into a portfolio report")
+    parser.add_argument("--portfolio-mode", default="raw_capital", choices=["raw_capital", "equal_weight", "custom_weight"],
+                        help="Allocation mode for portfolio aggregation (default: raw_capital)")
+    parser.add_argument("--portfolio-weights", metavar="JSON_FILE", default=None,
+                        help="Path to JSON file with custom weights for --portfolio-mode custom_weight")
 
     args = parser.parse_args()
 
@@ -328,8 +332,23 @@ def main() -> None:
             return
             
         print(f"  Found {len(sessions)} sessions.")
-        json_p, md_p = write_portfolio_report(sessions, root)
-        print(f"  Portfolio report generated:")
+        
+        weights = None
+        if args.portfolio_weights:
+            try:
+                with open(args.portfolio_weights, "r", encoding="utf-8") as f:
+                    weights = json.load(f)
+            except Exception as e:
+                print(f"ERROR: Could not load portfolio weights from {args.portfolio_weights}: {e}")
+                return
+
+        json_p, md_p = write_portfolio_report(
+            sessions, 
+            root, 
+            mode=args.portfolio_mode,
+            weights=weights
+        )
+        print(f"  Portfolio report generated ({args.portfolio_mode}):")
         print(f"    → {json_p}")
         print(f"    → {md_p}")
         return
