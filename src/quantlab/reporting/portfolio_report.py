@@ -53,11 +53,20 @@ def _get_dedup_key(sess: Dict[str, Any]) -> Tuple:
 def aggregate_portfolio(
     session_dirs: List[str | Path], 
     mode: str = "raw_capital", 
-    weights: Optional[Dict[str, float]] = None
+    weights: Optional[Dict[str, float]] = None,
+    top_n: Optional[int] = None,
+    rank_metric: str = "total_return",
+    min_return: Optional[float] = None,
+    max_drawdown: Optional[float] = None,
+    include_tickers: Optional[List[str]] = None,
+    exclude_tickers: Optional[List[str]] = None,
+    include_strategies: Optional[List[str]] = None,
+    exclude_strategies: Optional[List[str]] = None,
+    latest_per_source_run: bool = False
 ) -> Dict[str, Any]:
     """
     Aggregate multiple forward evaluation sessions into a portfolio payload.
-    Applies deduplication, metadata normalization, and weighted allocation.
+    Applies deduplication, metadata normalization, selection rules, and weighted allocation.
     """
     scanned_count = 0
     excluded_incomplete = 0
@@ -94,19 +103,26 @@ def aggregate_portfolio(
             strategy = candidate.get("strategy_name") or state.get("strategy_name") or "N/A"
             source_run_id = candidate.get("source_run_id") or state.get("source_run_id") or "N/A"
             
+            # Session-level metrics for selection
+            eq = df_eq["equity"]
+            peak = eq.cummax()
+            dd = (eq / peak) - 1.0
+            sess_max_dd = float(dd.min())
+
             raw_sessions.append({
                 "session_id": state.get("session_id"),
                 "ticker": ticker,
                 "strategy": strategy,
                 "source_run_id": source_run_id,
                 "starting_cash": initial_cash,
-                "ending_equity": float(df_eq["equity"].iloc[-1] * initial_cash),
-                "total_pnl": float((df_eq["equity"].iloc[-1] - 1.0) * initial_cash),
-                "total_return": float(df_eq["equity"].iloc[-1] - 1.0),
+                "ending_equity": float(eq.iloc[-1] * initial_cash),
+                "total_pnl": float((eq.iloc[-1] - 1.0) * initial_cash),
+                "total_return": float(eq.iloc[-1] - 1.0),
+                "max_drawdown": sess_max_dd,
                 "eval_start": state.get("eval_start", "N/A"),
                 "eval_end": state.get("eval_end", "N/A"),
                 "updated_at": state.get("updated_at", ""),
-                "equity_norm": df_eq["equity"]  # Normalized 1.0-based series
+                "equity_norm": eq  # Normalized 1.0-based series
             })
             
         except Exception as e:
@@ -126,25 +142,67 @@ def aggregate_portfolio(
             if sess.get("updated_at", "") > existing.get("updated_at", ""):
                 dedup_map[key] = sess
                 
-    candidates_data = list(dedup_map.values())
-    dropped_as_dupes = len(raw_sessions) - len(candidates_data)
+    candidates_after_dedup = list(dedup_map.values())
+    dropped_as_dupes = len(raw_sessions) - len(candidates_after_dedup)
+
+    # --- SELECTION FILTERS ---
+    final_selected = candidates_after_dedup
+    
+    # 1. Ticker/Strategy Filters
+    if include_tickers:
+        final_selected = [c for c in final_selected if c["ticker"] in include_tickers]
+    if exclude_tickers:
+        final_selected = [c for c in final_selected if c["ticker"] not in exclude_tickers]
+    if include_strategies:
+        final_selected = [c for c in final_selected if c["strategy"] in include_strategies]
+    if exclude_strategies:
+        final_selected = [c for c in final_selected if c["strategy"] not in exclude_strategies]
+        
+    # 2. Performance Filters
+    if min_return is not None:
+        final_selected = [c for c in final_selected if c["total_return"] >= min_return]
+    if max_drawdown is not None:
+        # Threshold is decimal negative, e.g. -0.20
+        final_selected = [c for c in final_selected if c["max_drawdown"] >= max_drawdown]
+        
+    # 3. Latest per source run
+    if latest_per_source_run:
+        grouped = {}
+        for c in final_selected:
+            srid = c["source_run_id"]
+            if srid not in grouped or c["updated_at"] > grouped[srid]["updated_at"]:
+                grouped[srid] = c
+        final_selected = list(grouped.values())
+        
+    # 4. Ranking & Top-N
+    if top_n is not None and top_n > 0:
+        # Sort by rank_metric descending
+        # If sort_key is contribution_pct, use total_pnl as proxy for ordering
+        sk = rank_metric
+        if sk == "contribution_pct":
+            sk = "total_pnl"
+        
+        final_selected.sort(key=lambda x: x.get(sk, 0.0), reverse=True)
+        final_selected = final_selected[:top_n]
+    
+    candidates_data = final_selected
     
     stats = {
         "sessions_scanned": scanned_count,
         "sessions_included": len(candidates_data),
         "sessions_excluded_incomplete": excluded_incomplete,
-        "sessions_collapsed_duplicates": dropped_as_dupes
+        "sessions_collapsed_duplicates": dropped_as_dupes,
+        "sessions_after_hygiene": len(raw_sessions),
+        "sessions_after_dedup": len(candidates_after_dedup),
+        "sessions_after_selection": len(candidates_data)
     }
 
     if not candidates_data:
-        return {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "n_candidates": 0,
-            "candidates": [],
-            "portfolio_summary": {},
-            **stats,
-            "scanning_stats": stats
-        }
+        raise ValueError(
+            "No portfolio sessions remain after applying selection rules. "
+            f"(scanned={scanned_count}, after_hygiene={len(raw_sessions)}, "
+            f"after_dedup={len(candidates_after_dedup)}, after_selection=0)"
+        )
 
     # Weight resolution
     target_weights = {}
@@ -290,6 +348,17 @@ def aggregate_portfolio(
             "weights_used": json_weights,
             "normalized_weights": mode in ["equal_weight", "custom_weight"]
         },
+        "selection": {
+            "rank_metric": rank_metric,
+            "top_n": top_n,
+            "min_return": min_return,
+            "max_drawdown": max_drawdown,
+            "include_tickers": include_tickers,
+            "exclude_tickers": exclude_tickers,
+            "include_strategies": include_strategies,
+            "exclude_strategies": exclude_strategies,
+            "latest_per_source_run": latest_per_source_run
+        },
         **stats,
         "scanning_stats": stats
     }
@@ -304,6 +373,7 @@ def render_portfolio_md(payload: Dict[str, Any]) -> str:
     candidates = payload.get("candidates", [])
     stats = payload.get("scanning_stats", {})
     alloc = payload.get("allocation", {})
+    sel = payload.get("selection", {})
     
     lines = [
         "# Portfolio Aggregation Report",
@@ -313,9 +383,24 @@ def render_portfolio_md(payload: Dict[str, Any]) -> str:
         "## Scanning & Deduplication",
         "",
         f"- **Sessions Scanned:** {stats.get('sessions_scanned', 0)}",
-        f"- **Sessions Included:** {stats.get('sessions_included', 0)}",
+        f"- **Sessions Included (Final):** {stats.get('sessions_included', 0)}",
         f"- **Sessions Excluded (Incomplete):** {stats.get('sessions_excluded_incomplete', 0)}",
         f"- **Sessions Collapsed (Duplicates):** {stats.get('sessions_collapsed_duplicates', 0)}",
+        f"- **Sessions After Hygiene:** {stats.get('sessions_after_hygiene', 'N/A')}",
+        f"- **Sessions After Dedup:** {stats.get('sessions_after_dedup', 'N/A')}",
+        f"- **Sessions After Selection:** {stats.get('sessions_after_selection', 'N/A')}",
+        "",
+        "## Selection Rules",
+        "",
+        f"- **Rank Metric:** `{sel.get('rank_metric', 'total_return')}`",
+        f"- **Top N:** {sel.get('top_n') or 'All'}",
+        f"- **Min Return:** {sel.get('min_return') if sel.get('min_return') is not None else 'None'}",
+        f"- **Max Drawdown:** {sel.get('max_drawdown') if sel.get('max_drawdown') is not None else 'None'}",
+        f"- **Include Tickers:** {', '.join(sel.get('include_tickers')) if sel.get('include_tickers') else 'All'}",
+        f"- **Exclude Tickers:** {', '.join(sel.get('exclude_tickers')) if sel.get('exclude_tickers') else 'None'}",
+        f"- **Include Strategies:** {', '.join(sel.get('include_strategies')) if sel.get('include_strategies') else 'All'}",
+        f"- **Exclude Strategies:** {', '.join(sel.get('exclude_strategies')) if sel.get('exclude_strategies') else 'None'}",
+        f"- **Latest Per Source Run:** {'Yes' if sel.get('latest_per_source_run') else 'No'}",
         "",
         "## Allocation",
         "",
@@ -354,7 +439,16 @@ def write_portfolio_report(
     session_dirs: List[str | Path], 
     out_dir: str | Path,
     mode: str = "raw_capital",
-    weights: Optional[Dict[str, float]] = None
+    weights: Optional[Dict[str, float]] = None,
+    top_n: Optional[int] = None,
+    rank_metric: str = "total_return",
+    min_return: Optional[float] = None,
+    max_drawdown: Optional[float] = None,
+    include_tickers: Optional[List[str]] = None,
+    exclude_tickers: Optional[List[str]] = None,
+    include_strategies: Optional[List[str]] = None,
+    exclude_strategies: Optional[List[str]] = None,
+    latest_per_source_run: bool = False
 ) -> Tuple[str, str]:
     """
     Write portfolio report artifacts to *out_dir*.
@@ -362,7 +456,20 @@ def write_portfolio_report(
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
     
-    payload = aggregate_portfolio(session_dirs, mode=mode, weights=weights)
+    payload = aggregate_portfolio(
+        session_dirs, 
+        mode=mode, 
+        weights=weights,
+        top_n=top_n,
+        rank_metric=rank_metric,
+        min_return=min_return,
+        max_drawdown=max_drawdown,
+        include_tickers=include_tickers,
+        exclude_tickers=exclude_tickers,
+        include_strategies=include_strategies,
+        exclude_strategies=exclude_strategies,
+        latest_per_source_run=latest_per_source_run
+    )
     
     json_path = out_path / "portfolio_report.json"
     md_path = out_path / "portfolio_report.md"

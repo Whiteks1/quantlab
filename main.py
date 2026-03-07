@@ -288,6 +288,27 @@ def main() -> None:
                         help="Allocation mode for portfolio aggregation (default: raw_capital)")
     parser.add_argument("--portfolio-weights", metavar="JSON_FILE", default=None,
                         help="Path to JSON file with custom weights for --portfolio-mode custom_weight")
+    
+    # Stage M.3: Portfolio Selection
+    parser.add_argument("--portfolio-top-n", type=int, default=None,
+                        help="Keep only the best N sessions after hygiene/dedup")
+    parser.add_argument("--portfolio-rank-metric", default="total_return",
+                        choices=["total_return", "ending_equity", "contribution_pct", "updated_at"],
+                        help="Metric to rank sessions for Top-N selection (default: total_return)")
+    parser.add_argument("--portfolio-min-return", type=float, default=None,
+                        help="Exclude sessions with total_return below this threshold")
+    parser.add_argument("--portfolio-max-drawdown", type=float, default=None,
+                        help="Exclude sessions with max drawdown worse than this threshold (e.g. -0.20)")
+    parser.add_argument("--portfolio-include-tickers", default=None,
+                        help="Comma-separated list of tickers to include")
+    parser.add_argument("--portfolio-exclude-tickers", default=None,
+                        help="Comma-separated list of tickers to exclude")
+    parser.add_argument("--portfolio-include-strategies", default=None,
+                        help="Comma-separated list of strategies to include")
+    parser.add_argument("--portfolio-exclude-strategies", default=None,
+                        help="Comma-separated list of strategies to exclude")
+    parser.add_argument("--portfolio-latest-per-source-run", action="store_true",
+                        help="If set, only keep the latest session for each source_run_id")
 
     args = parser.parse_args()
 
@@ -342,11 +363,28 @@ def main() -> None:
                 print(f"ERROR: Could not load portfolio weights from {args.portfolio_weights}: {e}")
                 return
 
+        # Parse comma-separated inclusions/exclusions
+        def _parse_list(s): return [item.strip() for item in s.split(",")] if s else None
+        
+        include_tickers = _parse_list(args.portfolio_include_tickers)
+        exclude_tickers = _parse_list(args.portfolio_exclude_tickers)
+        include_strategies = _parse_list(args.portfolio_include_strategies)
+        exclude_strategies = _parse_list(args.portfolio_exclude_strategies)
+
         json_p, md_p = write_portfolio_report(
             sessions, 
             root, 
             mode=args.portfolio_mode,
-            weights=weights
+            weights=weights,
+            top_n=args.portfolio_top_n,
+            rank_metric=args.portfolio_rank_metric,
+            min_return=args.portfolio_min_return,
+            max_drawdown=args.portfolio_max_drawdown,
+            include_tickers=include_tickers,
+            exclude_tickers=exclude_tickers,
+            include_strategies=include_strategies,
+            exclude_strategies=exclude_strategies,
+            latest_per_source_run=args.portfolio_latest_per_source_run
         )
         print(f"  Portfolio report generated ({args.portfolio_mode}):")
         print(f"    → {json_p}")
