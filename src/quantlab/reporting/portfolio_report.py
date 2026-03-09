@@ -50,10 +50,8 @@ def _get_dedup_key(sess: Dict[str, Any]) -> Tuple:
         round(float(sess.get("ending_equity", 0.0)), 2),
     )
 
-def aggregate_portfolio(
-    session_dirs: List[str | Path], 
-    mode: str = "raw_capital", 
-    weights: Optional[Dict[str, float]] = None,
+def get_eligible_sessions(
+    session_dirs: List[str | Path],
     top_n: Optional[int] = None,
     rank_metric: str = "total_return",
     min_return: Optional[float] = None,
@@ -63,10 +61,10 @@ def aggregate_portfolio(
     include_strategies: Optional[List[str]] = None,
     exclude_strategies: Optional[List[str]] = None,
     latest_per_source_run: bool = False
-) -> Dict[str, Any]:
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
-    Aggregate multiple forward evaluation sessions into a portfolio payload.
-    Applies deduplication, metadata normalization, selection rules, and weighted allocation.
+    Scan, hygiene, dedup, and filter sessions.
+    Returns (sessions_list, scanning_stats).
     """
     scanned_count = 0
     excluded_incomplete = 0
@@ -185,24 +183,29 @@ def aggregate_portfolio(
         final_selected.sort(key=lambda x: x.get(sk, 0.0), reverse=True)
         final_selected = final_selected[:top_n]
     
-    candidates_data = final_selected
-    
     stats = {
         "sessions_scanned": scanned_count,
-        "sessions_included": len(candidates_data),
+        "sessions_included": len(final_selected),
         "sessions_excluded_incomplete": excluded_incomplete,
         "sessions_collapsed_duplicates": dropped_as_dupes,
         "sessions_after_hygiene": len(raw_sessions),
         "sessions_after_dedup": len(candidates_after_dedup),
-        "sessions_after_selection": len(candidates_data)
+        "sessions_after_selection": len(final_selected)
     }
+    
+    return final_selected, stats
 
+def compute_portfolio_from_sessions(
+    candidates_data: List[Dict[str, Any]],
+    mode: str = "raw_capital",
+    weights: Optional[Dict[str, float]] = None,
+) -> Dict[str, Any]:
+    """
+    Perform weighted aggregation and metric calculation from a list of eligible sessions.
+    The candidates_data should contain 'equity_norm' series for each session.
+    """
     if not candidates_data:
-        raise ValueError(
-            "No portfolio sessions remain after applying selection rules. "
-            f"(scanned={scanned_count}, after_hygiene={len(raw_sessions)}, "
-            f"after_dedup={len(candidates_after_dedup)}, after_selection=0)"
-        )
+        raise ValueError("No portfolio sessions provided for aggregation.")
 
     # Weight resolution
     target_weights = {}
@@ -238,27 +241,25 @@ def aggregate_portfolio(
             target_weights[c["session_id"]] = (c["starting_cash"] / total_start_cash) if total_start_cash > 0 else 0.0
 
     # Apply resolved weights to candidates for metadata
-    for c in candidates_data:
+    # We work on a copy to avoid side effects if reused
+    import copy
+    work_candidates = copy.deepcopy(candidates_data)
+    for c in work_candidates:
         c["assigned_weight"] = target_weights.get(c["session_id"], 0.0)
 
     # Weighted Equity Construction
     # Align all normalized (1.0 based) curves
-    equity_norm_list = [c.get("equity_norm") for c in candidates_data]
+    equity_norm_list = [c.get("equity_norm") for c in work_candidates]
     for i, s in enumerate(equity_norm_list):
-        s.name = candidates_data[i]["session_id"]
+        s.name = work_candidates[i]["session_id"]
         
     aligned_df = pd.concat(equity_norm_list, axis=1)
-    
-    # Handle staggered starts in weighted modes: before inception, weight = 0
-    # Actually, if we multiply by weight directly, we need to handle when sum(weights) at t < 1.0
-    # The requirement says "do NOT fabricate exposure before inception".
-    # We'll build the weighted sum bar by bar.
     
     # For raw_capital, we continue with the absolute sum approach to stay consistent
     if mode == "raw_capital":
         # absolute sum logic (Stage M fix)
         abs_list = []
-        for c in candidates_data:
+        for c in work_candidates:
             abs_eq = c["equity_norm"] * c["starting_cash"]
             abs_eq.name = c["session_id"]
             abs_list.append(abs_eq)
@@ -266,7 +267,7 @@ def aggregate_portfolio(
         portfolio_df = pd.concat(abs_list, axis=1)
         # Correct staggered starts: fill leading NaNs with starting cash
         for col in portfolio_df.columns:
-            matching_c = next(c for c in candidates_data if c["session_id"] == col)
+            matching_c = next(c for c in work_candidates if c["session_id"] == col)
             sc = matching_c["starting_cash"]
             fv = portfolio_df[col].first_valid_index()
             if fv is not None:
@@ -274,20 +275,14 @@ def aggregate_portfolio(
         
         portfolio_df = portfolio_df.ffill()
         portfolio_equity = portfolio_df.sum(axis=1)
-        starting_value = float(sum(c["starting_cash"] for c in candidates_data))
+        starting_value = float(sum(c["starting_cash"] for c in work_candidates))
         ending_value = float(portfolio_equity.iloc[-1])
     else:
         # Weighted normalized logic
-        # Before a session starts, its weight in the sum is essentially 0 or it's not present.
-        # But if it hasn't started, the "portfolio" is composed of other things.
-        # We will fill leading NaNs with 1.0 (neutral) so the weighted sum works correctly.
-        # This treats a non-active session as "holding cash (1.0) with its assigned weight".
+        # Neutral fill for staggered starts
         for col in aligned_df.columns:
-            # Find the first valid index (inception)
             fv = aligned_df[col].first_valid_index()
             if fv is not None:
-                # Use .loc to fill everything before (and including) the first valid index
-                # with 1.0 if it's currently NaN.
                 aligned_df.loc[:fv, col] = aligned_df.loc[:fv, col].fillna(1.0)
         
         aligned_df = aligned_df.ffill()
@@ -296,7 +291,6 @@ def aggregate_portfolio(
         weights_series = pd.Series(target_weights)
         portfolio_equity_norm = (aligned_df * weights_series).sum(axis=1)
         
-        # Scale to a nominal base (e.g. 10,000) for standard reporting look
         starting_value = 10_000.0
         portfolio_equity = portfolio_equity_norm * starting_value
         ending_value = float(portfolio_equity.iloc[-1])
@@ -311,29 +305,25 @@ def aggregate_portfolio(
     
     # Contribution analysis (weighted)
     if mode == "raw_capital":
-        for c in candidates_data:
+        for c in work_candidates:
             c["contribution_pct"] = float(c["total_pnl"] / total_pnl) if abs(total_pnl) > 1e-6 else 0.0
     else:
-        # PnL contribution from weighted component i: w_i * (norm_eq_i_end - 1.0) * Portfolio_Start
-        # sum of contributions will equal total portfolio PnL
-        for c in candidates_data:
+        for c in work_candidates:
             sid = c["session_id"]
             w = float(target_weights.get(sid, 0.0))
-            comp_normalized_pnl = float(c["total_return"]) # (norm_eq - 1.0)
+            comp_normalized_pnl = float(c["total_return"])
             comp_pnl_in_portfolio = w * comp_normalized_pnl * starting_value
             c["contribution_pct"] = float(comp_pnl_in_portfolio / total_pnl) if abs(total_pnl) > 1e-6 else 0.0
 
-    # CLEANUP: Pop equity_norm from candidates before payload construction
-    for c in candidates_data:
+    # CLEANUP: Pop equity_norm
+    for c in work_candidates:
         c.pop("equity_norm", None)
 
     # Ensure target_weights values are floats for JSON
     json_weights = {k: float(v) for k, v in target_weights.items()}
 
-    payload = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "n_candidates": len(candidates_data),
-        "candidates": candidates_data,
+    return {
+        "candidates": work_candidates,
         "portfolio_summary": {
             "starting_value": float(starting_value),
             "ending_value": float(ending_value),
@@ -347,7 +337,55 @@ def aggregate_portfolio(
             "weights_supplied": weights or {},
             "weights_used": json_weights,
             "normalized_weights": mode in ["equal_weight", "custom_weight"]
-        },
+        }
+    }
+
+def aggregate_portfolio(
+    session_dirs: List[str | Path], 
+    mode: str = "raw_capital", 
+    weights: Optional[Dict[str, float]] = None,
+    top_n: Optional[int] = None,
+    rank_metric: str = "total_return",
+    min_return: Optional[float] = None,
+    max_drawdown: Optional[float] = None,
+    include_tickers: Optional[List[str]] = None,
+    exclude_tickers: Optional[List[str]] = None,
+    include_strategies: Optional[List[str]] = None,
+    exclude_strategies: Optional[List[str]] = None,
+    latest_per_source_run: bool = False
+) -> Dict[str, Any]:
+    """
+    Aggregate multiple forward evaluation sessions into a portfolio payload.
+    Wrapper around get_eligible_sessions and compute_portfolio_from_sessions.
+    """
+    candidates_data, stats = get_eligible_sessions(
+        session_dirs,
+        top_n=top_n,
+        rank_metric=rank_metric,
+        min_return=min_return,
+        max_drawdown=max_drawdown,
+        include_tickers=include_tickers,
+        exclude_tickers=exclude_tickers,
+        include_strategies=include_strategies,
+        exclude_strategies=exclude_strategies,
+        latest_per_source_run=latest_per_source_run
+    )
+
+    if not candidates_data:
+        raise ValueError(
+            "No portfolio sessions remain after applying selection rules. "
+            f"(scanned={stats['sessions_scanned']}, after_hygiene={stats['sessions_after_hygiene']}, "
+            f"after_dedup={stats['sessions_after_dedup']}, after_selection=0)"
+        )
+
+    res = compute_portfolio_from_sessions(candidates_data, mode=mode, weights=weights)
+
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "n_candidates": len(res["candidates"]),
+        "candidates": res["candidates"],
+        "portfolio_summary": res["portfolio_summary"],
+        "allocation": res["allocation"],
         "selection": {
             "rank_metric": rank_metric,
             "top_n": top_n,
@@ -359,8 +397,8 @@ def aggregate_portfolio(
             "exclude_strategies": exclude_strategies,
             "latest_per_source_run": latest_per_source_run
         },
-        **stats,
-        "scanning_stats": stats
+        "scanning_stats": stats,
+        **stats
     }
     
     return _sanitize(payload)
@@ -405,7 +443,7 @@ def render_portfolio_md(payload: Dict[str, Any]) -> str:
         "## Allocation",
         "",
         f"- **Mode:** `{alloc.get('mode', 'raw_capital')}`",
-        f"- **Included Sessions:** {payload.get('n_candidates', 0)}",
+        f"- **Included Sessions:** {len(candidates)}",
         f"- **Weights Normalized:** {'yes' if alloc.get('normalized_weights') else 'no'}",
         f"- **Total Assigned Weight:** {_fmt(sum(alloc.get('weights_used', {}).values()), '.4f')}",
         "",
