@@ -1,8 +1,37 @@
 # Current State - QuantLab
 
+## Project Identity
+QuantLab is a **CLI-first personal quantitative research laboratory**. It is designed for research reproducibility, experiment traceability, and portfolio-level reasoning. It is NOT a SaaS platform, public API, or multi-user system.
+
+## Architectural Direction
+- **Layered Architecture**: `data/`, `indicators/`, `strategies/`, `backtest/`, `execution/` (paper broker), `reporting/`.
+- **CLI Orchestration**: `main.py` serves as the entrypoint for all research and backtesting pipelines.
+- **Data-Driven**: Research is backed by deterministic processes and verifiable artifacts in `outputs/`.
+
+## Roadmap Stages
+- **Stage M**: Portfolio Engine (Current focus)
+- **Stage N**: Allocation & Risk Policies
+- **Stage O**: Research Intelligence
+- **Stage P**: Lab Automation
+
+## Development Workflow
+QuantLab follows a strict "Plan-Execute-Verify" workflow:
+1. **Architect (ChatGPT)**: Designs changes and provides implementation plans.
+2. **Execution Agent (Antigravity)**: Implements plans in dedicated branches.
+3. **Verification**: Automated tests (`pytest`) and manual output validation.
+4. **Stable Main**: No direct commits to `main`.
+
+## Out-of-Scope (for now)
+- External APIs or Web Frontends
+- Authentication or Multi-user support
+- Live trading execution (Paper-only by default)
+- Microservices infrastructure
+
+---
+
 ## Active Stage
 - **Stage**: M.3 — Portfolio Selection / Session Inclusion Rules
-- **Last Updated**: 2026-03-07
+- **Last Updated**: 2026-03-10
 - **Task File**: `.agents/tasks/stage-m3-selection-rules.md`
 
 ## Completed Stages
