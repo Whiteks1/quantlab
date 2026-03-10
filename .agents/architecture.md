@@ -1,82 +1,215 @@
-# Architecture - QuantLab
+# Architecture Overview — QuantLab
 
 ## Purpose
-This document describes the current architectural structure of QuantLab and its intended evolution.
 
-## System Orientation
-QuantLab is a CLI-first quantitative research laboratory focused on:
-- reproducible experimentation
-- backtesting
-- forward evaluation
-- portfolio-level analysis
-- structured reporting
+This document defines the architectural structure of QuantLab and the dependency rules between modules.
 
-## Architectural Principles
-- layered architecture
+QuantLab is designed as a **research-first, CLI-driven quantitative laboratory** focused on reproducible strategy experimentation and portfolio analysis.
+
+The architecture prioritizes:
+
+- clarity
+- deterministic behavior
+- reproducibility
+- modular design
+- strict separation of concerns
+
+---
+
+# Architectural Layers
+
+QuantLab follows a layered architecture where responsibilities flow in one direction.
+
+Each layer has a well-defined responsibility.
+
+---
+
+# Layer Responsibilities
+
+## data
+Responsible for acquiring and preparing market data.
+
+Typical tasks:
+- OHLC loading
+- data cleaning
+- timeframe normalization
+- dataset preparation
+
+Outputs:
+DataFrames ready for analysis.
+
+---
+
+## indicators
+Computes technical indicators and derived features.
+
+Examples:
+- RSI
+- moving averages
+- ATR
+- volatility metrics
+
+Indicators must be **pure functions** whenever possible.
+
+---
+
+## strategies
+Implements signal generation logic.
+
+Responsibilities:
+- combine indicators
+- generate BUY / SELL signals
+- define entry and exit logic
+
+Strategies must remain **stateless and deterministic**.
+
+---
+
+## backtest
+Simulates historical trading using strategy signals.
+
+Responsibilities:
+- trade simulation
+- position management
+- capital tracking
+- trade log generation
+
+Outputs:
+- trade logs
+- performance metrics
+
+---
+
+## execution
+Handles **paper trading / forward evaluation**.
+
+Responsibilities:
+- simulate real-time decision making
+- maintain forward session logs
+- record trades
+
+Outputs:
+- forward run artifacts
+- trade logs
+
+---
+
+## portfolio
+Aggregates multiple strategy runs into a portfolio.
+
+Responsibilities:
+- combine runs
+- apply allocation rules
+- compute portfolio-level metrics
+
+Examples:
+- equal weight
+- capital weight
+- custom weight
+
+---
+
+## reporting
+Produces human-readable and machine-readable outputs.
+
+Artifacts include:
+
+- markdown reports
+- JSON summaries
+- enriched CSV outputs
+- charts and analytics
+
+Reporting must **not contain business logic**.
+
+---
+
+# Dependency Rules
+
+Allowed dependency direction:
+
+---
+
+# Forbidden Patterns
+
+The following architectural violations must be avoided:
+
+### Reporting importing strategy logic
+Reporting must only consume results, never compute them.
+
+### Business logic in CLI
+`main.py` should only orchestrate commands.
+
+### Execution modifying strategy definitions
+Execution must treat strategies as immutable.
+
+### Cross-layer shortcuts
+Lower layers must not import higher layers.
+
+Example of forbidden dependency:
+
+---
+
+# Architectural Principles
+
+QuantLab architecture follows these principles:
+
+**Deterministic behavior**
+Results must be reproducible.
+
+**Separation of concerns**
+Each module has a single responsibility.
+
+**Explicit artifacts**
+All outputs must be stored and traceable.
+
+**Small composable modules**
+Large monolithic logic should be avoided.
+
+---
+
+# Future Architectural Evolution
+
+Possible future expansions include:
+
+- research automation modules
+- portfolio risk policies
+- strategy benchmarking frameworks
+- experiment orchestration
+
+However, QuantLab will remain **CLI-first** for the foreseeable roadmap.
+
+No service layer or SaaS architecture is currently planned.
+# Dependency Rules
+
+Allowed dependency direction:
+
+`data -> indicators -> strategies -> backtest -> execution -> reporting`
+
+`portfolio` may consume results from backtest and execution, but should not introduce cross-layer shortcuts.
+# Forbidden Patterns
+
+The following architectural violations should be avoided:
+
+- business logic in `main.py`
+- reporting code containing strategy logic
+- execution code modifying strategy definitions
+- lower layers importing higher layers
+- portfolio logic mixed into reporting or CLI code
+# Architectural Principles
+
+QuantLab architecture follows these principles:
+
+- deterministic behavior
 - separation of concerns
-- research-first design
-- deterministic outputs where possible
-- modular evolution over premature platform complexity
+- explicit artifacts
+- modular evolution
+- research-first design# Future Architectural Evolution
 
-## Current Layered Structure
-data -> indicators -> strategies -> backtest -> execution -> reporting -> portfolio
-
-## High-Level Components
-
-### data/
-Responsible for data acquisition, normalization, and OHLC handling.
-
-### features/ or indicators/
-Responsible for indicator computation and feature generation.
-
-### strategies/
-Responsible for signal generation and strategy logic.
-
-### backtest/
-Responsible for historical simulation and performance evaluation.
-
-### execution/
-Responsible for paper execution and forward evaluation workflows.
-
-### reporting/
-Responsible for Markdown, JSON, CSV, and chart outputs.
-
-### portfolio/
-Responsible for portfolio aggregation, position logic, allocation, and selection layers.
-
-## Project Memory Layer
-The `.agents/` directory acts as the project memory and workflow coordination layer.
-
-Key files:
-- `project-brief.md`
-- `current-state.md`
-- `implementation-rules.md`
-- `session-log.md`
-
-## Workflow Layer
-Development is coordinated through:
-- `read-and-plan.md`
-- `execute-task.md`
-- `review-stage.md`
-- `close-session.md`
-
-## Current Architectural Focus
-Current work is focused on Stage M.x portfolio evolution:
-- aggregation
-- hygiene
-- allocation
-- selection
-- mode comparison
-
-## Future Architectural Direction
 Possible future extensions may include:
+
 - broker integrations
-- paper trading extensions
 - research automation
-- API or service layers
-- broader user-facing workflows
+- portfolio risk policies
+- experiment orchestration
 
-These remain future possibilities, not current priorities.
-
-## Guiding Principle
-QuantLab should remain small enough to stay clear, but modular enough to evolve.
+These should remain future extensions and should not compromise the current CLI-first research architecture.

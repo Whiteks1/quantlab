@@ -1,73 +1,79 @@
-# Decision Log - QuantLab
+# Decision Log — QuantLab
 
-This file records important architectural, workflow, and project-scope decisions.
+This document records key architectural and workflow decisions.
 
----
+The goal is to prevent architectural drift and ensure continuity between development sessions.
 
-## 2026-03-10 — QuantLab is CLI-first
-**Decision**  
-QuantLab will be developed primarily as a CLI-first quantitative research laboratory.
+Each entry includes:
 
-**Reasoning**  
-This keeps the project focused on research quality, reproducibility, and modularity without introducing premature platform complexity.
-
-**Implications**
-- no service layer by default
-- no SaaS assumptions
-- no frontend as a current priority
+- context
+- decision
+- consequences
 
 ---
 
-## 2026-03-10 — No service layer in the current roadmap
-**Decision**  
-Broker APIs, dashboards, multi-user features, and broader service layers are out of current scope.
+# 2026-03-10 — CLI-first architecture
 
-**Reasoning**  
-These features may become relevant later, but they should not drive architecture before the research core is mature.
+## Context
 
-**Implications**
-- prioritize research core
-- prioritize portfolio and risk logic
-- preserve extensibility without implementing platform complexity now
+QuantLab is evolving as a research environment for quantitative strategies.
 
----
+It could naturally drift toward API layers, services, or platform-style infrastructure.
 
-## 2026-03-10 — Branch-first development workflow
-**Decision**  
-All significant work must be done in dedicated branches. `main` remains stable.
+However, this would introduce unnecessary complexity at the current stage.
 
-**Reasoning**  
-This supports safer collaboration between ChatGPT planning, Antigravity execution, and user validation.
+## Decision
 
-**Implications**
-- no direct work on `main`
-- one scoped task per branch
-- clearer PR history
+QuantLab will remain **CLI-first**.
+
+The system will be designed primarily for command-line execution and batch experiments.
+
+## Consequences
+
+- no service layer
+- no web API
+- no microservices
+- workflows centered around CLI commands and artifacts
 
 ---
 
-## 2026-03-10 — `.agents` as project memory
-**Decision**  
-The `.agents/` directory is the source of workflow continuity and project memory.
+# 2026-03-10 — Branch-first development workflow
 
-**Reasoning**  
-It reduces context overload and improves continuity between sessions.
+## Context
 
-**Implications**
-- workflows must be read before execution
-- current state must be maintained
-- session summaries should preserve continuity
+Development involves collaboration between ChatGPT (architecture/design) and Antigravity (execution).
+
+To avoid instability in the repository, changes must be isolated.
+
+## Decision
+
+All work must occur in **dedicated branches**.
+
+Direct commits to `main` are prohibited.
+
+## Consequences
+
+- every change occurs through a branch
+- pull requests are the integration mechanism
+- main branch remains stable
 
 ---
 
-## Template
+# 2026-03-10 — QuantLab as a research laboratory
 
-### YYYY-MM-DD — [Decision Title]
-**Decision**  
-[What was decided]
+## Context
 
-**Reasoning**  
-[Why it was decided]
+QuantLab could evolve toward a live trading platform.
 
-**Implications**  
-[What changes because of this]
+However the current objective is research and experimentation.
+
+## Decision
+
+QuantLab is defined as a **quantitative research laboratory**, not a trading platform.
+
+## Consequences
+
+- focus on experimentation
+- reproducible experiments
+- strong reporting
+- forward evaluation before any live execution
