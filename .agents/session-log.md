@@ -1,5 +1,14 @@
 # Session Log - QuantLab
 
+## 2026-03-07 — Stage M.3 Closed
+- **Session Focus**: Final verification and closure of Stage M.3.
+- **Tasks Completed**:
+    - Verified `test/test_portfolio_selection.py`, `test/test_portfolio_report.py`, `test/test_portfolio_allocation.py`, and `test/test_portfolio_hygiene.py` all pass.
+    - Verified normal CLI portfolio reporting still works with `--portfolio-report .\outputs\forward_runs`.
+    - Verified empty-selection behavior now fails loudly with a clear `ValueError`.
+- **Key Decisions**: Stage M.3 is considered closed with explicit fail-loud behavior when no sessions remain after selection rules.
+- **Next Steps**: Begin Stage M.4 for portfolio mode comparison across `raw_capital`, `equal_weight`, and `custom_weight`.
+
 ## 2026-03-07 — Workflow Alignment
 - **Session Focus**: Align `.agents` documentation to match actual project state.
 - **Tasks Completed**:
