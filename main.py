@@ -7,6 +7,9 @@ import pandas as pd
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
 
+
+from quantlab.cli.portfolio import handle_portfolio_commands
+from quantlab.cli.forward import handle_forward_commands
 from quantlab.cli.report import handle_report_commands
 from quantlab.data.sources import fetch_ohlc
 from quantlab.features.indicators import add_indicators
@@ -14,6 +17,8 @@ from quantlab.strategies.rsi_ma_atr import RsiMaAtrStrategy
 from quantlab.backtest.engine import run_backtest
 from quantlab.backtest.metrics import compute_metrics
 from quantlab.execution.paper import run_paper_broker, save_trades_csv
+from quantlab.reporting.portfolio_report import write_portfolio_report
+from quantlab.reporting.portfolio_mode_compare import write_mode_comparison_report
 from quantlab.reporting.report import write_report as write_trade_report
 from quantlab.reporting.run_report import write_report as write_run_report
 from quantlab.reporting.run_index import write_runs_index, build_runs_index
@@ -315,117 +320,19 @@ def main() -> None:
     ):
         return
 
-    # --- FORWARD EVALUATION MODE (Stage L) ---
-    if args.forward_eval or args.resume_forward:
-        _run_forward_mode(args)
+    # --- FORWARD COMMANDS ---
+    if handle_forward_commands(
+        args,
+        run_forward_mode=_run_forward_mode,
+    ):
         return
-
-    # --- PORTFOLIO REPORT MODE (Stage M) ---
-    if args.portfolio_report:
-        from quantlab.reporting.portfolio_report import write_portfolio_report
-
-        root = Path(args.portfolio_report)
-        if not root.exists():
-            print(f"ERROR: Portfolio root directory not found: {root}")
-            return
-
-        print(f"\n=== STAGE M: PORTFOLIO AGGREGATION ===")
-        print(f"  Scanning: {root}")
-
-        sessions = []
-        for d in root.iterdir():
-            if d.is_dir() and (d / "portfolio_state.json").exists():
-                sessions.append(d)
-
-        if not sessions:
-            print(f"  No valid forward sessions found in {root}")
-            return
-
-        print(f"  Found {len(sessions)} sessions.")
-
-        weights = None
-        if args.portfolio_weights:
-            try:
-                with open(args.portfolio_weights, "r", encoding="utf-8") as f:
-                    weights = json.load(f)
-            except Exception as e:
-                print(f"ERROR: Could not load portfolio weights from {args.portfolio_weights}: {e}")
-                return
-
-        def _parse_list(s):
-            return [item.strip() for item in s.split(",")] if s else None
-
-        include_tickers = _parse_list(args.portfolio_include_tickers)
-        exclude_tickers = _parse_list(args.portfolio_exclude_tickers)
-        include_strategies = _parse_list(args.portfolio_include_strategies)
-        exclude_strategies = _parse_list(args.portfolio_exclude_strategies)
-
-        json_p, md_p = write_portfolio_report(
-            sessions,
-            root,
-            mode=args.portfolio_mode,
-            weights=weights,
-            top_n=args.portfolio_top_n,
-            rank_metric=args.portfolio_rank_metric,
-            min_return=args.portfolio_min_return,
-            max_drawdown=args.portfolio_max_drawdown,
-            include_tickers=include_tickers,
-            exclude_tickers=exclude_tickers,
-            include_strategies=include_strategies,
-            exclude_strategies=exclude_strategies,
-            latest_per_source_run=args.portfolio_latest_per_source_run,
-        )
-        print(f"  Portfolio report generated ({args.portfolio_mode}):")
-        print(f"    → {json_p}")
-        print(f"    → {md_p}")
-        return
-
-    # --- PORTFOLIO COMPARISON MODE (Stage M.4) ---
-    if args.portfolio_compare:
-        from quantlab.reporting.portfolio_mode_compare import write_mode_comparison_report
-
-        root = Path(args.portfolio_compare)
-        if not root.exists():
-            print(f"ERROR: Portfolio root directory not found: {root}")
-            return
-
-        print(f"\n=== STAGE M.4: PORTFOLIO MODE COMPARISON ===")
-        print(f"  Scanning: {root}")
-
-        sessions = [d for d in root.iterdir() if d.is_dir() and (d / "portfolio_state.json").exists()]
-        if not sessions:
-            print(f"  No valid forward sessions found in {root}")
-            return
-
-        weights = None
-        if args.portfolio_weights:
-            try:
-                with open(args.portfolio_weights, "r", encoding="utf-8") as f:
-                    weights = json.load(f)
-            except Exception as e:
-                print(f"ERROR: Could not load portfolio weights from {args.portfolio_weights}: {e}")
-                return
-
-        def _parse_list(s):
-            return [item.strip() for item in s.split(",")] if s else None
-
-        json_p, md_p = write_mode_comparison_report(
-            sessions,
-            root,
-            weights=weights,
-            top_n=args.portfolio_top_n,
-            rank_metric=args.portfolio_rank_metric,
-            min_return=args.portfolio_min_return,
-            max_drawdown=args.portfolio_max_drawdown,
-            include_tickers=_parse_list(args.portfolio_include_tickers),
-            exclude_tickers=_parse_list(args.portfolio_exclude_tickers),
-            include_strategies=_parse_list(args.portfolio_include_strategies),
-            exclude_strategies=_parse_list(args.portfolio_exclude_strategies),
-            latest_per_source_run=args.portfolio_latest_per_source_run,
-        )
-        print("  Comparison report generated:")
-        print(f"    → {json_p}")
-        print(f"    → {md_p}")
+    
+    # --- PORTFOLIO COMMANDS ---
+    if handle_portfolio_commands(
+        args,
+        write_portfolio_report=write_portfolio_report,
+        write_mode_comparison_report=write_mode_comparison_report,
+    ):
         return
 
     # --- SWEEP MODE (exits early) ---
