@@ -11,7 +11,7 @@ def generate_run_id(mode: str, config_content: Optional[Any] = None) -> str:
     If config_content is provided, short_hash is derived from it.
     Otherwise, it is a randomized seed for uniqueness.
     """
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(datetime.timezone.utc)
     timestamp = now.strftime("%Y%m%d_%H%M%S")
     
     if config_content is not None:
@@ -25,3 +25,4 @@ def generate_run_id(mode: str, config_content: Optional[Any] = None) -> str:
         short_hash = hashlib.sha1(str(now.timestamp()).encode()).hexdigest()[:7]
         
     return f"{timestamp}_{mode}_{short_hash}"
+    # short_hash ensures uniqueness between runs executed in the same second

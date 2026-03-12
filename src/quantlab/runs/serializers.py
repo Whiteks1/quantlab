@@ -2,6 +2,7 @@ import json
 import math
 import datetime
 from typing import Any, Dict, List, Union
+from pathlib import Path
 
 def _sanitize_value(obj: Any) -> Any:
     """
@@ -17,7 +18,11 @@ def _sanitize_value(obj: Any) -> Any:
             return None
     elif isinstance(obj, (datetime.date, datetime.datetime)):
         return obj.isoformat()
+    elif isinstance(obj, Path):
+        return str(obj)
     return obj
+    
+    
 
 def to_json(obj: Any, indent: int = 2) -> str:
     """

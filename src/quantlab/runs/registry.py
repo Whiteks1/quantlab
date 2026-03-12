@@ -7,11 +7,22 @@ class RunRegistry:
     """
     Manage the global/central registry of all runs.
     """
-    DEFAULT_COLUMNS = [
-        "run_id", "created_at", "mode", "strategy", "ticker", 
-        "start_date", "end_date", "status", "total_return", 
-        "sharpe", "max_drawdown", "trades", "win_rate", "tags"
-    ]
+    DEFAULT_COLUMNS = (
+    "run_id",
+    "created_at",
+    "mode",
+    "strategy",
+    "ticker",
+    "start_date",
+    "end_date",
+    "status",
+    "total_return",
+    "sharpe",
+    "max_drawdown",
+    "trades",
+    "win_rate",
+    "tags",
+)
     
     def __init__(self, registry_path: str = "outputs/runs/registry.csv"):
         self.registry_path = Path(registry_path)
@@ -41,6 +52,6 @@ class RunRegistry:
         if not self.registry_path.exists():
             return []
             
-        with open(self.registry_path, "r", encoding="utf-8") as f:
+        with open(self.registry_path, "r", newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             return list(reader)
