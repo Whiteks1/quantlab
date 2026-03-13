@@ -7,6 +7,8 @@ import pandas as pd
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
 
+
+from quantlab.cli.run import run_classic_pipeline
 from quantlab.cli.sweep import handle_sweep_command
 from quantlab.cli.portfolio import handle_portfolio_commands
 from quantlab.cli.forward import handle_forward_commands
@@ -343,6 +345,18 @@ def main() -> None:
         return
     outdir = args.outdir or "outputs"
     os.makedirs(outdir, exist_ok=True)
+
+    run_classic_pipeline(
+        args,
+        fetch_ohlc=fetch_ohlc,
+        add_indicators=add_indicators,
+        strategy_cls=RsiMaAtrStrategy,
+        run_backtest=run_backtest,
+        compute_metrics=compute_metrics,
+        run_paper_broker=run_paper_broker,
+        save_trades_csv=save_trades_csv,
+        write_trade_report=write_trade_report,
+    )
 
 
     # 1) Datos
