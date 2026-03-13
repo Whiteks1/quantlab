@@ -7,7 +7,7 @@ import pandas as pd
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
 
-
+from quantlab.cli.sweep import handle_sweep_command
 from quantlab.cli.portfolio import handle_portfolio_commands
 from quantlab.cli.forward import handle_forward_commands
 from quantlab.cli.report import handle_report_commands
@@ -335,14 +335,15 @@ def main() -> None:
     ):
         return
 
-    # --- SWEEP MODE (exits early) ---
-    if args.sweep:
-        out_dir = args.sweep_outdir or args.outdir
-        run_sweep(args.sweep, out_dir=out_dir)
+    # --- SWEEP COMMAND ---
+    if handle_sweep_command(
+        args,
+        run_sweep=run_sweep,
+    ):
         return
-
     outdir = args.outdir or "outputs"
     os.makedirs(outdir, exist_ok=True)
+
 
     # 1) Datos
     df = fetch_ohlc(args.ticker, args.start, args.end, interval=args.interval)
