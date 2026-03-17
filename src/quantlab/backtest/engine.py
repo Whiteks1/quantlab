@@ -19,6 +19,11 @@ def run_backtest(
     """
     out = df.copy()
 
+    if out.empty:
+        raise ValueError(
+            "run_backtest received an empty DataFrame. Check data loading, date range, and preprocessing."
+        )
+
     # Señales alineadas
     sig = signals.reindex(out.index).fillna(0).astype(int).to_numpy()
     out["signal"] = sig
