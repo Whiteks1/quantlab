@@ -205,7 +205,7 @@ QuantLab architecture follows these principles:
 - modular evolution
 - research-first design# Future Architectural Evolution
 
-Possible future extensions may include:
+Possible future extensions may include
 
 - broker integrations
 - research automation
@@ -213,3 +213,17 @@ Possible future extensions may include:
 - experiment orchestration
 
 These should remain future extensions and should not compromise the current CLI-first research architecture.
+## Dependency Rules
+
+Allowed directional flow:
+- data -> indicators
+- indicators -> strategies
+- strategies -> backtest
+- backtest -> reporting
+- execution -> reporting
+- portfolio -> reporting
+
+Forbidden patterns:
+- reporting importing strategy logic
+- CLI containing business logic
+- execution modifying strategy definitions
