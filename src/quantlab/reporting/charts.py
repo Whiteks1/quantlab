@@ -31,6 +31,53 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
 
+def plot_basic_equity(
+    bt: pd.DataFrame,
+    out_path: str,
+    ticker: str,
+    strategy_name: str
+) -> None:
+    """
+    Simple equity curve plot used for legacy reports.
+    """
+    plt.figure(figsize=(12, 6))
+    plt.plot(bt.index, bt["equity"], label="Equity (net)")
+    plt.title(f"Equity Curve — {ticker} — {strategy_name}")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+
+
+def plot_price_signals(
+    df: pd.DataFrame,
+    signals: pd.Series,
+    out_path: str,
+    ticker: str,
+    strategy_name: str
+) -> None:
+    """
+    Price + BUY/SELL signals plot.
+    """
+    plt.figure(figsize=(12, 6))
+    plt.plot(df.index, df["close"], label="Close")
+    if "ma20" in df.columns:
+        plt.plot(df.index, df["ma20"], label="MA20", linestyle="--")
+
+    buy_idx = df.index[signals == 1]
+    sell_idx = df.index[signals == -1]
+    plt.scatter(buy_idx, df.loc[buy_idx, "close"], marker="^", s=100, label="BUY")
+    plt.scatter(sell_idx, df.loc[sell_idx, "close"], marker="v", s=100, label="SELL")
+
+    plt.title(f"Price + Signals — {ticker} — {strategy_name}")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+
+
 # ---------------------------------------------------------------------------
 # Styling helpers
 # ---------------------------------------------------------------------------

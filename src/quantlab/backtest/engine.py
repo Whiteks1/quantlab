@@ -18,6 +18,11 @@ def run_backtest(
       - fees/slippage se aplican el día del trade como penalización
     """
     out = df.copy()
+    if out.empty:
+        # Return empty df with expected columns
+        for col in ["signal", "position", "ret", "strategy_ret", "trade", "fees", "slip_cost", "strategy_ret_net", "equity"]:
+            out[col] = pd.Series(dtype=float)
+        return out
 
     if out.empty:
         raise ValueError(
