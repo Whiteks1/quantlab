@@ -140,12 +140,14 @@ def test_cli_advanced_report_early_exit(tmp_path, monkeypatch):
     monkeypatch.setattr("main.write_advanced_report", mock_write)
 
     mock_fetch = MagicMock(side_effect=AssertionError("fetch_ohlc must NOT be called"))
-    monkeypatch.setattr("main.fetch_ohlc", mock_fetch)
+    monkeypatch.setattr("quantlab.cli.run.fetch_ohlc", mock_fetch)
 
     monkeypatch.setattr(sys, "argv", ["main.py", "--advanced-report", str(run_dir)])
 
     import main as main_module
-    main_module.main()
+    with pytest.raises(SystemExit) as excinfo:
+        main_module.main()
+    assert excinfo.value.code == 0
 
     mock_write.assert_called_once_with(str(run_dir))
 

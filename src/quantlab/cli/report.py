@@ -12,6 +12,45 @@ from quantlab.reporting.compare_runs import write_comparison as default_write_co
 from quantlab.reporting.advanced_report import (
     write_advanced_report as default_write_advanced_report,
 )
+from quantlab.reporting.report import write_report as write_trade_report
+
+
+def generate_legacy_report(
+    *,
+    outdir: str,
+    ticker: str,
+    strategy_name: str,
+    backtest_metrics: dict,
+    trades_path: str,
+) -> str:
+    """
+    Internal helper for the legacy --report flag (Stage I).
+    """
+    import os
+    meta = {
+        "ticker": ticker,
+        "strategy_name": strategy_name,
+        "backtest_metrics": backtest_metrics,
+    }
+
+    report_md = os.path.join(outdir, "report.md")
+    report_json = os.path.join(outdir, "report.json")
+
+    payload = write_trade_report(
+        trades_csv_path=trades_path,
+        out_md_path=report_md,
+        out_json_path=report_json,
+        meta=meta,
+    )
+
+    metrics = payload.get("metrics", {})
+    print("\n=== TRADE-LEVEL METRICS ===")
+    print(f"Total Trades:  {metrics.get('trades', 0)}")
+    print(f"Win Rate:      {metrics.get('win_rate_trades', 0.0):.2%}")
+    print(f"Profit Factor: {metrics.get('profit_factor', 0.0):.2f}")
+    print(f"Expectancy:    {metrics.get('expectancy_net', 0.0):.4f}")
+
+    return report_md
 
 
 def handle_report_commands(

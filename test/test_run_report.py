@@ -213,7 +213,9 @@ def test_cli_report_only_mode_does_not_run_pipeline(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "--report", str(run_dir)])
 
     import main as main_module
-    main_module.main()
+    with pytest.raises(SystemExit) as excinfo:
+        main_module.main()
+    assert excinfo.value.code == 0
 
     # write_run_report called once with the correct path
     mock_write_run_report.assert_called_once_with(str(run_dir))
@@ -237,15 +239,16 @@ def test_cli_report_flag_as_bool_does_not_early_exit(tmp_path, monkeypatch):
     ])
 
     mock_fetch = MagicMock(side_effect=RuntimeError("pipeline reached — correct"))
-    monkeypatch.setattr("main.fetch_ohlc", mock_fetch)
+    monkeypatch.setattr("quantlab.cli.run.fetch_ohlc", mock_fetch)
 
     # Patch write_run_report to be safe (should not be called either since no dir)
     mock_write = MagicMock()
     monkeypatch.setattr("main.write_run_report", mock_write)
 
     import main as main_module
-    with pytest.raises(RuntimeError, match="pipeline reached"):
+    with pytest.raises(SystemExit) as excinfo:
         main_module.main()
+    assert excinfo.value.code == 1
 
     # write_run_report must NOT have been called (not a dir path)
     mock_write.assert_not_called()
