@@ -84,37 +84,6 @@ def handle_report_commands(
         print(f"  MD  : {md_p}")
         return True
 
-    # --- LIST-RUNS MODE ---
-    if args.list_runs:
-        csv_p, json_p, md_p = write_runs_index(args.list_runs)
-        print("Runs index written:")
-        print(f"  CSV : {csv_p}")
-        print(f"  JSON: {json_p}")
-        print(f"  MD  : {md_p}")
-        return True
-
-    # --- BEST-FROM MODE ---
-    if args.best_from:
-        payload = build_runs_index(args.best_from)
-        runs = payload.get("runs", [])
-        metric = args.metric
-        valid = [r for r in runs if r.get(metric) is not None]
-
-        if not valid:
-            print(f"No runs with metric '{metric}' found in {args.best_from}")
-            return True
-
-        best = max(
-            valid,
-            key=lambda r: float(r[metric]) if r[metric] is not None else float("-inf"),
-        )
-
-        print(f"Best run by '{metric}':")
-        print(f"  run_id : {best.get('run_id')}")
-        print(f"  {metric:12s}: {best.get(metric)}")
-        print(f"  path   : {best.get('path')}")
-        return True
-
     # --- COMPARE MODE ---
     if args.compare:
         out_dir = args.outdir or "."

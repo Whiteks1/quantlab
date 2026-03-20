@@ -15,6 +15,7 @@ from quantlab.cli.portfolio import handle_portfolio_commands
 from quantlab.cli.forward import handle_forward_commands
 from quantlab.cli.report import handle_report_commands
 from quantlab.cli.run import handle_run_command
+from quantlab.cli.runs import handle_runs_commands
 
 # Real Implementation Dependencies
 from quantlab.experiments import run_sweep
@@ -65,10 +66,15 @@ def main() -> None:
     parser.add_argument("--sweep", help="Path a .yaml de configuración para grid search")
     parser.add_argument("--sweep_outdir", default=None)
 
-    # Stage J/K/L/M Flags
-    parser.add_argument("--list-runs", metavar="ROOT_DIR", default=None)
-    parser.add_argument("--best-from", metavar="ROOT_DIR", default=None)
-    parser.add_argument("--metric", default="sharpe_simple")
+    # Run navigation (Stage N)
+    parser.add_argument("--runs-list", metavar="ROOT_DIR", default=None, help="List all runs in a directory.")
+    parser.add_argument("--runs-show", metavar="RUN_DIR", default=None, help="Show details for a single run.")
+    parser.add_argument("--runs-best", metavar="ROOT_DIR", default=None, help="Find the best run by a metric.")
+    parser.add_argument("--metric", default="sharpe_simple", help="Metric to rank by (used with --runs-best, --best-from).")
+
+    # Stage J/K/L/M Flags (legacy — use --runs-* equivalents)
+    parser.add_argument("--list-runs", metavar="ROOT_DIR", default=None, help="[Deprecated] Use --runs-list.")
+    parser.add_argument("--best-from", metavar="ROOT_DIR", default=None, help="[Deprecated] Use --runs-best.")
     parser.add_argument("--compare", nargs="+", metavar="RUN_DIR")
     parser.add_argument("--advanced-report", metavar="RUN_DIR", default=None)
     parser.add_argument("--forward-eval", metavar="RUN_DIR", default=None)
@@ -93,6 +99,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # --- Backward-compat aliases: map deprecated flags to new ones ---
+    if getattr(args, "list_runs", None) and not getattr(args, "runs_list", None):
+        args.runs_list = args.list_runs
+    if getattr(args, "best_from", None) and not getattr(args, "runs_best", None):
+        args.runs_best = args.best_from
+
     # --- JSON Request Overlay ---
     if args.json_request:
         try:
@@ -113,6 +125,9 @@ def main() -> None:
 
     try:
         # --- COMMAND ROUTING (Order matters: specific -> generic) ---
+        if handle_runs_commands(args):
+            sys.exit(0)
+
         if handle_report_commands(
             args,
             write_run_report=write_run_report,
