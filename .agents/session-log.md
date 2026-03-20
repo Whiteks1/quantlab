@@ -1,5 +1,16 @@
 # Session Log - QuantLab
 
+## 2026-03-20 — Stepbit CLI Stability (Issue #21)
+- **Session Focus**: Harden the CLI for predictable headless Stepbit-driven execution.
+- **Tasks Completed**:
+  - Implemented strict `schema_version` and `command` validation in `main.py` (exit 2 for invalid input).
+  - Propagated `request_id` to `args._request_id` for traceability.
+  - Implemented explicit command dispatch for JSON requests, ensuring predictable routing regardless of flag fallthrough.
+  - Reverted `run.py` changes as they belong in Issue #22.
+  - Added 8 unit tests in `test/test_json_request.py`.
+- **Key Decisions**: Forced `command` field in JSON requests as hard required. Treated missing command as invalid input (exit 2).
+- **Next Steps**: Proceed to Issue #22 for consistent `report.json` and artifact production.
+
 ## 2026-03-20 — Stepbit I/O Contract (Issue #20)
 - **Session Focus**: Verify and publish the Stepbit I/O contract document.
 - **Tasks Completed**:
