@@ -80,15 +80,16 @@ pip install -e .
 Linux / macOS
 source .venv/bin/activate
 pip install -e .
-Usage
+
+## Usage
 
 Example entrypoint:
 
-python main.py --help
+python main.py --help 
+```
 
 Depending on the current stage of the repository, available commands may include research execution, reporting, forward validation, and portfolio-related workflows.
-
-Design Principles
+## Design Principles
 
 QuantLab is being built around a few core principles:
 
@@ -102,6 +103,6 @@ clear contracts over implicit behavior
 
 extensibility without collapsing architectural boundaries
 
-License
+## License
 
 Licensed under the Apache License, Version 2.0.
