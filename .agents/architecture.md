@@ -18,9 +18,10 @@ The architecture prioritizes:
 
 # Architectural Layers
 
-QuantLab follows a layered architecture where responsibilities flow in one direction.
+QuantLab follows a layered architecture where responsibilities flow in one direction:
+`data -> indicators -> strategies -> backtest -> execution -> reporting`
 
-Each layer has a well-defined responsibility.
+The system explicitly separates **Orchestration** (CLI) from **Core Domain Logic**.
 
 ---
 
@@ -137,7 +138,7 @@ The following architectural violations must be avoided:
 Reporting must only consume results, never compute them.
 
 ### Business logic in CLI
-`main.py` should only orchestrate commands.
+`main.py` and the modules in `src/quantlab/cli/` should only orchestrate commands. They should delegate all quantitative and domain logic to the core modules.
 
 ### Execution modifying strategy definitions
 Execution must treat strategies as immutable.

@@ -1,106 +1,62 @@
-# QuantLab Code Map
+# Project Workflow — QuantLab
 
-## Entry points
+This document defines how to contribute to and work within the QuantLab repository. It covers the branching strategy, task management, and the AI-assisted collaboration model.
 
-### main.py
-Responsibilities:
-- parse CLI arguments
-- route commands
-- delegate execution to src/quantlab/cli/
+## 1. Branching Strategy
 
-Must remain thin.
+QuantLab follows a strict **Issue-Branch-PR** workflow:
 
-Do not place business logic here.
+1. **Issue**: Every task or bug should be represented by a GitHub Issue.
+2. **Branch**: Create a dedicated branch for each issue.
+3. **Pull Request**: All changes should be integrated via PR. Direct commits to `main` should be avoided.
 
 ---
 
-## CLI orchestration
+## 2. Agent Collaboration Model
 
-### src/quantlab/cli/
-Responsibilities:
-- command-specific orchestration
-- early-exit command handling
-- delegation into core modules
+When working with AI assistants (Antigravity), follow this protocol:
 
-Modules:
-- report.py
-- forward.py
-- portfolio.py
-- sweep.py
-- run.py
-- runs.py
+### /read-and-plan
+When starting a new issue or session:
+- Read the relevant `.agents/` context files.
+- Read the task file in scope.
+- Propose a scoped implementation or cleanup plan.
+- Wait for user approval before execution.
 
-This layer may coordinate behavior, but should not contain core quantitative logic.
+### /execute-task
+During implementation:
+- Execute one well-defined step at a time.
+- Keep changes tightly scoped to the approved task.
+- Log relevant continuity in `.agents/session-log.md` when appropriate.
 
----
-
-## Core research logic
-
-### src/quantlab/data/
-Market data loading and acquisition.
-
-### src/quantlab/features/
-Indicators and feature engineering.
-
-### src/quantlab/strategies/
-Signal generation and strategy definitions.
-
-### src/quantlab/backtest/
-Backtesting engine and metrics.
-
-### src/quantlab/execution/
-Paper execution and forward evaluation.
-
-### src/quantlab/reporting/
-Report generation and output artifacts.
-
-### src/quantlab/portfolio/
-Portfolio aggregation and portfolio-level logic.
-
-### src/quantlab/runs/
-Run tracking, storage, registry, and serialization.
+### /close-session
+When finishing work:
+- Summarize what was completed.
+- Note any important continuity for the next session.
+- Leave the branch in a reviewable state for PR preparation.
 
 ---
 
-## Testing
+## 3. Task Management (`.agents/tasks/`)
 
-### test/
-Tests should validate observable behavior.
-Refactors should preserve test behavior unless the task explicitly changes functionality.
+Active work is tracked in task files under `.agents/tasks/`.
 
----
-
-## Documentation / project memory
-
-### .agents/
-Persistent project context for AI-assisted workflow.
-
-Important files:
-- project-brief.md
-- architecture.md
-- artifact-contracts.md
-- current-state.md
-- implementation-rules.md
-- workflow.md
-- session-log.md
-- tasks/
+- **Purpose**: Maintain a persistent record of the current objective and sub-tasks.
+- **Use**: Tasks help preserve continuity across sessions and keep implementation aligned with issue scope.
 
 ---
 
-## Change boundaries
+## 4. Documentation First
 
-### Safe places for refactors
-- src/quantlab/cli/
-- src/quantlab/runs/
-- documentation in .agents/
-
-### Files that require extra caution
-- main.py
-- artifact-related reporting modules
-- forward evaluation modules
-- portfolio aggregation modules
+- Architecture changes must be reflected in `.agents/architecture.md`.
+- File placement rules must be reflected in `.agents/code-map.md`.
+- Artifact or output contract changes must be reflected in `.agents/artifact-contracts.md`.
 
 ---
 
-## Rule
-Before changing a file, the execution agent should explain why that file is the correct place for the change.
+## 5. Workflow Rule
+
+Before changing files, confirm:
+- why those files are the correct place for the change
+- that the task scope is still respected
+- that unrelated files remain untouched
