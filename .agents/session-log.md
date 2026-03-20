@@ -1,5 +1,14 @@
 # Session Log - QuantLab
 
+## 2026-03-20 — Stepbit I/O Contract (Issue #20)
+- **Session Focus**: Verify and publish the Stepbit I/O contract document.
+- **Tasks Completed**:
+  - Analyzed gap between `.agents/stepbit-io-v1.md` design and current CLI/artifact reality.
+  - Created `docs/stepbit-io-v1.md` with accurate `[done]`/`[planned]` labels, corrected artifact path (`run_report.json`), and linked gaps to Issues #21–#23.
+  - Synced `.agents/stepbit-io-v1.md` to match `docs/stepbit-io-v1.md` exactly — both files now share the same corrected contract.
+- **Key Decisions**: No code changes. Response envelope, fingerprint, and schema validation deferred to #21–#23.
+- **Next Steps**: Hand over to user for review and branch merge.
+
 ## 2026-03-20 — Runs CLI Interface (Issue #12)
 - **Session Focus**: Implement the `runs.py` command surface for run navigation.
 - **Tasks Completed**:

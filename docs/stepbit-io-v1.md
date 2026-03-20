@@ -11,8 +11,6 @@ Each field and section is labeled with its current implementation status:
 - `[done]` — implemented and stable in the current codebase
 - `[planned]` — defined here but not yet implemented (tracked in linked issues)
 
-> The published version of this document lives in `docs/stepbit-io-v1.md`. Both files must remain identical.
-
 ---
 
 ## 1. Invocation
@@ -127,7 +125,7 @@ Failure response:
 | `1` | `GENERAL_ERROR` | Unexpected crash or unhandled exception. |
 | `2` | `INVALID_CONFIG` | JSON payload or CLI flags are invalid. |
 
-> Exit codes `3` (DATA_ERROR) and `4` (STRATEGY_ERROR) are defined in this document but not yet emitted from distinct code paths. Tracked in [Issue #23](https://github.com/Whiteks1/quantlab/issues/23).
+> Exit codes `3` (DATA_ERROR) and `4` (STRATEGY_ERROR) are defined in `.agents/stepbit-io-v1.md` but not yet emitted from distinct code paths. Tracked in [Issue #23](https://github.com/Whiteks1/quantlab/issues/23).
 
 ---
 
