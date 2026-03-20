@@ -34,5 +34,8 @@ Clear operational documentation is essential for maintaining the integration. Th
 - Must reside within the `.agents/` directory to be accessible to AI agents.
 - Follow the "reproducibility" principle.
 
+## GitHub issue
+- #26 docs: integración - Completar runbook QuantLab <-> Stepbit
+
 ## Suggested next step
 Move to [task-stepbit-adapter-interface.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-adapter-interface.md).

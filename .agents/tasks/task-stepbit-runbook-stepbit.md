@@ -31,5 +31,8 @@ While the QuantLab-side runbook explains the CLI, the Stepbit-side runbook expla
 - Must be referencable by Stepbit's system prompts.
 - Maintain high-level abstraction (refer to the QuantLab runbook for CLI details).
 
+## GitHub issue
+- #28 docs: integration - Add QuantLab integration runbook
+
 ## Suggested next step
 Move to [task-stepbit-events-signals.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-events-signals.md).

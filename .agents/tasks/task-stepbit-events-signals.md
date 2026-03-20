@@ -31,5 +31,8 @@ For long-running sweeps or complex forward evaluations, polling the filesystem i
 - Use standard Python libraries (e.g., `requests` for webhooks) or simple file-based signals.
 - No heavy infrastructure dependencies.
 
+## GitHub issue
+- #25 feat: integración - Emitir events/signals estructurados para Stepbit
+
 ## Suggested next step
 Move to [task-stepbit-distributed-sweeps.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-distributed-sweeps.md).

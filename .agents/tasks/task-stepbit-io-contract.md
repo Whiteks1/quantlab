@@ -32,5 +32,8 @@ A well-defined contract ensures that the orchestration layer (Stepbit) can relia
 - Must remain compatible with current QuantLab results structure.
 - No breaking changes to existing `registry.csv`.
 
+## GitHub issue
+- #20 feat: integración - Definir contrato input/output QuantLab <-> Stepbit
+
 ## Suggested next step
 Move to [task-stepbit-cli-stable.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-cli-stable.md) to ensure the CLI can fulfill this contract.

@@ -32,5 +32,11 @@ Before implementation, we must agree on how Stepbit agents will interact with th
 - Follow Stepbit-core's tool standards.
 - No QuantLab business logic in the interface.
 
+## GitHub issue
+- #19 meta: backlog consolidado QuantLab ↔ Stepbit
+
+## Derived from
+- `.agents/tasks/stage-stepbit-integration-roadmap.md`
+
 ## Suggested next step
 Move to [task-stepbit-e2e-flow.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-e2e-flow.md).
