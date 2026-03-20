@@ -1,5 +1,15 @@
 # Session Log - QuantLab
 
+## 2026-03-20 — Runs CLI Interface (Issue #12)
+- **Session Focus**: Implement the `runs.py` command surface for run navigation.
+- **Tasks Completed**:
+  - Implemented `--runs-list`, `--runs-show`, `--runs-best` in `src/quantlab/cli/runs.py`.
+  - Wired `handle_runs_commands` into `main.py` before the report handler.
+  - Migrated `--list-runs` and `--best-from` out of `report.py`; kept deprecated aliases for backward compat.
+  - Added 13 tests in `test/test_cli_runs.py`; full test suite passes.
+- **Key Decisions**: Kept `--compare` in `report.py` — it writes artifacts and is a reporting operation, not run navigation. Migrating it is deferred.
+- **Next Steps**: Hand over to user for review and branch merge.
+
 ## 2026-03-20 — Post-CLI Roadmap Definition (Issue #14)
 - **Session Focus**: Define the next development milestones for QuantLab after the CLI refactor.
 - **Tasks Completed**:
