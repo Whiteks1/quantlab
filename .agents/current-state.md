@@ -1,11 +1,11 @@
 # Current State - QuantLab
 
 ## Active Stage
-- **Stage**: M.3 — Portfolio Selection / Session Inclusion Rules
-- **Last Updated**: 2026-03-07
-- **Task File**: `.agents/tasks/stage-m3-selection-rules.md`
+- **Stage**: Stage N — Run Lifecycle Management
+- **Last Updated**: 2026-03-20
+- **Task File**: `.agents/tasks/task-runs-cli-interface.md`
 
-## Completed Stages
+## Completed/Planned Stages
 
 | Stage | Description | Status |
 |-------|-------------|--------|
@@ -22,9 +22,11 @@
 | M.2 | Allocation Controls / Weighted Aggregation | ✅ Done |
 | M.3 | Portfolio Selection / Session Inclusion Rules | ✅ Done |
 | M.4 | Portfolio Mode Comparison | ✅ Done |
+| N | Run Lifecycle Management (`quantlab runs`) | 🟦 Planned |
+| O | Stepbit Automation Readiness (I/O & CLI Stability) | 🟦 Planned |
 
 ## Active Work
-- **Stage Closed**: Stage M.4 is closed. Next logical step is Stage N (if defined) or further refinement of portfolio analytics.
+- **Stage Open**: Stage N is the current focus. It aims to clarify and implement the `runs.py` command interface for run inspection and comparison.
 
 ## Known Issues / Technical Debt
 - Some test files in `test/` may need alignment with runner API changes from Stage G.
