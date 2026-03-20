@@ -20,10 +20,11 @@
 | M | Portfolio Aggregation scaffold | ✅ Done |
 | M.1 | Portfolio Hygiene and Deduplication | ✅ Done |
 | M.2 | Allocation Controls / Weighted Aggregation | ✅ Done |
+| M.3 | Portfolio Selection / Session Inclusion Rules | ✅ Done |
+| M.4 | Portfolio Mode Comparison | ✅ Done |
 
 ## Active Work
-- **M.3**: Add a configurable selection layer that filters which forward sessions are included in the aggregated portfolio, before any allocation weighting is applied.
-- Selection controls: top-N, rank metric, min-return, max-drawdown, include/exclude by ticker or strategy, latest-per-source-run.
+- **Stage Closed**: Stage M.4 is closed. Next logical step is Stage N (if defined) or further refinement of portfolio analytics.
 
 ## Known Issues / Technical Debt
 - Some test files in `test/` may need alignment with runner API changes from Stage G.

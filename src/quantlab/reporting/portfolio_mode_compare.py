@@ -60,9 +60,9 @@ def compare_portfolio_modes(
             mode=mode,
             weights=weights
         )
-        comparison_results[mode] = res["portfolio_summary"]
-        # Add a few more details to the summary for comparison
-        comparison_results[mode]["mode"] = mode
+        # Store full result for this mode (candidates, portfolio_summary, allocation)
+        # candidates already has equity_norm popped inside compute_portfolio_from_sessions
+        comparison_results[mode] = res
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -125,8 +125,35 @@ def render_comparison_md(payload: Dict[str, Any]) -> str:
     for label, key, fmt in metrics:
         row = [label]
         for mode in comp.keys():
-            val = comp[mode].get(key, 0.0)
+            mode_data = comp[mode]
+            summary = mode_data.get("portfolio_summary", {})
+            val = summary.get(key, 0.0)
             row.append(_fmt(val, fmt))
+        lines.append("| " + " | ".join(row) + " |")
+
+    lines.append("")
+    lines.append("## Weight Comparison")
+    lines.append("")
+    
+    # Headers for weight table
+    headers = ["Session ID", "Ticker"] + [f"`{m}`" for m in comp.keys()]
+    lines.append("| " + " | ".join(headers) + " |")
+    lines.append("|" + "|".join(["----------"] * len(headers)) + "|")
+
+    # We use the first mode's candidates to get the list of sessions (they all use the same universe)
+    first_mode = list(comp.keys())[0]
+    sessions_meta = comp[first_mode].get("candidates", [])
+
+    for s in sessions_meta:
+        sid = s.get("session_id")
+        ticker = s.get("ticker")
+        row = [f"`{sid}`", ticker]
+        for mode in comp.keys():
+            mode_data = comp[mode]
+            # Find candidate in this mode's result
+            cand = next((c for c in mode_data.get("candidates", []) if c["session_id"] == sid), None)
+            weight = cand.get("assigned_weight", 0.0) if cand else 0.0
+            row.append(_fmt(weight, ".2%"))
         lines.append("| " + " | ".join(row) + " |")
 
     return "\n".join(lines)

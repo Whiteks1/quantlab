@@ -51,10 +51,14 @@ def test_compare_portfolio_modes_basic(mock_session_dirs):
     assert "custom_weight" not in payload["comparison"]
     
     # raw_capital return: (11k + 9k) / 20k - 1 = 0%
-    assert payload["comparison"]["raw_capital"]["total_return"] == pytest.approx(0.0)
+    assert payload["comparison"]["raw_capital"]["portfolio_summary"]["total_return"] == pytest.approx(0.0)
     
     # equal_weight return: (0.5 * 0.1) + (0.5 * -0.1) = 0%
-    assert payload["comparison"]["equal_weight"]["total_return"] == pytest.approx(0.0)
+    assert payload["comparison"]["equal_weight"]["portfolio_summary"]["total_return"] == pytest.approx(0.0)
+    
+    # Check enriched fields
+    assert "candidates" in payload["comparison"]["raw_capital"]
+    assert "allocation" in payload["comparison"]["raw_capital"]
 
 def test_compare_portfolio_modes_with_custom(mock_session_dirs):
     weights = {"eth_session": 1.0, "btc_session": 0.0}
@@ -62,14 +66,15 @@ def test_compare_portfolio_modes_with_custom(mock_session_dirs):
     
     assert "custom_weight" in payload["comparison"]
     # custom_weight return (100% ETH): +10%
-    assert payload["comparison"]["custom_weight"]["total_return"] == pytest.approx(0.10)
+    assert payload["comparison"]["custom_weight"]["portfolio_summary"]["total_return"] == pytest.approx(0.10)
 
 def test_render_comparison_md(mock_session_dirs):
     payload = compare_portfolio_modes(mock_session_dirs)
     md = render_comparison_md(payload)
     
     assert "# Portfolio Mode Comparison Report" in md
-    assert "| Total Return |" in md
+    assert "## Weight Comparison" in md
+    assert "| Session ID | Ticker | `raw_capital` | `equal_weight` |" in md
     assert "0.00%" in md
 
 def test_compare_modes_reuse_universe(mock_session_dirs):
@@ -80,5 +85,5 @@ def test_compare_modes_reuse_universe(mock_session_dirs):
     assert payload["n_sessions"] == 1
     
     # Both modes should show same return since they only have one session
-    assert payload["comparison"]["raw_capital"]["total_return"] == pytest.approx(0.10)
-    assert payload["comparison"]["equal_weight"]["total_return"] == pytest.approx(0.10)
+    assert payload["comparison"]["raw_capital"]["portfolio_summary"]["total_return"] == pytest.approx(0.10)
+    assert payload["comparison"]["equal_weight"]["portfolio_summary"]["total_return"] == pytest.approx(0.10)

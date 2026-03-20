@@ -1,5 +1,14 @@
 # Session Log - QuantLab
 
+## 2026-03-20 — Stage M.4 Gap Closure
+- **Session Focus**: Enrich portfolio mode comparison artifacts (JSON/Markdown) to meet specification.
+- **Tasks Completed**:
+  - Updated `portfolio_mode_compare.py` to store full mode blocks (candidates, allocation, summary) in the JSON payload.
+  - Added "Weight Comparison" table to `portfolio_compare.md`.
+  - Updated `test/test_portfolio_mode_compare.py` and verified all portfolio tests pass.
+- **Key Decisions**: Decided to include full candidate metadata in the comparison JSON to ensure each mode's aggregation is fully traceable.
+- **Next Steps**: Hand over to user for review and branch merge.
+
 ## 2026-03-10 — Run System Foundations
 - **Session Focus**: Implement minimal infrastructure for structured, reproducible run storage.
 - **Tasks Completed**:
