@@ -1,24 +1,44 @@
 # Implementation Rules - QuantLab
 
 ## General Principles
-- Follow **layered architecture**: data -> indicators -> strategies -> backtest -> execution -> reporting.
-- Logic is strictly prohibited in `main.py` (CLI orchestration only).
-- Prefer **pure functions** for analytics and metric calculations.
-- Use **type hints** and **PEP8** standards for all new code.
+- Follow a **layered architecture**: `data -> indicators -> strategies -> backtest -> execution -> reporting`.
+- Keep `main.py` limited to **CLI orchestration only**. Business logic must not live there.
+- Prefer **pure functions** for analytics, metrics, and transformation logic whenever possible.
+- Use **type hints** for new code and follow **PEP 8** style conventions.
+- Favor **small, reversible changes** over broad refactors.
 
-## Data & State
+## Architectural Discipline
+- Keep responsibilities clearly separated across modules.
+- Do not mix strategy logic, portfolio logic, execution logic, and reporting concerns in the same implementation layer.
+- New functionality should fit into the existing architecture rather than bypassing it.
+- Avoid premature infrastructure complexity unless it clearly improves research quality or maintainability.
+
+## Data and State
 - All session outputs must go to the `outputs/` directory.
 - Avoid side effects on import.
 - Seed randomness to ensure deterministic behavior in backtests.
+- Prefer explicit configuration over hidden defaults when behavior affects reproducibility.
 
 ## Testing & Quality
-- New metrics or core logic MUST include unit tests using `pytest`.
-- Handle edge cases: empty datasets, non-standard trade sequences, etc.
-- Documentation (docstrings) is required for all public functions/modules.
+- New metrics or core logic **must** include unit tests using `pytest`.
+- Handle edge cases explicitly, including:
+  - empty datasets
+  - missing values where applicable
+  - non-standard trade sequences
+  - zero-trade scenarios
+  - no-op or resume cases
+- Documentation (docstrings) is required for public functions and modules.
+- If behavior or contracts change, validate the change against existing tests before considering the work complete.
+
+## Reporting and Artifacts
+- Reporting outputs in Markdown, JSON, CSV, and charts should remain consistent when they describe the same run, experiment, or portfolio.
+- Do not silently change reporting schemas or field meanings.
+- Artifact naming should remain stable and predictable across runs.
 
 ## Trading Safety
 - **Paper mode only** by default.
-- Never commit secrets or API keys.
+- Never commit secrets, API keys, credentials, or sensitive environment-specific data.
+- Any future live execution capability must remain opt-in, explicit, and outside the default development path.
 
 ## Safe Change Protocol
 
@@ -40,27 +60,24 @@ Prefer the smallest change that satisfies the task.
 Avoid architectural changes unless the task explicitly requires them.
 
 ### Step 4 — Preserve architecture boundaries
-
-Do not move business logic into main.py.
+Do not move business logic into `main.py`.
 
 Command routing belongs in:
-src/quantlab/cli/
+`src/quantlab/cli/`
 
 Core logic belongs in:
-src/quantlab/
+`src/quantlab/`
 
 ### Step 5 — Validate tests
-
 After implementing a change, ensure:
 
-pytest passes.
+- `pytest` passes
 
 If tests fail, identify whether:
 - behavior changed unintentionally
 - tests require adjustment
 
 ### Step 6 — Document impact
-
 If the change affects:
 
 - artifact contracts
@@ -71,17 +88,19 @@ If the change affects:
 note this explicitly in the PR summary.
 
 ### No hidden side effects
-
 Do not introduce behavior changes unless explicitly requested.
 
 Refactors should preserve observable behavior.
 
 Antigravity must inspect the repository before implementing changes.
 
----
+## Scope Control for Antigravity
+- Only modify the files explicitly required for the approved task.
+- Do not create alternative paths, duplicated nested folders, or inferred file locations.
+- If a target path is ambiguous, stop and report the ambiguity instead of guessing.
+- If unrelated modified or untracked files are present, leave them untouched unless explicitly instructed otherwise.
 
 ## GitHub
-
 GitHub is the **task and state manager**.
 
 Responsibilities:
@@ -91,31 +110,37 @@ Responsibilities:
 - Branches implement work
 - Pull requests integrate work
 
----
-
-# Development workflow
-
+## Development Workflow
 QuantLab follows a simplified GitHub workflow:
 
-1 issue = 1 branch = 1 pull request
+**1 issue = 1 branch = 1 pull request**
 
 Pull requests should reference the issue using:
 
-Closes #<NUMBER>
+`Closes #<NUMBER>`
+
+- Work in a **dedicated branch** for each significant task.
+- Do not stage unrelated files.
+- Do not use broad staging commands such as `git add .` when task scope is limited.
+- Before committing, verify that only intended files are staged.
+- Leave a clear summary of what changed, what was tested, and what remains pending.
 
 ## Session Log
-
 All research sessions must be logged in:
 
-.agents/session-log.md
+`.agents/session-log.md`
 
-Each entry must include:
+Each entry should include, when applicable:
 
 - session ID
 - timestamp
 - command used
 - key parameters
 - relevant metrics
-- links to outputs/
+- links to `outputs/`
 
 This log is the **source of truth** for run history.
+
+## Guiding Rule
+QuantLab must remain a **research-first system**: prioritize correctness, reproducibility, and clarity over speed, convenience, or premature platform expansion.
+
