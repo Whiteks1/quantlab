@@ -106,25 +106,76 @@ def main() -> None:
         args.runs_best = args.best_from
 
     # --- JSON Request Overlay ---
+    _json_command: str | None = None  # tracks command for explicit dispatch below
+
     if args.json_request:
         try:
             req = json.loads(args.json_request)
-            cmd = req.get("command")
-            params = req.get("params", {})
+
+            # 1) Validate schema version
+            schema_version = req.get("schema_version")
+            if schema_version != "1.0":
+                print(
+                    f"ERROR: Unsupported or missing schema_version '{schema_version}'. Expected '1.0'.",
+                    file=sys.stderr,        
+                )
+                sys.exit(2)
             
-            # Map params to args for existing handlers
+            # 2) Require command
+            _json_command = req.get("command")
+            if not _json_command:
+                print("ERROR: Missing 'command' in JSON request.", file=sys.stderr)
+                sys.exit(2)
+
+            # 3) Propagate request_id
+            args._request_id = req.get("request_id")
+
+            # 4) Map params
+            params = req.get("params", {})
             for k, v in params.items():
                 if hasattr(args, k):
                     setattr(args, k, v)
-                
-            if cmd == "sweep" and "config_path" in params: args.sweep = params["config_path"]
-            elif cmd == "forward" and "run_dir" in params: args.forward_eval = params["run_dir"]
-        except Exception as e:
-            print(f"ERROR: Invalid --json-request payload: {e}")
+
+            # 5) Explicit param routing for nested/non-obvious flags
+            if _json_command == "sweep" and "config_path" in params:
+                args.sweep = params["config_path"]
+            elif _json_command == "forward" and "run_dir" in params:
+                args.forward_eval = params["run_dir"]
+
+        except (json.JSONDecodeError, TypeError) as e:
+            print(f"ERROR: Invalid --json-request payload: {e}", file=sys.stderr)
             sys.exit(2)
 
     try:
         # --- COMMAND ROUTING (Order matters: specific -> generic) ---
+
+        # Explicit dispatch for machine-driven requests via --json-request.
+        if _json_command:
+            if _json_command == "run":
+                handle_run_command(args)
+                sys.exit(0)
+            elif _json_command == "sweep":
+                handle_sweep_command(args, run_sweep=run_sweep)
+                sys.exit(0)
+            elif _json_command == "forward":
+                handle_forward_commands(args)
+                sys.exit(0)
+            elif _json_command == "portfolio":
+                handle_portfolio_commands(
+                    args,
+                    write_portfolio_report=write_portfolio_report,
+                    write_mode_comparison_report=write_mode_comparison_report,
+                )
+                sys.exit(0)
+            else:
+                print(
+                    f"ERROR: Unknown command '{_json_command}'. "
+                    "Valid commands: run, sweep, forward, portfolio.",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+
+        # --- Standard flag-driven routing (human CLI use) ---
         if handle_runs_commands(args):
             sys.exit(0)
 
