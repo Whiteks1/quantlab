@@ -1,5 +1,13 @@
 # Session Log - QuantLab
 
+## 2026-03-20 — Post-CLI Roadmap Definition (Issue #14)
+- **Session Focus**: Define the next development milestones for QuantLab after the CLI refactor.
+- **Tasks Completed**:
+  - Analyzed repository state and maturity.
+  - Formalized Stage N (Run Lifecycle Management) and Stage O (Stepbit Automation Readiness) in `current-state.md`.
+- **Key Decisions**: Prioritized internal run management (`quantlab runs`) over immediate Stepbit integration to ensure the research lab's utility.
+- **Next Steps**: Begin Stage N implementation (Issue #12).
+
 ## 2026-03-20 — Stage M.4 Gap Closure
 - **Session Focus**: Enrich portfolio mode comparison artifacts (JSON/Markdown) to meet specification.
 - **Tasks Completed**:
