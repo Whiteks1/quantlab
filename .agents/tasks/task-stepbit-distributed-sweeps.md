@@ -32,5 +32,8 @@ As strategy complexity and parameter counts grow, single-threaded sweeps become 
 - Preserve "Determinism" across nodes.
 - Do not introduce complex distributed lock management if simple aggregations suffice.
 
+## GitHub issue
+- #29 feat: integration - Distributed QuantLab sweeps orchestration
+
 ## Suggested next step
 The Stepbit Integration Roadmap is now complete. Review [stage-stepbit-integration-roadmap.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/stage-stepbit-integration-roadmap.md) to begin implementation of the first phase.

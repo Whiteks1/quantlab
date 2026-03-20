@@ -32,5 +32,7 @@ Path issues, dependency mismatches, and incorrect Python interpreters are common
 - Follow `PEP8` and standard Python packaging practices.
 - No hardcoded absolute paths in the codebase.
 
+## GitHub issue
+- #24 core: integración - Detectar y usar virtualenv local para ejecución automatizada
 ## Suggested next step
 Move to [task-stepbit-runbook-quantlab.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-runbook-quantlab.md).

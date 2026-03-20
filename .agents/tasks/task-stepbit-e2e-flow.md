@@ -33,5 +33,8 @@ The ultimate proof of integration is a successful end-to-end loop where Stepbit 
 - Must use the "Stable CLI" and "report.json" as the source of truth.
 - No hardcoded test paths.
 
+## GitHub issue
+- #27 test: integration - End-to-end Reasoning Engine -> QuantLabTool flow
+
 ## Suggested next step
 Read [task-stepbit-runbook-stepbit.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-runbook-stepbit.md).

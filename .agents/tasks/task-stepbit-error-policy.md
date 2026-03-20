@@ -32,5 +32,8 @@ Silent failures or generic traceback outputs make automated orchestration brittl
 - Maintain the "Correctness before convenience" principle.
 - No side effects on error (e.g., do not leave partial/broken run directories).
 
+## GitHub issue
+- #23 core: integración - Política de errores y reintentos QuantLab <-> Stepbit
+
 ## Suggested next step
 Read [task-stepbit-venv-resolution.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-venv-resolution.md).

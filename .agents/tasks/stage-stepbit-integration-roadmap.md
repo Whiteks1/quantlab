@@ -40,5 +40,18 @@ QuantLab is a rigorous research environment. Stepbit-core is an AI orchestration
 - Minimum viable bridge focused on stability first.
 - Distributed sweeps are deferred to the final scaling step.
 
+## GitHub issues
+- #19 meta: backlog consolidado QuantLab ↔ Stepbit
+- #20 feat: integración - Definir contrato input/output QuantLab <-> Stepbit
+- #21 feat: quantlab - CLI estable para integración automatizada
+- #22 feat: quantlab - Generar report.json consistente para integración
+- #23 core: integración - Política de errores y reintentos QuantLab <-> Stepbit
+- #24 core: integración - Detectar y usar virtualenv local para ejecución automatizada
+- #25 feat: integración - Emitir events/signals estructurados para Stepbit
+- #26 docs: integración - Completar runbook QuantLab <-> Stepbit
+- #27 test: integration - End-to-end Reasoning Engine -> QuantLabTool flow
+- #28 docs: integration - Add QuantLab integration runbook
+- #29 feat: integration - Distributed QuantLab sweeps orchestration
+
 ## Suggested next step
 Proceed to [task-stepbit-io-contract.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-io-contract.md).

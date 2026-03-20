@@ -33,5 +33,8 @@ Standard library CLI parsers or interactive prompts can break machine-to-machine
 - [x] Do not remove existing human-facing CLI flags; maintain backward compatibility.
 - [x] Adhere to "No business logic in main.py".
 
+## GitHub issue
+- #21 feat: quantlab - CLI estable para integración automatizada
+
 ## Suggested next step
 Read [task-stepbit-report-json.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-report-json.md).

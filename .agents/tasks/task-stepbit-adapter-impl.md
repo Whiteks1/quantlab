@@ -34,5 +34,11 @@ After the interface is defined and the QuantLab-side bridge is stable (Steps 1-5
 - Do not replicate business logic.
 - Ensure cross-platform path compatibility (Windows/Linux).
 
+## GitHub issue
+- #19 meta: backlog consolidado QuantLab ↔ Stepbit
+
+## Derived from
+- `.agents/tasks/stage-stepbit-integration-roadmap.md`
+
 ## Suggested next step
 Move to [task-stepbit-e2e-flow.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-e2e-flow.md).

@@ -34,5 +34,8 @@ Human-readable Markdown and charts are excellent for researchers, but automated 
 - Do not bloat `report.json` with multi-megabyte dataframes; keep it for summaries and metadata.
 - Follow "Reporting must not contain business logic".
 
+## GitHub issue
+- #22 feat: quantlab - Generar report.json consistente para integración
+
 ## Suggested next step
 Read [task-stepbit-error-policy.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-error-policy.md).
