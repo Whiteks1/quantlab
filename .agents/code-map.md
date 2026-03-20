@@ -176,11 +176,13 @@ Run tracking, storage, registry, metadata management, and serialization.
 
 **Typical contents**
 
-* Run IDs
-* Experiment registry
 * Metadata persistence
 * Run folder structure
 * Reproducibility helpers
+* `serializers.py`: Deterministic JSON serialization
+* `run_id.py`: Temporal and deterministic run ID generation
+* `run_store.py`: Filesystem management for run directories
+* `registry.py`: Centralized run index management
 
 This layer supports reproducibility and experiment traceability.
 
