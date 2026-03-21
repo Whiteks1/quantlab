@@ -1,5 +1,6 @@
 import pandas as pd
 from .base import Strategy
+from quantlab.errors import DataError
 
 
 class RsiMaAtrStrategy(Strategy):
@@ -36,7 +37,7 @@ class RsiMaAtrStrategy(Strategy):
         required = {"close", "ma20", "rsi"}
         missing = required - set(df.columns)
         if missing:
-            raise ValueError(f"Faltan columnas requeridas para la estrategia: {sorted(missing)}")
+            raise DataError(f"Faltan columnas requeridas para la estrategia: {sorted(missing)}")
 
         close = df["close"]
         ma20 = df["ma20"]

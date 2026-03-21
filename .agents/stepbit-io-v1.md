@@ -126,8 +126,10 @@ Failure response:
 | `0` | `SUCCESS` | Task completed normally. |
 | `1` | `GENERAL_ERROR` | Unexpected crash or unhandled exception. |
 | `2` | `INVALID_CONFIG` | JSON payload or CLI flags are invalid. |
+| `3` | `DATA_ERROR` | OHLC data missing or invalid state. |
+| `4` | `STRATEGY_ERROR` | Strategy-specific logic failure. |
 
-> Exit codes `3` (DATA_ERROR) and `4` (STRATEGY_ERROR) are defined in this document but not yet emitted from distinct code paths. Tracked in [Issue #23](https://github.com/Whiteks1/quantlab/issues/23).
+> Exit codes are implemented via a central exception hierarchy in `src/quantlab/errors.py`.
 
 ---
 

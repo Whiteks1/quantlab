@@ -26,6 +26,8 @@ from quantlab.reporting.compare_runs import write_comparison
 from quantlab.reporting.portfolio_report import write_portfolio_report
 from quantlab.reporting.portfolio_mode_compare import write_mode_comparison_report
 
+from quantlab.errors import QuantLabError, ConfigError, DataError, StrategyError
+
 
 def main() -> None:
     load_dotenv()
@@ -105,48 +107,42 @@ def main() -> None:
     if getattr(args, "best_from", None) and not getattr(args, "runs_best", None):
         args.runs_best = args.best_from
 
-    # --- JSON Request Overlay ---
-    _json_command: str | None = None  # tracks command for explicit dispatch below
-
-    if args.json_request:
-        try:
-            req = json.loads(args.json_request)
-
-            # 1) Validate schema version
-            schema_version = req.get("schema_version")
-            if schema_version != "1.0":
-                print(
-                    f"ERROR: Unsupported or missing schema_version '{schema_version}'. Expected '1.0'.",
-                    file=sys.stderr,        
-                )
-                sys.exit(2)
-            
-            # 2) Require command
-            _json_command = req.get("command")
-            if not _json_command:
-                print("ERROR: Missing 'command' in JSON request.", file=sys.stderr)
-                sys.exit(2)
-
-            # 3) Propagate request_id
-            args._request_id = req.get("request_id")
-
-            # 4) Map params
-            params = req.get("params", {})
-            for k, v in params.items():
-                if hasattr(args, k):
-                    setattr(args, k, v)
-
-            # 5) Explicit param routing for nested/non-obvious flags
-            if _json_command == "sweep" and "config_path" in params:
-                args.sweep = params["config_path"]
-            elif _json_command == "forward" and "run_dir" in params:
-                args.forward_eval = params["run_dir"]
-
-        except (json.JSONDecodeError, TypeError) as e:
-            print(f"ERROR: Invalid --json-request payload: {e}", file=sys.stderr)
-            sys.exit(2)
-
     try:
+        # --- JSON Request Overlay ---
+        _json_command: str | None = None  # tracks command for explicit dispatch below
+
+        if args.json_request:
+            try:
+                req = json.loads(args.json_request)
+
+                # 1) Validate schema version
+                schema_version = req.get("schema_version")
+                if schema_version != "1.0":
+                    raise ConfigError(f"Unsupported or missing schema_version '{schema_version}'. Expected '1.0'.")
+                
+                # 2) Require command
+                _json_command = req.get("command")
+                if not _json_command:
+                    raise ConfigError("Missing 'command' in JSON request.")
+
+                # 3) Propagate request_id
+                args._request_id = req.get("request_id")
+
+                # 4) Map params
+                params = req.get("params", {})
+                for k, v in params.items():
+                    if hasattr(args, k):
+                        setattr(args, k, v)
+
+                # 5) Explicit param routing for nested/non-obvious flags
+                if _json_command == "sweep" and "config_path" in params:
+                    args.sweep = params["config_path"]
+                elif _json_command == "forward" and "run_dir" in params:
+                    args.forward_eval = params["run_dir"]
+
+            except (json.JSONDecodeError, TypeError) as e:
+                raise ConfigError(f"Invalid --json-request payload: {e}")
+
         # --- COMMAND ROUTING (Order matters: specific -> generic) ---
 
         # Explicit dispatch for machine-driven requests via --json-request.
@@ -168,12 +164,10 @@ def main() -> None:
                 )
                 sys.exit(0)
             else:
-                print(
-                    f"ERROR: Unknown command '{_json_command}'. "
-                    "Valid commands: run, sweep, forward, portfolio.",
-                    file=sys.stderr,
+                raise ConfigError(
+                    f"Unknown command '{_json_command}'. "
+                    "Valid commands: run, sweep, forward, portfolio."
                 )
-                sys.exit(2)
 
         # --- Standard flag-driven routing (human CLI use) ---
         if handle_runs_commands(args):
@@ -214,6 +208,19 @@ def main() -> None:
     except KeyboardInterrupt:
         print("\nAborted by user.")
         sys.exit(1)
+    except QuantLabError as e:
+        # Known QuantLab errors: print clean message to stderr, exit with mapped code, no traceback.
+        print(f"ERROR: {e}", file=sys.stderr)
+        
+        # Mapping exceptions to specific exit codes
+        if isinstance(e, ConfigError):
+            sys.exit(2)
+        elif isinstance(e, DataError):
+            sys.exit(3)
+        elif isinstance(e, StrategyError):
+            sys.exit(4)
+        else:
+            sys.exit(1)
     except Exception as e:
         print(f"CRITICAL ERROR: {e}")
         import traceback
