@@ -1,12 +1,22 @@
 # Session Log - QuantLab
 
-## 2026-03-20 — Stepbit CLI Stability (Issue #21)
+## 2026-03-21 — E2E Integration Validation (Issue #27)
+- **Session Focus**: Validate the full Stepbit-QuantLab loop (Request -> Execution -> Report -> Exit Code).
+- **Tasks Completed**:
+  - Implemented automated deterministic tests for the ConfigError policy in `test/test_integration_deterministic.py`.
+  - Fixed `report_summary.py` flattening logic to handle classic run payloads.
+  - Performed manual smoke validation for a real success path (ETH-USD research run via `--json-request`).
+  - Verified exit code 0 for success and exit code 2 for malformed requests.
+  - Confirmed `report.json` as the canonical machine-readable artifact with a populated `summary` block.
+- **Key Decisions**: Separated network-dependent success paths from deterministic local validation to ensure test suite stability.
+- **Next Steps**: Proceed with further Stepbit automation features (Response Envelopes, Fingerprinting).
+
+## 2026-03-20 — Stepbit Error Policy (Issue #23)
 - **Session Focus**: Harden the CLI for predictable headless Stepbit-driven execution.
 - **Tasks Completed**:
   - Implemented strict `schema_version` and `command` validation in `main.py` (exit 2 for invalid input).
   - Propagated `request_id` to `args._request_id` for traceability.
   - Implemented explicit command dispatch for JSON requests, ensuring predictable routing regardless of flag fallthrough.
-  - Reverted `run.py` changes as they belong in Issue #22.
   - Added 8 unit tests in `test/test_json_request.py`.
 - **Key Decisions**: Forced `command` field in JSON requests as hard required. Treated missing command as invalid input (exit 2).
 - **Next Steps**: Proceed to Issue #22 for consistent `report.json` and artifact production.
