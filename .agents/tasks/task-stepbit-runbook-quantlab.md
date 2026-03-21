@@ -1,41 +1,62 @@
 # Task: QuantLab Runbook for Stepbit
 
 ## Goal
-Create a human-readable and machine-referenceable "Runbook" within the QuantLab repository that describes how to operate the system via Stepbit.
+Create a concise operational runbook inside the QuantLab repository that explains how Stepbit should invoke, validate, and troubleshoot QuantLab in its current integration-ready form.
 
 ## Why
-Clear operational documentation is essential for maintaining the integration. The runbook acts as the source of truth for Stepbit agents on how to invoke QuantLab, troubleshoot common issues, and interpret results.
+After stabilizing the JSON request path, machine-readable reporting, error policy, runtime resolution, and validating the first end-to-end slice, the integration now needs a single operational source of truth. The runbook should help both humans and AI agents execute QuantLab reliably and interpret outcomes correctly.
 
 ## Scope
-- Document standard CLI command patterns for basic tasks (run, sweep, forward).
-- Reference the **I/O Contract** and **report.json** schemas from Steps 1 & 3.
-- List required environment variables and configuration files.
-- Explain the significance of key artifacts (metadata, config, metrics).
-- Provide troubleshooting steps for common error codes defined in the **Error Policy** (Step 4).
+- document the current recommended invocation pattern for Stepbit -> QuantLab execution
+- document the role of:
+  - `--json-request`
+  - `report.json`
+  - exit codes
+  - `--check`
+  - `--version`
+- provide minimal command patterns for:
+  - run
+  - sweep
+  - forward
+  - portfolio, only if already naturally supported and stable
+- explain the expected machine-readable artifacts and where to find them
+- explain the meaning of common failure outcomes and how to respond
+- include a short troubleshooting section for configuration/runtime/data-related failures
+- reference the canonical internal docs already created during the integration work
 
 ## Non-goals
-- Documenting every internal function (use code docstrings for that).
-- Creating a separate wiki or external site.
+- documenting every internal module or function
+- creating external documentation sites or wikis
+- redesigning the integration architecture
+- documenting unimplemented future features as if they were operational
 
 ## Inputs
-- `.agents/tasks/task-stepbit-io-contract.md`
-- `.agents/tasks/task-stepbit-report-json.md`
-- `.agents/tasks/task-stepbit-cli-stable.md`
-- `.agents/tasks/task-stepbit-error-policy.md`
+- `.agents/stepbit-io-v1.md`
+- `.agents/artifact-contracts.md`
+- `.agents/session-log.md`
+- completed work from issues #20, #21, #22, #23, #24, and #27
 
 ## Expected outputs
-- A new file: `.agents/stepbit-runbook.md`.
+- a new file: `.agents/stepbit-runbook.md`
 
 ## Acceptance criteria
-- The runbook is concise and action-oriented.
-- An AI agent reading the runbook can successfully execute a backtest using the CLI.
+- the runbook is concise, operational, and action-oriented
+- an AI agent can use it to execute a basic QuantLab run via the CLI
+- the runbook clearly identifies:
+  - how to invoke QuantLab
+  - which artifact is canonical
+  - how to interpret exit codes
+  - how to verify runtime health before execution
+- the runbook reflects current repo reality rather than aspirational future behavior
 
 ## Constraints
-- Must reside within the `.agents/` directory to be accessible to AI agents.
-- Follow the "reproducibility" principle.
+- must live in `.agents/`
+- must prioritize reproducibility and operational clarity
+- must not duplicate large sections of other docs unnecessarily
+- prefer linking/reference patterns over redundant duplication
 
 ## GitHub issue
 - #26 docs: integración - Completar runbook QuantLab <-> Stepbit
 
 ## Suggested next step
-Move to [task-stepbit-adapter-interface.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-adapter-interface.md).
+Inspect the current integration-ready behavior and write a runbook organized around: prepare runtime, invoke QuantLab, inspect artifacts, interpret results, recover from common failures.
