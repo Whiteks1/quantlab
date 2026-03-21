@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuantLab | Research Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+    <div id="app">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">QL</span>
+                    <span class="logo-text">QuantLab</span>
+                </div>
+                <div class="version">v1.0.0-mvp</div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#/" class="nav-item active" id="nav-runs">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                    </svg>
+                    Run Registry
+                </a>
+<a href="#/compare" class="nav-item disabled" id="nav-compare" aria-disabled="true">
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+    </svg>
+                    Comparison
+                </a>
+<a href="#/settings" class="nav-item disabled" aria-disabled="true">
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+        </path>
+    </svg>
+                    Config
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <span class="dot pulse"></span>
+                    <span class="status-text">System Active</span>
+                </div>
+            </div>
+        </aside>
+
+        <main class="content">
+            <header class="content-header">
+                <div class="breadcrumb" id="breadcrumb">Run Registry</div>
+
+                <div class="header-actions">
+                    <div class="search-box">
+                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="text" id="run-search" placeholder="Search by ticker or run ID...">
+                    </div>
+<button class="btn btn-primary btn-refresh" id="refresh-data" type="button">
+    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="23 4 23 10 17 10"></polyline>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+    </svg>
+                        Refresh
+                    </button>
+                </div>
+            </header>
+
+            <div id="view-container">
+                <div id="run-index-view" class="view active">
+                    <div class="stats-overview">
+                        <div class="stat-card glass">
+                            <div class="stat-label">Total Runs</div>
+                            <div class="stat-value" id="stats-total-runs">-</div>
+                        </div>
+
+                        <div class="stat-card glass">
+                            <div class="stat-label">Executions (24h)</div>
+                            <div class="stat-value" id="stats-active-sessions">-</div>
+                        </div>
+
+                        <div class="stat-card glass">
+                            <div class="stat-label">Registry Integrity</div>
+                            <div class="stat-value text-success">Healthy</div>
+                        </div>
+                    </div>
+
+                    <div class="card table-container glass">
+                        <div class="card-header">
+                            <h2>All Experiments</h2>
+
+                            <div class="filters">
+                                <select id="filter-mode" class="select-sm">
+                                    <option value="all">All Modes</option>
+                                    <option value="run">Backtest</option>
+                                    <option value="sweep">Sweep</option>
+                                    <option value="forward">Forward</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table id="runs-table">
+                                <thead>
+                                    <tr>
+                                        <th data-sort="run_id">Run ID</th>
+                                        <th data-sort="mode">Mode</th>
+                                        <th data-sort="ticker">Ticker</th>
+                                        <th data-sort="total_return">Return</th>
+                                        <th data-sort="sharpe_simple">Sharpe</th>
+                                        <th data-sort="max_drawdown">Drawdown</th>
+                                        <th data-sort="created_at">Date</th>
+                                        <th class="no-sort">Actions</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody id="runs-body">
+                                    <tr>
+                                        <td colspan="8" class="loading-state">
+                                            <div class="spinner"></div>
+                                            Searching run artifacts...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="run-detail-view" class="view">
+                    <div class="loading-state">
+                        <div class="spinner"></div>
+                        Phase 2: Detailed analytics loading...
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
