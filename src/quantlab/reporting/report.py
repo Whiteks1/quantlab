@@ -4,6 +4,7 @@ import pandas as pd
 from typing import Dict, Any, Optional
 
 from .trade_analytics import load_trades_csv, compute_round_trips, aggregate_trade_metrics
+from .report_summary import build_standard_summary
 
 def build_report_payload(trades_csv_path: str, meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
@@ -14,7 +15,9 @@ def build_report_payload(trades_csv_path: str, meta: Optional[Dict[str, Any]] = 
 
     trades_df = load_trades_csv(trades_csv_path)
     if trades_df.empty:
-        return {"meta": meta or {}, "metrics": {}, "trades": []}
+        payload = {"meta": meta or {}, "metrics": {}, "trades": []}
+        payload["summary"] = build_standard_summary(payload)
+        return payload
 
     round_trips = compute_round_trips(trades_df)
     metrics = aggregate_trade_metrics(round_trips)
@@ -29,11 +32,16 @@ def build_report_payload(trades_csv_path: str, meta: Optional[Dict[str, Any]] = 
                 rt_display[col] = rt_display[col].apply(lambda x: x.isoformat() if hasattr(x, "isoformat") else str(x))
         trades_list = rt_display.to_dict(orient="records")
 
-    return {
+    payload = {
         "meta": meta or {},
         "metrics": metrics,
         "trades": trades_list
     }
+    
+    # Add standardized summary
+    payload["summary"] = build_standard_summary(payload)
+    
+    return payload
 
 def render_report_md(payload: Dict[str, Any]) -> str:
     """

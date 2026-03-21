@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, Any, Tuple, Optional
 
 import pandas as pd
+from quantlab.reporting.report_summary import build_standard_summary
 
 def _sanitize_for_json(obj: Any) -> Any:
     """
@@ -103,6 +104,16 @@ def build_report(run_dir: str) -> Dict[str, Any]:
             })
     report["artifacts"] = sorted(artifacts, key=lambda x: x["file_name"])
             
+    # Standardized summary for Stepbit
+    standard_summary = build_standard_summary(report)
+
+    # Preserve legacy summary structures (e.g. walkforward summary tables)
+    # and add the machine-readable KPI block additively.
+    if "summary" in report:
+        report["kpi_summary"] = standard_summary
+    else:
+        report["summary"] = standard_summary
+    
     return _sanitize_for_json(report)
 
 def render_report_md(report: Dict[str, Any]) -> str:
@@ -164,7 +175,8 @@ def render_report_md(report: Dict[str, Any]) -> str:
         lines.append("\n## Walkforward Summary")
         summary = report.get("summary", [])
         if summary:
-            df_sum = pd.DataFrame(summary)
+            df_sum = pd.DataFrame([summary]).T.reset_index()
+            df_sum.columns = ["metric", "value"]
             lines.append(df_sum.to_markdown(index=False))
         else:
             lines.append("No summary results found.")
@@ -181,19 +193,31 @@ def render_report_md(report: Dict[str, Any]) -> str:
 
 def write_report(run_dir: str) -> Tuple[str, str]:
     """
-    Builds and writes report.md and report.json to the run directory.
+    Builds and writes reporting artifacts to the run directory.
+    
+    Writes:
+    - report.json (canonical)
+    - run_report.json (legacy)
+    - run_report.md
     """
     report = build_report(run_dir)
     run_path = Path(run_dir)
     
     md_path = run_path / "run_report.md"
-    json_path = run_path / "run_report.json"
+    json_path = run_path / "report.json"
+    legacy_json_path = run_path / "run_report.json"
     
     md_content = render_report_md(report)
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(md_content)
         
+    # Write canonical artifact
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False, allow_nan=False)
         
-    return str(md_path), str(json_path)
+    # Write legacy artifact for backward compatibility
+    with open(legacy_json_path, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2, ensure_ascii=False, allow_nan=False)
+        
+    return str(md_path), str(legacy_json_path)
+
