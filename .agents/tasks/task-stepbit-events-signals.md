@@ -1,38 +1,61 @@
-# Task: Event Signalling & Session Hooks (Optimization)
+# Task: Event Signalling & Session Hooks
 
 ## Goal
-Implement a lightweight "event" or "hook" system in QuantLab to signal progress or completion to Stepbit without requiring constant polling.
+Add a minimal, optional session-level signalling mechanism so QuantLab can emit structured completion/failure signals for Stepbit without relying only on filesystem polling.
 
 ## Why
-For long-running sweeps or complex forward evaluations, polling the filesystem is inefficient. This optimization allows QuantLab to "push" state changes to Stepbit, reducing latency in the research loop.
+The current integration works through CLI invocation, exit codes, and artifact inspection. For longer or more structured research flows, Stepbit benefits from a lightweight push-style signal that indicates when a session starts, completes, or fails, while preserving QuantLab’s offline-first and CLI-first model.
 
 ## Scope
-- Define "Key Events" to signal (e.g., `RUN_STARTED`, `RUN_COMPLETED`, `RUN_FAILED`).
-- Implement an optional `--webhook` or `--signal-file` flag in the CLI.
-- Ensure signals include the `run_id` and a path to the `report.json`.
+- define a minimal set of session-level event types
+- implement one lightweight signalling transport for the first iteration:
+  - `--signal-file`
+- emit structured signals for the main session lifecycle outcomes
+- ensure emitted signals include enough information for Stepbit to locate and interpret the produced result
+- document the signal payload structure and operational usage
 
 ## Non-goals
-- Implementing a complex message broker (Kafka, RabbitMQ).
-- Real-time streaming of trade-by-trade status (keep it to session-level events).
+- webhook delivery in this issue
+- message brokers or infrastructure-heavy event systems
+- trade-by-trade or bar-by-bar streaming
+- retry engines, delivery guarantees, or event deduplication layers
+- redesigning the QuantLab execution model
 
 ## Inputs
-- `.agents/tasks/task-stepbit-cli-stable.md`
+- current CLI integration behavior
+- `main.py`
 - `src/quantlab/cli/`
+- `report.json` artifact contract
+- current exit code policy
+- current run/session identity conventions
 
 ## Expected outputs
-- Updated CLI parser and orchestration logic supporting signals/hooks.
-- Documentation of the event payload structure.
+- CLI support for an optional `--signal-file`
+- structured session-level signal payloads
+- documentation of emitted event types and payload shape
 
 ## Acceptance criteria
-- Stepbit can receive a signal immediately upon session completion.
-- Signals are optional and do not break the "Strictly Offline" / "CLI-first" research mode.
+- QuantLab can optionally emit a signal when a session:
+  - starts
+  - completes successfully
+  - fails
+- signals do not break normal offline CLI usage
+- emitted payloads include at least:
+  - event type
+  - run/session identifier when available
+  - status
+  - path to `report.json` when available
+- Stepbit can consume the signal without requiring polling-only behavior
 
 ## Constraints
-- Use standard Python libraries (e.g., `requests` for webhooks) or simple file-based signals.
-- No heavy infrastructure dependencies.
+- prefer standard library only
+- keep the transport local and lightweight
+- keep changes minimal and reviewable
+- preserve CLI-first behavior
+- do not introduce heavy infrastructure dependencies
 
 ## GitHub issue
 - #25 feat: integración - Emitir events/signals estructurados para Stepbit
 
 ## Suggested next step
-Move to [task-stepbit-distributed-sweeps.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-distributed-sweeps.md).
+Define the minimal session event model and implement file-based signalling first, leaving webhooks for a future issue if still needed.

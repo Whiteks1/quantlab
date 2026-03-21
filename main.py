@@ -5,7 +5,9 @@ import argparse
 import json
 import os
 import sys
+import datetime as _dt
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -29,6 +31,38 @@ from quantlab.reporting.portfolio_mode_compare import write_mode_comparison_repo
 from quantlab.errors import QuantLabError, ConfigError, DataError, StrategyError
 
 
+class SignalEmitter:
+    """
+    Best-effort signalling via append-only JSON Lines file.
+    """
+
+    def __init__(self, signal_file: Optional[str], schema_version: str = "1.0"):
+        self.signal_file = signal_file
+        self.schema_version = schema_version
+
+    def emit(self, event: str, status: str, **kwargs) -> None:
+        if not self.signal_file:
+            return
+
+        payload = {
+            "schema_version": self.schema_version,
+            "event": event,
+            "status": status,
+            "timestamp": _dt.datetime.now().replace(microsecond=0).isoformat(),
+        }
+        payload.update(kwargs)
+
+        try:
+            with open(self.signal_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(payload) + "\n")
+        except Exception as e:
+            # Signal failure must not crash the main execution path.
+            print(
+                f"Warning: Failed to write signal to {self.signal_file}: {e}",
+                file=sys.stderr,
+            )
+
+
 def main() -> None:
     load_dotenv()
 
@@ -36,8 +70,15 @@ def main() -> None:
         description="QuantLab MVP: research-first trading experiment engine."
     )
     # Global / Request params
-    parser.add_argument("--json-request", help="Pass a V1 Stepbit Request JSON string directly.")
-    
+    parser.add_argument(
+        "--json-request",
+        help="Pass a V1 Stepbit Request JSON string directly.",
+    )
+    parser.add_argument(
+        "--signal-file",
+        help="Path to an append-only JSON Lines file for session signals.",
+    )
+
     parser.add_argument("--ticker", default="ETH-USD")
     parser.add_argument("--start", default="2023-01-01")
     parser.add_argument("--end", default="2024-01-01")
@@ -50,33 +91,88 @@ def main() -> None:
     parser.add_argument("--cooldown_days", type=int, default=0)
 
     # Output
-    parser.add_argument("--outdir", default=None, help="Output directory (default: outputs)")
+    parser.add_argument(
+        "--outdir", default=None, help="Output directory (default: outputs)"
+    )
     parser.add_argument("--save_price_plot", action="store_true")
 
     # Paper broker
-    parser.add_argument("--paper", action="store_true", help="Ejecuta paper broker + CSV de trades")
-    parser.add_argument("--initial_cash", type=float, default=1000.0, help="Cash inicial para paper broker")
+    parser.add_argument(
+        "--paper",
+        action="store_true",
+        help="Ejecuta paper broker + CSV de trades",
+    )
+    parser.add_argument(
+        "--initial_cash",
+        type=float,
+        default=1000.0,
+        help="Cash inicial para paper broker",
+    )
 
     # Slippage
-    parser.add_argument("--slippage_bps", type=float, default=8.0, help="Slippage fijo en bps (10bps=0.10%)")
+    parser.add_argument(
+        "--slippage_bps",
+        type=float,
+        default=8.0,
+        help="Slippage fijo en bps (10bps=0.10%)",
+    )
     parser.add_argument("--slippage_mode", default="fixed", choices=["fixed", "atr"])
-    parser.add_argument("--k_atr", type=float, default=0.05, help="Sensibilidad slippage ATR (si slippage_mode=atr)")
+    parser.add_argument(
+        "--k_atr",
+        type=float,
+        default=0.05,
+        help="Sensibilidad slippage ATR (si slippage_mode=atr)",
+    )
 
     # Reporting / Sweep
-    parser.add_argument("--report", nargs="?", const=True, help="Genera report para un run (pasa el path) o para la ejecución actual")
+    parser.add_argument(
+        "--report",
+        nargs="?",
+        const=True,
+        help="Genera report para un run (pasa el path) o para la ejecución actual",
+    )
     parser.add_argument("--trades_csv", default=None)
     parser.add_argument("--sweep", help="Path a .yaml de configuración para grid search")
     parser.add_argument("--sweep_outdir", default=None)
 
     # Run navigation (Stage N)
-    parser.add_argument("--runs-list", metavar="ROOT_DIR", default=None, help="List all runs in a directory.")
-    parser.add_argument("--runs-show", metavar="RUN_DIR", default=None, help="Show details for a single run.")
-    parser.add_argument("--runs-best", metavar="ROOT_DIR", default=None, help="Find the best run by a metric.")
-    parser.add_argument("--metric", default="sharpe_simple", help="Metric to rank by (used with --runs-best, --best-from).")
+    parser.add_argument(
+        "--runs-list",
+        metavar="ROOT_DIR",
+        default=None,
+        help="List all runs in a directory.",
+    )
+    parser.add_argument(
+        "--runs-show",
+        metavar="RUN_DIR",
+        default=None,
+        help="Show details for a single run.",
+    )
+    parser.add_argument(
+        "--runs-best",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Find the best run by a metric.",
+    )
+    parser.add_argument(
+        "--metric",
+        default="sharpe_simple",
+        help="Metric to rank by (used with --runs-best, --best-from).",
+    )
 
     # Stage J/K/L/M Flags (legacy — use --runs-* equivalents)
-    parser.add_argument("--list-runs", metavar="ROOT_DIR", default=None, help="[Deprecated] Use --runs-list.")
-    parser.add_argument("--best-from", metavar="ROOT_DIR", default=None, help="[Deprecated] Use --runs-best.")
+    parser.add_argument(
+        "--list-runs",
+        metavar="ROOT_DIR",
+        default=None,
+        help="[Deprecated] Use --runs-list.",
+    )
+    parser.add_argument(
+        "--best-from",
+        metavar="ROOT_DIR",
+        default=None,
+        help="[Deprecated] Use --runs-best.",
+    )
     parser.add_argument("--compare", nargs="+", metavar="RUN_DIR")
     parser.add_argument("--advanced-report", metavar="RUN_DIR", default=None)
     parser.add_argument("--forward-eval", metavar="RUN_DIR", default=None)
@@ -86,7 +182,11 @@ def main() -> None:
     parser.add_argument("--forward-metric", default="sharpe_simple")
     parser.add_argument("--resume-forward", metavar="SESSION_DIR", default=None)
     parser.add_argument("--portfolio-report", metavar="ROOT_DIR", default=None)
-    parser.add_argument("--portfolio-mode", default="raw_capital", choices=["raw_capital", "equal_weight", "custom_weight"])
+    parser.add_argument(
+        "--portfolio-mode",
+        default="raw_capital",
+        choices=["raw_capital", "equal_weight", "custom_weight"],
+    )
     parser.add_argument("--portfolio-weights", metavar="JSON_FILE", default=None)
     parser.add_argument("--portfolio-top-n", type=int, default=None)
     parser.add_argument("--portfolio-rank-metric", default="total_return")
@@ -107,6 +207,9 @@ def main() -> None:
     if getattr(args, "best_from", None) and not getattr(args, "runs_best", None):
         args.runs_best = args.best_from
 
+    emitter = SignalEmitter(args.signal_file)
+    session_metadata = {"mode": "unknown", "request_id": None}
+
     try:
         # --- JSON Request Overlay ---
         _json_command: str | None = None  # tracks command for explicit dispatch below
@@ -118,8 +221,10 @@ def main() -> None:
                 # 1) Validate schema version
                 schema_version = req.get("schema_version")
                 if schema_version != "1.0":
-                    raise ConfigError(f"Unsupported or missing schema_version '{schema_version}'. Expected '1.0'.")
-                
+                    raise ConfigError(
+                        f"Unsupported or missing schema_version '{schema_version}'. Expected '1.0'."
+                    )
+
                 # 2) Require command
                 _json_command = req.get("command")
                 if not _json_command:
@@ -127,6 +232,7 @@ def main() -> None:
 
                 # 3) Propagate request_id
                 args._request_id = req.get("request_id")
+                session_metadata["request_id"] = args._request_id
 
                 # 4) Map params
                 params = req.get("params", {})
@@ -143,26 +249,41 @@ def main() -> None:
             except (json.JSONDecodeError, TypeError) as e:
                 raise ConfigError(f"Invalid --json-request payload: {e}")
 
+        # Determine mode for signalling after validation and just before execution
+        if _json_command:
+            session_metadata["mode"] = _json_command
+        elif args.sweep:
+            session_metadata["mode"] = "sweep"
+        elif args.forward_eval or args.resume_forward:
+            session_metadata["mode"] = "forward"
+        elif args.portfolio_report or args.portfolio_compare:
+            session_metadata["mode"] = "portfolio"
+        elif args.report:
+            session_metadata["mode"] = "report"
+        elif args.runs_list or args.runs_show or args.runs_best:
+            session_metadata["mode"] = "runs"
+        else:
+            session_metadata["mode"] = "run"
+
+        emitter.emit("SESSION_STARTED", "running", **session_metadata)
+
         # --- COMMAND ROUTING (Order matters: specific -> generic) ---
+        result_ctx = None
 
         # Explicit dispatch for machine-driven requests via --json-request.
         if _json_command:
             if _json_command == "run":
-                handle_run_command(args)
-                sys.exit(0)
+                result_ctx = handle_run_command(args)
             elif _json_command == "sweep":
-                handle_sweep_command(args, run_sweep=run_sweep)
-                sys.exit(0)
+                result_ctx = handle_sweep_command(args, run_sweep=run_sweep)
             elif _json_command == "forward":
-                handle_forward_commands(args)
-                sys.exit(0)
+                result_ctx = handle_forward_commands(args)
             elif _json_command == "portfolio":
-                handle_portfolio_commands(
+                result_ctx = handle_portfolio_commands(
                     args,
                     write_portfolio_report=write_portfolio_report,
                     write_mode_comparison_report=write_mode_comparison_report,
                 )
-                sys.exit(0)
             else:
                 raise ConfigError(
                     f"Unknown command '{_json_command}'. "
@@ -170,61 +291,93 @@ def main() -> None:
                 )
 
         # --- Standard flag-driven routing (human CLI use) ---
-        if handle_runs_commands(args):
-            sys.exit(0)
+        if result_ctx in (None, False):
+            result_ctx = handle_runs_commands(args)
 
-        if handle_report_commands(
-            args,
-            write_run_report=write_run_report,
-            write_advanced_report=write_advanced_report,
-            write_runs_index=write_runs_index,
-            build_runs_index=build_runs_index,
-            write_comparison=write_comparison,
-        ):
-            sys.exit(0)
+        if result_ctx in (None, False):
+            result_ctx = handle_report_commands(
+                args,
+                write_run_report=write_run_report,
+                write_advanced_report=write_advanced_report,
+                write_runs_index=write_runs_index,
+                build_runs_index=build_runs_index,
+                write_comparison=write_comparison,
+            )
 
-        if handle_forward_commands(args):
-            sys.exit(0)
-        
-        if handle_portfolio_commands(
-            args,
-            write_portfolio_report=write_portfolio_report,
-            write_mode_comparison_report=write_mode_comparison_report,
-        ):
-            sys.exit(0)
+        if result_ctx in (None, False):
+            result_ctx = handle_forward_commands(args)
 
-        if handle_sweep_command(
-            args,
-            run_sweep=run_sweep,
-        ):
-            sys.exit(0)
+        if result_ctx in (None, False):
+            result_ctx = handle_portfolio_commands(
+                args,
+                write_portfolio_report=write_portfolio_report,
+                write_mode_comparison_report=write_mode_comparison_report,
+            )
+
+        if result_ctx in (None, False):
+            result_ctx = handle_sweep_command(
+                args,
+                run_sweep=run_sweep,
+            )
 
         # Final fallthrough: classic run
-        if handle_run_command(args):
-            sys.exit(0)
-            
+        if result_ctx in (None, False):
+            result_ctx = handle_run_command(args)
+
+        extra_ctx = result_ctx if isinstance(result_ctx, dict) else {}
+        emitter.emit(
+            "SESSION_COMPLETED",
+            "success",
+            **session_metadata,
+            **extra_ctx,
+        )
         sys.exit(0)
 
     except KeyboardInterrupt:
         print("\nAborted by user.")
+        emitter.emit(
+            "SESSION_FAILED",
+            "error",
+            **session_metadata,
+            exit_code=1,
+            error_type="KeyboardInterrupt",
+            message="Aborted by user",
+        )
         sys.exit(1)
     except QuantLabError as e:
         # Known QuantLab errors: print clean message to stderr, exit with mapped code, no traceback.
         print(f"ERROR: {e}", file=sys.stderr)
-        
-        # Mapping exceptions to specific exit codes
+
+        exit_code = 1
         if isinstance(e, ConfigError):
-            sys.exit(2)
+            exit_code = 2
         elif isinstance(e, DataError):
-            sys.exit(3)
+            exit_code = 3
         elif isinstance(e, StrategyError):
-            sys.exit(4)
-        else:
-            sys.exit(1)
+            exit_code = 4
+
+        emitter.emit(
+            "SESSION_FAILED",
+            "error",
+            **session_metadata,
+            exit_code=exit_code,
+            error_type=e.__class__.__name__,
+            message=str(e),
+        )
+        sys.exit(exit_code)
     except Exception as e:
         print(f"CRITICAL ERROR: {e}")
         import traceback
+
         traceback.print_exc()
+        emitter.emit(
+            "SESSION_FAILED",
+            "error",
+            **session_metadata,
+            exit_code=1,
+            error_type=e.__class__.__name__,
+            message=str(e),
+        )
         sys.exit(1)
 
 

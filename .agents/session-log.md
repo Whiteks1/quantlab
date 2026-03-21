@@ -1,5 +1,17 @@
 # Session Log - QuantLab
 
+## 2026-03-21 — Event Signalling & Session Hooks (Issue #25)
+- **Session Focus**: Implement file-based session lifecycle notifications for Stepbit.
+- **Tasks Completed**:
+  - Implemented `SignalEmitter` in `main.py` with append-only JSON Lines support.
+  - Added `--signal-file` CLI argument.
+  - Updated CLI handlers (`run`, `sweep`, `forward`, `portfolio`, `report`, `runs`) to return execution context.
+  - Implemented `SESSION_STARTED`, `SESSION_COMPLETED`, and `SESSION_FAILED` event emission in `main.py`.
+  - Synchronized `.agents/stepbit-io-v1.md` and `docs/stepbit-io-v1.md`.
+  - Fixed a literal `%` bug in `argparse` help strings causing `ValueError`.
+- **Key Decisions**: Used append-only JSON Lines for best-effort signalling; deferred webhook delivery. Ensured handler changes were minimal for context propagation.
+- **Next Steps**: Hand over for Stepbit integration testing.
+
 ## 2026-03-21 — QuantLab Runbook for Stepbit (Issue #26)
 - **Session Focus**: Create operational documentation for Stepbit integration and sync I/O contract status.
 - **Tasks Completed**:

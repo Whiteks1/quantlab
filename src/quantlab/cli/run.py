@@ -100,7 +100,7 @@ def handle_run_command(args) -> bool:
         if trades_df is None:
             if not os.path.exists(csv_path):
                 print(f"ERROR: No existe trades.csv para report. Esperado en: {csv_path}")
-                return False
+                return None
             trades_df = pd.read_csv(csv_path)
 
         if trades_df.empty:
@@ -116,7 +116,11 @@ def handle_run_command(args) -> bool:
             )
             print(f"\nSaved: {report_path}")
 
-    return True
+    return {
+        "run_id": None,
+        "artifacts_path": outdir,
+        "report_path": os.path.join(outdir, "report.json") if os.path.exists(os.path.join(outdir, "report.json")) else None
+    }
 
 
 # Backward-compatible alias for older refactor paths / tests

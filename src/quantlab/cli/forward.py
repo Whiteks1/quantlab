@@ -12,13 +12,11 @@ from quantlab.reporting.forward_report import write_forward_report
 from quantlab.data.sources import fetch_ohlc
 
 
-def run_forward_mode(args) -> None:
+def run_forward_mode(args) -> dict | None:
     """
     Stage L: orchestrate a forward evaluation session from CLI args.
 
-    Loads the best candidate from an existing run directory, fetches OHLC data
-    for the forward period, runs the paper portfolio simulation, persists all
-    artifacts, and generates a JSON + Markdown report.
+    Returns a metadata dictionary on success, or None on failure/mismatch.
     """
     resume_dir = getattr(args, "resume_forward", None)
     run_dir = getattr(args, "forward_eval", None)
@@ -30,10 +28,10 @@ def run_forward_mode(args) -> None:
             session_data = load_forward_session(resume_dir)
         except ValueError as e:
             print(f"ERROR: {e}")
-            return
+            return None
         except Exception as e:
             print(f"ERROR: Could not load session: {e}")
-            return
+            return None
 
         candidate = session_data["candidate"]
         initial_state = session_data["portfolio_state"]
@@ -96,7 +94,7 @@ def run_forward_mode(args) -> None:
         )
     except Exception as e:
         print(f"ERROR: Forward evaluation failed: {e}")
-        return
+        return None
 
     ps = result["portfolio_state"]
     print(f"  Bars evaluated : {result['bars_evaluated']}")
@@ -116,15 +114,20 @@ def run_forward_mode(args) -> None:
     for f in written_files:
         print(f"  → {f}")
 
+    return {
+        "run_id": os.path.basename(out_dir),
+        "artifacts_path": out_dir,
+        "report_path": json_p
+    }
+
 
 def handle_forward_commands(
     args,
-) -> bool:
+) -> dict | None:
     """
     Handle forward-evaluation related CLI modes.
     """
     if args.forward_eval or args.resume_forward:
-        run_forward_mode(args)
-        return True
+        return run_forward_mode(args)
 
-    return False
+    return None
