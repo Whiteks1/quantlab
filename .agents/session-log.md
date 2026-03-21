@@ -1,15 +1,14 @@
 # Session Log - QuantLab
 
-## 2026-03-21 — E2E Integration Validation (Issue #27)
-- **Session Focus**: Validate the full Stepbit-QuantLab loop (Request -> Execution -> Report -> Exit Code).
+## 2026-03-21 — QuantLab Runbook for Stepbit (Issue #26)
+- **Session Focus**: Create operational documentation for Stepbit integration and sync I/O contract status.
 - **Tasks Completed**:
-  - Implemented automated deterministic tests for the ConfigError policy in `test/test_integration_deterministic.py`.
-  - Fixed `report_summary.py` flattening logic to handle classic run payloads.
-  - Performed manual smoke validation for a real success path (ETH-USD research run via `--json-request`).
-  - Verified exit code 0 for success and exit code 2 for malformed requests.
-  - Confirmed `report.json` as the canonical machine-readable artifact with a populated `summary` block.
-- **Key Decisions**: Separated network-dependent success paths from deterministic local validation to ensure test suite stability.
-- **Next Steps**: Proceed with further Stepbit automation features (Response Envelopes, Fingerprinting).
+  - Created `.agents/stepbit-runbook.md` organized by Prepare, Invoke, Interpret, and Recover.
+  - Synchronized `.agents/stepbit-io-v1.md` and `docs/stepbit-io-v1.md`.
+  - Updated I/O status labels for `schema_version` validation, `request_id` propagation, and exit codes 3/4 [done].
+  - Documented missing Issue #24 features (`--check`, `--version`, path anchoring) as explicit operational gaps.
+- **Key Decisions**: Documented current repository reality only, deferring restoration of missing runtime features to a dedicated slot.
+- **Next Steps**: Hand over for review and eventual restoration of Issue #24 features if required.
 
 ## 2026-03-20 — Stepbit Error Policy (Issue #23)
 - **Session Focus**: Harden the CLI for predictable headless Stepbit-driven execution.

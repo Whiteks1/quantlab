@@ -17,13 +17,22 @@ Each field and section is labeled with its current implementation status:
 
 ## 1. Invocation
 
-Stepbit invokes QuantLab as a subprocess via its CLI:
+Stepbit invokes QuantLab as a subprocess via its CLI.
 
 ```bash
-python main.py --json-request '<JSON_PAYLOAD>'
+<EXPLICIT_PYTHON_INTERPRETER> main.py --json-request '<JSON_PAYLOAD>'
 ```
 
+**Recommended Configuration Examples:**
+- **Windows**: `.venv\Scripts\python.exe`
+- **POSIX**: `.venv/bin/python`
+
 `[done]` — The `--json-request` flag is registered and parsed in `main.py`.
+
+`[done]` — Runtime resolution has been hardened for local automated execution:
+- `main.py` anchors `src/` into `sys.path`.
+- `PROJECT_ROOT` is resolved from the entrypoint.
+- Default `outdir` is anchored to the project root when not explicitly provided.
 
 ---
 
@@ -33,14 +42,14 @@ python main.py --json-request '<JSON_PAYLOAD>'
 
 | Field | Type | Status | Description |
 |---|---|---|---|
-| `schema_version` | `string` | `[planned]` | Must be `"1.0"`. Read but not validated today. |
-| `request_id` | `string` | `[planned]` | Caller-generated ID for tracking. Read but not propagated. |
+| `schema_version` | `string` | `[done]` | Must be `"1.0"`. Validated by `main.py`. |
+| `request_id` | `string` | `[done]` | Caller-generated ID for tracking. Captured as `args._request_id`. |
 | `command` | `string` | `[done]` | One of: `run`, `sweep`, `forward`, `portfolio`. |
 | `params` | `dict` | `[done]` | Command-specific parameters mapped to CLI args. |
 
 `[done]` `params` keys are mapped to argparse namespace attributes via `setattr` in `main.py`.
 
-`[planned]` `schema_version` validation, `request_id` propagation tracked in [Issue #21](https://github.com/Whiteks1/quantlab/issues/21).
+`[done]` `schema_version` validation and `request_id` propagation are implemented.
 
 ### Mapped `params` Keys (command: `run`)
 
@@ -77,14 +86,15 @@ python main.py --json-request '<JSON_PAYLOAD>'
 
 ### Current Behavior `[done]`
 
-QuantLab writes artifacts to `outputs/runs/<run_id>/` upon completion. Stepbit reads results from these files.
+QuantLab writes artifacts to a mode-specific output directory upon completion. Stepbit reads results from these files.
 
 QuantLab does **not** emit a JSON response envelope to stdout. This is by current design.
 
 ### JSON Response Envelope `[planned]`
 
-A future version will emit a structured JSON envelope to stdout on completion:
+A future version may emit a structured JSON envelope to stdout on completion.
 
+**Example success shape:**
 ```json
 {
   "schema_version": "1.0",
@@ -92,17 +102,17 @@ A future version will emit a structured JSON envelope to stdout on completion:
   "status": "success",
   "run_id": "20260320_162100_run_a1b2c3d",
   "artifacts_path": "outputs/runs/20260320_162100_run_a1b2c3d",
-  "metrics": {
-    "sharpe_simple": 1.82,
+  "summary": {
     "total_return": 0.45,
+    "sharpe_simple": 1.82,
     "max_drawdown": -0.15,
+    "trades": 12,
     "win_rate": 0.62
   }
 }
 ```
 
-Failure response:
-
+**Example failure shape:**
 ```json
 {
   "schema_version": "1.0",
@@ -110,7 +120,7 @@ Failure response:
   "status": "error",
   "error": {
     "code": "DATA_ERROR",
-    "message": "OHLC data missing for range 2023-01-01 -> 2023-12-31"
+    "message": "OHLC data missing for requested range"
   }
 }
 ```
@@ -126,8 +136,8 @@ Failure response:
 | `0` | `SUCCESS` | Task completed normally. |
 | `1` | `GENERAL_ERROR` | Unexpected crash or unhandled exception. |
 | `2` | `INVALID_CONFIG` | JSON payload or CLI flags are invalid. |
-| `3` | `DATA_ERROR` | OHLC data missing or invalid state. |
-| `4` | `STRATEGY_ERROR` | Strategy-specific logic failure. |
+| `3` | `DATA_ERROR` | OHLC data missing or invalid state (e.g. empty or unusable data). |
+| `4` | `STRATEGY_ERROR` | Strategy-specific logic failure or parameter/runtime error. |
 
 > Exit codes are implemented via a central exception hierarchy in `src/quantlab/errors.py`.
 
@@ -135,30 +145,22 @@ Failure response:
 
 ## 5. Artifact Paths `[done]`
 
-All run artifacts are written to:
+The canonical machine-readable artifact for integration is **`report.json`**.
 
-```
-outputs/runs/<run_id>/
-```
+For session-oriented flows, it is expected inside the produced run/session directory.
 
-### Mandatory Artifacts
+- **Typical pattern**: `outputs/runs/<run_id>/report.json`
 
-| File | Status | Notes |
-|---|---|---|
-| `report.json` | `[done]` | Main metrics and summary. This is the canonical machine-readable output. |
-| `metadata.json` | `[planned]` | Run identity and context. Module exists (`RunStore`) but not wired into `run.py`. |
-| `config.json` | `[planned]` | Exact parameters used. Module exists but not wired. |
-
-> Note: `outputs/report.json` is a top-level legacy artifact written by the classic `run` pipeline. It is not run-scoped and should not be used by Stepbit.
+Additional legacy artifacts may still exist for backward compatibility, but Stepbit should prefer `report.json` whenever available.
 
 ---
 
-## 6. Run Identity `[done]`
+## 6. Run Identity
 
-| Field | Format | Notes |
+| Field | Status | Notes |
 |---|---|---|
-| `run_id` | `YYYYMMDD_HHMMSS_<mode>_<hash7>` | Generated by `runs/run_id.py`. Temporal + content-based. |
-| `fingerprint` | SHA-1 of `(command, params)` | `[planned]` — Not currently labeled or exposed in output. |
+| `run_id` | `[done]` | Present in run/session-oriented flows where applicable. |
+| `fingerprint` | `[planned]` | Not yet emitted as part of the runtime response surface. |
 
 ---
 
@@ -166,9 +168,25 @@ outputs/runs/<run_id>/
 
 | Gap | Issue |
 |---|---|
-| `schema_version` validation and `request_id` propagation | #21 |
 | JSON response envelope emitted to stdout | #22 |
-| Structured exit codes (DATA_ERROR, STRATEGY_ERROR) | #23 |
 | `strategy` param mapping in `run` command | #21 |
 | `metadata.json` / `config.json` wired into `run.py` | #21 |
 | `fingerprint` field in output | #22 |
+
+---
+
+## 8. Health and Versioning `[done]`
+
+QuantLab provides machine-verifiable flags for runtime validation.
+
+| Flag | Status | Description |
+|---|---|---|
+| `--version` | `[done]` | Prints the current QuantLab version. |
+| `--check` | `[done]` | Performs a minimal runtime health check. |
+
+**Typical `--check` output includes:**
+- `project_root`
+- `interpreter`
+- `venv_active`
+- `quantlab_import`
+- `python_version`
