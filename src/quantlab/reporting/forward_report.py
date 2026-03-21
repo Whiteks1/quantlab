@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 
 from quantlab.reporting.charts import plot_equity_curve, plot_drawdown
+from quantlab.reporting.report_summary import build_standard_summary
 
 
 # ---------------------------------------------------------------------------
@@ -233,6 +234,14 @@ def build_forward_report(out_dir: str | Path) -> Dict[str, Any]:
             "total_bars": state.get("total_bars_evaluated", 0),
             "last_ts": state.get("last_timestamp", ""),
         }
+    }
+
+    # Add standard summary for Stepbit
+    legacy_summary = payload.get("summary", {})
+    standard_summary = build_standard_summary(payload)
+    payload["summary"] = {
+        **legacy_summary,
+        **standard_summary,
     }
 
     # Check for generated charts
@@ -450,11 +459,12 @@ def generate_forward_charts(out_dir: str | Path) -> List[str]:
 
 def write_forward_report(out_dir: str | Path) -> Tuple[str, str]:
     """
-    Build and write the forward evaluation report to *out_dir*.
+    Build and write forward evaluation reporting artifacts to *out_dir*.
 
-    Generates:
-    - ``forward_report.json`` (strict JSON)
-    - ``forward_report.md``
+    Writes:
+    - report.json (canonical)
+    - forward_report.json (legacy)
+    - forward_report.md
 
     Parameters
     ----------
@@ -473,13 +483,19 @@ def write_forward_report(out_dir: str | Path) -> Tuple[str, str]:
     
     payload = build_forward_report(out_path)
 
-    json_path = out_path / "forward_report.json"
+    json_path = out_path / "report.json"
+    legacy_json_path = out_path / "forward_report.json"
     md_path = out_path / "forward_report.md"
 
+    # Write canonical artifact
     with open(json_path, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2, ensure_ascii=False, allow_nan=False)
+
+    # Write legacy artifact for backward compatibility
+    with open(legacy_json_path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2, ensure_ascii=False, allow_nan=False)
 
     with open(md_path, "w", encoding="utf-8") as fh:
         fh.write(render_forward_report_md(payload))
 
-    return str(json_path), str(md_path)
+    return str(legacy_json_path), str(md_path)

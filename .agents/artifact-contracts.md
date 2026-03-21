@@ -134,7 +134,7 @@ Reporting / analytics layer.
 ### Minimum fields
 
 total_return  
-sharpe  
+sharpe_simple  
 max_drawdown  
 trades  
 win_rate  
@@ -183,9 +183,11 @@ run_id
 strategy  
 ticker  
 total_return  
-sharpe  
+sharpe_simple  
 max_drawdown  
 trades  
+win_rate  
+summary { ... }  
 
 ---
 
@@ -262,7 +264,7 @@ status
 ### Recommended columns
 
 total_return  
-sharpe  
+sharpe_simple  
 max_drawdown  
 trades  
 win_rate  

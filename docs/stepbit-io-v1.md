@@ -141,7 +141,7 @@ outputs/runs/<run_id>/
 
 | File | Status | Notes |
 |---|---|---|
-| `run_report.json` | `[done]` | Main metrics and summary. This is the canonical machine-readable output. |
+| `report.json` | `[done]` | Main metrics and summary. This is the canonical machine-readable output. |
 | `metadata.json` | `[planned]` | Run identity and context. Module exists (`RunStore`) but not wired into `run.py`. |
 | `config.json` | `[planned]` | Exact parameters used. Module exists but not wired. |
 
