@@ -51,35 +51,6 @@ Stepbit invokes QuantLab as a subprocess via its CLI.
 
 `[done]` `schema_version` validation and `request_id` propagation are implemented.
 
-### Mapped `params` Keys (command: `run`)
-
-| Key | CLI equivalent | Status |
-|---|---|---|
-| `ticker` | `--ticker` | `[done]` |
-| `start` | `--start` | `[done]` |
-| `end` | `--end` | `[done]` |
-| `interval` | `--interval` | `[done]` |
-| `fee` | `--fee` | `[done]` |
-| `config_path` (sweep) | `--sweep` | `[done]` |
-| `run_dir` (forward) | `--forward-eval` | `[done]` |
-| `strategy` | _(no direct mapping)_ | `[planned]` |
-
-### Example Request
-
-```json
-{
-  "schema_version": "1.0",
-  "request_id": "req_550e8400",
-  "command": "run",
-  "params": {
-    "ticker": "ETH-USD",
-    "start": "2023-01-01",
-    "end": "2023-12-31",
-    "fee": 0.002
-  }
-}
-```
-
 ---
 
 ## 3. Response (Output)
@@ -129,7 +100,47 @@ A future version may emit a structured JSON envelope to stdout on completion.
 
 ---
 
-## 4. Exit Codes `[done]`
+## 4. Session Signalling `[done]`
+
+QuantLab supports optional, file-based session signalling to notify Stepbit of lifecycle events without polling.
+
+### Invocation
+```bash
+python main.py --json-request '...' --signal-file path/to/signals.jsonl
+```
+
+### Behavior
+- **Format**: JSON Lines (one JSON object per line).
+- **Mode**: Append-only.
+- **Reliability**: Best-effort writes; signal failures do not abort the session.
+
+### Event Models
+
+#### Common Fields (All Events)
+| Field | Type | Description |
+|---|---|---|
+| `schema_version` | `string` | Always `"1.0"`. |
+| `event` | `string` | `SESSION_STARTED`, `SESSION_COMPLETED`, or `SESSION_FAILED`. |
+| `status` | `string` | `running`, `success`, or `error`. |
+| `mode` | `string` | The command type (e.g., `run`, `sweep`). |
+| `request_id` | `string` | Propagated from request if available. |
+| `timestamp` | `string` | ISO 8601 local time. |
+
+#### SESSION_COMPLETED
+Includes result location metadata (when available):
+- `run_id`: Unique identifier for the run.
+- `artifacts_path`: Directory containing the run artifacts.
+- `report_path`: Path to the canonical `report.json`.
+
+#### SESSION_FAILED
+Includes failure metadata:
+- `exit_code`: Numeric process exit code (1-4).
+- `error_type`: Exception class name.
+- `message`: Human-readable error description.
+
+---
+
+## 5. Exit Codes `[done]`
 
 | Code | Label | Meaning |
 |---|---|---|
@@ -139,11 +150,9 @@ A future version may emit a structured JSON envelope to stdout on completion.
 | `3` | `DATA_ERROR` | OHLC data missing or invalid state (e.g. empty or unusable data). |
 | `4` | `STRATEGY_ERROR` | Strategy-specific logic failure or parameter/runtime error. |
 
-> Exit codes are implemented via a central exception hierarchy in `src/quantlab/errors.py`.
-
 ---
 
-## 5. Artifact Paths `[done]`
+## 6. Artifact Paths `[done]`
 
 The canonical machine-readable artifact for integration is **`report.json`**.
 
@@ -151,31 +160,9 @@ For session-oriented flows, it is expected inside the produced run/session direc
 
 - **Typical pattern**: `outputs/runs/<run_id>/report.json`
 
-Additional legacy artifacts may still exist for backward compatibility, but Stepbit should prefer `report.json` whenever available.
-
 ---
 
-## 6. Run Identity
-
-| Field | Status | Notes |
-|---|---|---|
-| `run_id` | `[done]` | Present in run/session-oriented flows where applicable. |
-| `fingerprint` | `[planned]` | Not yet emitted as part of the runtime response surface. |
-
----
-
-## 7. Known Gaps → Follow-Up Issues
-
-| Gap | Issue |
-|---|---|
-| JSON response envelope emitted to stdout | #22 |
-| `strategy` param mapping in `run` command | #21 |
-| `metadata.json` / `config.json` wired into `run.py` | #21 |
-| `fingerprint` field in output | #22 |
-
----
-
-## 8. Health and Versioning `[done]`
+## 7. Health and Versioning `[done]`
 
 QuantLab provides machine-verifiable flags for runtime validation.
 
@@ -184,9 +171,12 @@ QuantLab provides machine-verifiable flags for runtime validation.
 | `--version` | `[done]` | Prints the current QuantLab version. |
 | `--check` | `[done]` | Performs a minimal runtime health check. |
 
-**Typical `--check` output includes:**
-- `project_root`
-- `interpreter`
-- `venv_active`
-- `quantlab_import`
-- `python_version`
+---
+
+## 8. Known Gaps → Follow-Up Issues
+
+| Gap | Issue |
+|---|---|
+| JSON response envelope emitted to stdout | #22 |
+| `strategy` param mapping in `run` command | #21 |
+| Webhook delivery for signals | #25 (Deferred) |
