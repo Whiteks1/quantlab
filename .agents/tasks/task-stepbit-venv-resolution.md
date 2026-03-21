@@ -1,38 +1,55 @@
 # Task: Virtual Environment & Runtime Resolution
 
 ## Goal
-Ensure QuantLab can be invoked reliably by Stepbit in different environments (dev, CI, headless nodes) by standardizing runtime resolution.
+Make QuantLab invocable in a predictable way for automated Stepbit execution by reducing interpreter, path, and current-working-directory fragility.
 
 ## Why
-Path issues, dependency mismatches, and incorrect Python interpreters are common integration bottlenecks. A stable runtime resolution ensures that "running QuantLab" works identically for humans and AI agents.
+After validating the first usable Stepbit ↔ QuantLab integration slice, the next bottleneck is operational reliability: the integration should not depend on launching QuantLab from one specific shell context or manually guessing the correct interpreter and import path.
 
 ## Scope
-- Develop a standard method for Stepbit to locate the QuantLab `venv`.
-- Ensure QuantLab can resolve its own internal paths regardless of the current working directory (CWD).
-- Standardize the `PYTHONPATH` requirements for the project.
-- Implement a version/health check command (e.g., `python main.py --version` or `--check`).
+- define the minimal runtime resolution strategy for automated QuantLab execution
+- make QuantLab execution robust against current working directory differences where practical
+- define how the correct Python interpreter should be supplied or resolved for local automated execution
+- add a minimal CLI health/version check suitable for automation
+- document the expected invocation contract for local automated use
 
 ## Non-goals
-- Implementing a full containerization layer (Docker).
-- Managing global Python installations.
+- full packaging redesign
+- Docker or container orchestration
+- global Python management
+- remote environment management
+- broad deployment tooling
+- runbook authoring beyond what is strictly needed to document the runtime contract
 
 ## Inputs
-- `pyproject.toml` / `requirements.txt`
 - `main.py`
+- current repo layout
+- current Stepbit integration assumptions
+- `pyproject.toml` / `requirements.txt` if present
+- completed integration work from issues #20, #21, #22, #23, and #27
 
 ## Expected outputs
-- A stable runtime resolution strategy (e.g., a wrapper script or standardized env vars).
-- A health-check command in the CLI.
+- a stable local runtime resolution approach for Stepbit-driven execution
+- a minimal health/version CLI command
+- reduced dependence on fragile CWD assumptions
+- clear documentation of the expected interpreter/runtime contract
 
 ## Acceptance criteria
-- QuantLab can be invoked from any directory by providing a full path to the interpreter.
-- Version and dependency status are easily verifiable via CLI.
+- QuantLab can be invoked reliably using an explicit interpreter path
+- invocation does not depend on launching from one specific working directory where avoidable
+- CLI can expose a simple health/version check for automation
+- no hardcoded absolute paths are introduced
+- runtime behavior is documented clearly enough for future runbooks
 
 ## Constraints
-- Follow `PEP8` and standard Python packaging practices.
-- No hardcoded absolute paths in the codebase.
+- prefer minimal, reviewable changes
+- follow standard Python project conventions where practical
+- do not broaden into packaging overhaul
+- do not broaden into response envelopes or orchestration redesign
+- no hardcoded machine-specific paths
 
 ## GitHub issue
 - #24 core: integración - Detectar y usar virtualenv local para ejecución automatizada
+
 ## Suggested next step
-Move to [task-stepbit-runbook-quantlab.md](file:///c:/Users/marce/Documents/QUANT%20LAB%20PERSONAL/quant_lab/.agents/tasks/task-stepbit-runbook-quantlab.md).
+Inspect the current invocation assumptions in `main.py` and the repo layout, then identify the smallest set of changes needed to make automated local execution predictable.

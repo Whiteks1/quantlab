@@ -15,15 +15,13 @@ Each field and section is labeled with its current implementation status:
 
 ---
 
-## 1. Invocation
-
-Stepbit invokes QuantLab as a subprocess via its CLI:
-
 ```bash
-python main.py --json-request '<JSON_PAYLOAD>'
+ <EXPLICIT_PYTHON_INTERPRETER> main.py --json-request '<JSON_PAYLOAD>'
 ```
 
 `[done]` — The `--json-request` flag is registered and parsed in `main.py`.
+
+`[done]` — **Runtime Resolution**: `main.py` now automatically anchors `src/` to `sys.path` and defaults `outdir` to the project root. This ensures reliable execution even when invoked from an external directory or when not installed in editable mode.
 
 ---
 
@@ -172,3 +170,24 @@ outputs/runs/<run_id>/
 | `strategy` param mapping in `run` command | #21 |
 | `metadata.json` / `config.json` wired into `run.py` | #21 |
 | `fingerprint` field in output | #22 |
+
+---
+
+## 8. Health and Versioning `[done]`
+
+QuantLab provides machine-verifiable flags for environment health and versioning.
+
+| Flag | Status | Description |
+|---|---|---|
+| `--version` | `[done]` | Prints the current package version (e.g., `0.1.0`). |
+| `--check` | `[done]` | Performs a minimal environment health check. |
+
+### Example `--check` Output:
+
+```text
+project_root: C:\Users\marce\Documents\QUANT LAB PERSONAL\quant_lab
+interpreter: C:\Users\marce\Documents\QUANT LAB PERSONAL\quant_lab\.venv\Scripts\python.exe
+venv_active: True
+quantlab_import: ok
+python_version: 3.13.0
+```

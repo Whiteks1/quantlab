@@ -7,6 +7,12 @@ import os
 import sys
 from pathlib import Path
 
+# --- Runtime Resolution Shim (Issue #24) ---
+# Resolve PROJECT_ROOT and add src/ to sys.path to ensure quantlab is importable
+# even if not installed in editable mode.
+PROJECT_ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
 from dotenv import load_dotenv
 
 # CLI Handlers
@@ -37,6 +43,8 @@ def main() -> None:
     )
     # Global / Request params
     parser.add_argument("--json-request", help="Pass a V1 Stepbit Request JSON string directly.")
+    parser.add_argument("--version", action="store_true", help="Print QuantLab version.")
+    parser.add_argument("--check", action="store_true", help="Perform a minimal environment health check.")
     
     parser.add_argument("--ticker", default="ETH-USD")
     parser.add_argument("--start", default="2023-01-01")
@@ -58,7 +66,7 @@ def main() -> None:
     parser.add_argument("--initial_cash", type=float, default=1000.0, help="Cash inicial para paper broker")
 
     # Slippage
-    parser.add_argument("--slippage_bps", type=float, default=8.0, help="Slippage fijo en bps (10bps=0.10%)")
+    parser.add_argument("--slippage_bps", type=float, default=8.0, help="Slippage fijo en bps (10bps=0.10%%)")
     parser.add_argument("--slippage_mode", default="fixed", choices=["fixed", "atr"])
     parser.add_argument("--k_atr", type=float, default=0.05, help="Sensibilidad slippage ATR (si slippage_mode=atr)")
 
@@ -100,6 +108,36 @@ def main() -> None:
     parser.add_argument("--portfolio-compare", metavar="ROOT_DIR", default=None)
 
     args = parser.parse_args()
+
+    # --- Version / Health Check (Issue #24) ---
+    if args.version:
+        print("0.1.0")
+        sys.exit(0)
+
+    if args.check:
+        try:
+            import quantlab
+            import platform
+            
+            status = {
+                "project_root": str(PROJECT_ROOT),
+                "interpreter": sys.executable,
+                "venv_active": sys.prefix != sys.base_prefix,
+                "quantlab_import": "ok",
+                "python_version": platform.python_version()
+            }
+            # Deterministic text summary (stable/lightweight)
+            for k, v in status.items():
+                print(f"{k}: {v}")
+            sys.exit(0)
+        except Exception as e:
+            print(f"ERROR: Health check failed: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    # --- Path Anchoring (Issue #24) ---
+    # Anchor default outdir to project root if not explicitly provided
+    if args.outdir is None:
+        args.outdir = str(PROJECT_ROOT / "outputs")
 
     # --- Backward-compat aliases: map deprecated flags to new ones ---
     if getattr(args, "list_runs", None) and not getattr(args, "runs_list", None):
