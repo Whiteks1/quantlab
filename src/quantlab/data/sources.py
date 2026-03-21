@@ -7,6 +7,8 @@ def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
         df.columns = [c[0] for c in df.columns]
     return df
 
+from quantlab.errors import DataError
+
 def fetch_ohlc(ticker: str, start: str, end: str, interval: str = "1d") -> pd.DataFrame:
     df = yf.download(
         ticker,
@@ -19,7 +21,7 @@ def fetch_ohlc(ticker: str, start: str, end: str, interval: str = "1d") -> pd.Da
     )
 
     if df is None or df.empty:
-        raise ValueError(f"No se pudieron descargar datos para {ticker}")
+        raise DataError(f"No se pudieron descargar datos para {ticker}")
 
     df = _flatten_columns(df)
     df = df.rename(columns=str.lower)
