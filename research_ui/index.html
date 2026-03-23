@@ -48,9 +48,10 @@
 
             <div class="sidebar-footer">
                 <div class="status-indicator">
-                    <span class="dot pulse"></span>
-                    <span class="status-text">System Active</span>
+                    <span class="dot"></span>
+                    <span class="status-text" id="registry-status">Registry: Initializing</span>
                 </div>
+                <div class="status-subtext" id="registry-date">Artifact: -</div>
             </div>
         </aside>
 
@@ -66,13 +67,16 @@
                         </svg>
                         <input type="text" id="run-search" placeholder="Search by ticker or run ID...">
                     </div>
-<button class="btn btn-primary btn-refresh" id="refresh-data" type="button">
-    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="23 4 23 10 17 10"></polyline>
-        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-    </svg>
-                        Refresh
-                    </button>
+                    <div class="action-wrapper">
+                        <button class="btn btn-primary btn-refresh" id="refresh-data" type="button">
+                            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                            </svg>
+                            Refresh
+                        </button>
+                        <span class="action-hint">Reloads runs_index.json</span>
+                        </div>
                 </div>
             </header>
 
@@ -80,7 +84,7 @@
                 <div id="run-index-view" class="view active">
                     <div class="stats-overview">
                         <div class="stat-card glass">
-                            <div class="stat-label">Total Runs</div>
+                            <div class="stat-label">Indexed Runs</div>
                             <div class="stat-value" id="stats-total-runs">-</div>
                         </div>
 
@@ -90,8 +94,8 @@
                         </div>
 
                         <div class="stat-card glass">
-                            <div class="stat-label">Registry Integrity</div>
-                            <div class="stat-value text-success">Healthy</div>
+                            <div class="stat-label">Registry Status</div>
+                            <div class="stat-value text-success" id="registry-integrity">Loaded</div>
                         </div>
                     </div>
 
@@ -103,7 +107,8 @@
                                 <select id="filter-mode" class="select-sm">
                                     <option value="all">All Modes</option>
                                     <option value="run">Backtest</option>
-                                    <option value="sweep">Sweep</option>
+                                    <option value="sweep">Sweep / Grid</option>
+                                    <option value="grid" hidden>Grid</option>
                                     <option value="forward">Forward</option>
                                 </select>
                             </div>
@@ -149,6 +154,6 @@
 
     <div id="toast-container"></div>
 
-    <script src="app.js"></script>
+    <script src="app.js" type="module"></script>
 </body>
 </html>

@@ -16,7 +16,9 @@ let state = {
     filterMode: 'all',
     searchQuery: '',
     isLoading: false,
-    currentView: 'runs'
+    currentView: 'runs',
+    generatedAt: null,
+    nRuns: 0
 };
 
 // --- DOM References ---
@@ -35,7 +37,10 @@ const elements = {
     navItems: {
         runs: document.getElementById('nav-runs'),
         compare: document.getElementById('nav-compare')
-    }
+    },
+    registryStatus: document.getElementById('registry-status'),
+    registryDate: document.getElementById('registry-date'),
+    registryIntegrity: document.getElementById('registry-integrity')
 };
 
 // --- Initialization ---
@@ -73,6 +78,8 @@ async function fetchData() {
         
         const data = await response.json();
         state.runs = data.runs || [];
+        state.generatedAt = data.generated_at || null;
+        state.nRuns = data.n_runs || state.runs.length;
         
         // Basic Post-processing: ensure numbers are numbers
         state.runs.forEach(run => {
@@ -225,12 +232,19 @@ function renderTable() {
 }
 
 function updateStats() {
-    elements.totalRuns.textContent = state.runs.length;
+    elements.totalRuns.textContent = state.nRuns;
     // Mocking active sessions as runs from last 24h
     const dayAgo = new Date();
     dayAgo.setDate(dayAgo.getDate() - 1);
     const active = state.runs.filter(r => new Date(r.created_at) > dayAgo).length;
     elements.activeSessions.textContent = active;
+
+    if (state.generatedAt) {
+        const date = new Date(state.generatedAt).toLocaleString();
+        elements.registryDate.textContent = `Artifact: ${date}`;
+        elements.registryStatus.textContent = 'Registry: Connected';
+        elements.registryStatus.parentElement.querySelector('.dot').classList.add('pulse');
+    }
 }
 
 // --- Helpers ---
@@ -247,7 +261,8 @@ function formatNum(val) {
 function getModeBadge(mode) {
     switch(mode) {
         case 'run': return 'badge-blue';
-        case 'sweep': return 'badge-purple';
+        case 'sweep': 
+        case 'grid': return 'badge-purple';
         case 'forward': return 'badge-green';
         default: return '';
     }
