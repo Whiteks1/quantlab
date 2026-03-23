@@ -93,7 +93,7 @@ The workflow is successful when:
 - results are suitable for stage review and reporting
 
 ## Expected Output Format
-After execution, Antigravity should provide:
+After execution, Codex should provide:
 
 1. **Input Validation**  
    Whether `outputs/trades.csv` was found and whether required fields were present.

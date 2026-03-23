@@ -4,7 +4,7 @@ description: How to read context and plan the next step in QuantLab
 
 # Read and Plan Workflow
 
-Use this workflow at the **start of every Antigravity session** before making any implementation changes.
+Use this workflow at the **start of every Codex session** before making any implementation changes.
 
 ## Purpose
 This workflow ensures that each session begins with the correct project context, follows the current roadmap and workflow rules, and avoids unnecessary or out-of-scope changes.
@@ -19,7 +19,7 @@ Read these files in order:
 5. The active task file inside `.agents/tasks/`
 
 ## Required Behavior
-Before implementing anything, Antigravity must:
+Before implementing anything, Codex must:
 
 - treat these files as the **source of truth** for the session
 - identify the active task and summarize it in its own words
@@ -32,7 +32,7 @@ Before implementing anything, Antigravity must:
 - remain within the approved task scope
 
 ## Constraints
-During the read-and-plan phase, Antigravity must **not**:
+During the read-and-plan phase, Codex must **not**:
 
 - implement changes
 - edit files
@@ -42,15 +42,19 @@ During the read-and-plan phase, Antigravity must **not**:
 - push changes
 - infer extra tasks beyond the approved scope
 
-If file paths, task scope, or requirements are ambiguous, Antigravity must stop and report the ambiguity instead of guessing.
+If file paths, task scope, or requirements are ambiguous, Codex must stop and report the ambiguity instead of guessing.
 
 ## Approval Gate
-After presenting the plan, Antigravity must **wait for explicit approval** before proceeding to execution.
+After presenting the plan, Codex must **wait for explicit approval** before proceeding to execution when:
 
-No implementation work should begin until approval is clearly given.
+- the user requested a plan-only response
+- the requested change has non-obvious consequences
+- the task scope is still ambiguous
+
+If the user has already explicitly approved implementation and the task is clear, Codex may proceed after this read-and-plan pass.
 
 ## Expected Output Format
-Antigravity should return the following sections:
+Codex should return the following sections:
 
 1. **Task Understanding**  
    A concise summary of the active task in its own words.
@@ -73,4 +77,4 @@ Antigravity should return the following sections:
    Suggest only the first execution step, without performing it.
 
 ## Guiding Principle
-Read first. Plan second. Execute only after approval.
+Read first. Plan second. Execute only after approval when approval is required.

@@ -4,15 +4,15 @@ description: How to execute the next implementation step in QuantLab
 
 # Execute Task Workflow
 
-Use this workflow only **after the implementation plan has been approved**.
+Use this workflow only **after the implementation plan has been approved**, or when the user has already explicitly requested implementation and the task scope is clear.
 
 ## Purpose
-This workflow defines how Antigravity should execute an approved task in a controlled, traceable, and repository-safe way.
+This workflow defines how Codex should execute an approved task in a controlled, traceable, and repository-safe way.
 
 ## Preconditions
-Before execution begins, Antigravity must confirm that:
+Before execution begins, Codex must confirm that:
 
-- the implementation plan has been explicitly approved
+- the implementation plan has been explicitly approved, or the user has already asked for direct execution
 - the active task is clearly defined
 - the expected file scope is known
 - the relevant `.agents` files have already been read
@@ -31,7 +31,7 @@ Before execution begins, Antigravity must confirm that:
 11. Document relevant results, deviations, and continuity notes in `.agents/session-log.md`.
 
 ## Scope Rules
-During execution, Antigravity must:
+During execution, Codex must:
 
 - modify only the files required by the approved task
 - avoid unrelated changes
@@ -40,7 +40,7 @@ During execution, Antigravity must:
 - stop and report any ambiguity instead of guessing
 
 ## Git Rules
-Antigravity must not use broad staging commands such as:
+Codex must not use broad staging commands such as:
 
 ```bash
 git add .

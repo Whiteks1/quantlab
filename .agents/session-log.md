@@ -1,5 +1,16 @@
 # Session Log - QuantLab
 
+## 2026-03-22 — Research Dashboard MVP (Phase 1)
+- **Session Focus**: Create a tangible, read-only UI layer for browsing research runs.
+- **Tasks Completed**:
+  - Scaffolded `research_ui/` with Vanilla JS/CSS (zero-dependency SPA).
+  - Implemented `research_ui/server.py` for local dev-preview with 302 redirect for asset routing.
+  - Built the Run Index table with real-time sorting and filtering.
+  - Fixed unstyled UI issue caused by root-path asset resolution.
+  - Handled port conflicts in the dev server.
+- **Key Decisions**: Kept the UI strictly read-only and decouped from the core. Used a 302 redirect in the dev server to normalize browser context for relative asset paths.
+- **Next Steps**: Phase 2 implementation for Run Detail and Comparison views.
+
 ## 2026-03-21 — Event Signalling & Session Hooks (Issue #25)
 - **Session Focus**: Implement file-based session lifecycle notifications for Stepbit.
 - **Tasks Completed**:

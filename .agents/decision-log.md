@@ -59,6 +59,31 @@ Direct commits to `main` are prohibited.
 
 ---
 
+# 2026-03-23 — `.agents` treated as shared repo context for Codex
+
+## Context
+
+The repository memory under `.agents/` was originally phrased around a ChatGPT plus Antigravity split.
+
+Codex now works directly inside the repository and benefits from the same architecture, workflow, and contract context.
+
+## Decision
+
+`.agents/` should be treated as **shared repository context** that is directly consumable by Codex.
+
+Agent-specific phrasing should prefer:
+
+- Codex explicitly, when guidance is Codex-specific
+- execution agent generically, when the rule should apply to any implementation agent
+
+## Consequences
+
+- workflow files should not depend on a ChatGPT versus Antigravity split
+- Codex can use `.agents/` as a first-class operating handbook
+- prompt files may coexist, but Codex should have a dedicated prompt entry
+
+---
+
 # 2026-03-10 — QuantLab as a research laboratory
 
 ## Context

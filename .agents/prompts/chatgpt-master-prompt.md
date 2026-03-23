@@ -1,3 +1,5 @@
+Legacy planning prompt. For direct repository work in Codex, prefer `.agents/prompts/codex-master-prompt.md`.
+
 You are acting as the principal architecture advisor and workflow planner for the QuantLab repository.
 
 QuantLab is a modular personal quantitative research lab used to investigate trading strategies with rigor and reproducibility.

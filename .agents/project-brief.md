@@ -62,17 +62,17 @@ Detailed stage-by-stage progress belongs in `.agents/current-state.md`, not in t
 - Backward compatibility should be preserved unless explicitly changed
 - Research clarity should take priority over premature infrastructure complexity
 
-## Workflow Principle for Antigravity
-Antigravity should not rely on long chat context alone.
+## Workflow Principle for Codex
+Codex should not rely on long chat context alone.
 
 Before implementation, it should:
 1. read the relevant workflow files
 2. review the current project state
 3. propose a scoped implementation plan
-4. execute only the next approved step
+4. execute only the next approved step, or the explicitly requested step when the user has already approved execution
 5. leave clear continuity for the next session
 
-Antigravity should work with **strict scope discipline**, avoid unrelated changes, and preserve repository clarity.
+Codex should work with **strict scope discipline**, avoid unrelated changes, and preserve repository clarity.
 
 ## Notes
 QuantLab is currently being developed as a **CLI-first quantitative research laboratory**, not as a SaaS platform or public service layer.

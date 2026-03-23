@@ -42,7 +42,7 @@
 
 ## Safe Change Protocol
 
-Before implementing any code change, the execution agent must follow this protocol.
+Before implementing any code change, Codex or any execution agent must follow this protocol.
 
 ### Step 1 — Inspect
 Identify the exact files involved in the task.
@@ -92,9 +92,9 @@ Do not introduce behavior changes unless explicitly requested.
 
 Refactors should preserve observable behavior.
 
-Antigravity must inspect the repository before implementing changes.
+Codex must inspect the repository before implementing changes.
 
-## Scope Control for Antigravity
+## Scope Control for Codex
 - Only modify the files explicitly required for the approved task.
 - Do not create alternative paths, duplicated nested folders, or inferred file locations.
 - If a target path is ambiguous, stop and report the ambiguity instead of guessing.
