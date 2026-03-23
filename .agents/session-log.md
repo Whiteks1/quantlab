@@ -1,5 +1,14 @@
 # Session Log - QuantLab
 
+## 2026-03-23 — Research Dashboard UI Polish
+- **Session Focus**: Upgrade the research dashboard from MVP registry table to a richer, read-only analysis surface.
+- **Tasks Completed**:
+  - Redesigned `research_ui/index.html` into a stronger research-terminal style layout.
+  - Rebuilt `research_ui/app.js` to add richer registry summary state, mode pills, toasts, and run detail loading from canonical artifacts.
+  - Reworked `research_ui/styles.css` for a more intentional visual system with improved responsive behavior.
+- **Key Decisions**: Kept the UI strictly read-only and artifact-driven. Used `runs_index.json` for registry state and loaded per-run `run_report.json` / `report.json` only for detail inspection.
+- **Next Steps**: Verify the dashboard in a local browser session and decide whether Comparison should remain disabled or become the next UI slice.
+
 ## 2026-03-22 — Research Dashboard MVP (Phase 1)
 - **Session Focus**: Create a tangible, read-only UI layer for browsing research runs.
 - **Tasks Completed**:
