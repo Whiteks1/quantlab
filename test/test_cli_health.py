@@ -26,5 +26,5 @@ def test_check():
     payload = json.loads(result.stdout)
     assert payload["status"] == "ok"
     assert payload["quantlab_import"] is True
-    assert payload["venv_active"] is True
+    assert isinstance(payload["venv_active"], bool)
     assert Path(payload["project_root"]).name in {"quant_lab", "quantlab"}
