@@ -105,13 +105,21 @@ def _apply_json_overlay(req_dict: dict, args=None):
 
     # 5) Map params
     params = req.get("params", {})
+    if json_command == "sweep":
+        config_path = params.get("config_path") or params.get("sweep")
+        if not isinstance(config_path, str) or not config_path:
+            raise SystemExit(2)
     for k, v in params.items():
         if hasattr(args, k):
             setattr(args, k, v)
 
     # 6) Explicit param routing for nested/non-obvious flags
-    if json_command == "sweep" and "config_path" in params:
-        args.sweep = params["config_path"]
+    if json_command == "sweep":
+        args.sweep = params.get("config_path") or params.get("sweep")
+        if "out_dir" in params:
+            args.sweep_outdir = params["out_dir"]
+        elif "sweep_outdir" in params:
+            args.sweep_outdir = params["sweep_outdir"]
     elif json_command == "forward" and "run_dir" in params:
         args.forward_eval = params["run_dir"]
 
@@ -213,3 +221,23 @@ class TestParamOverlay:
         args, cmd = _apply_json_overlay(req)
         assert cmd == "forward"
         assert args.forward_eval == "outputs/runs/run_001"
+
+    def test_sweep_missing_config_path_exits_2(self):
+        req = {
+            "schema_version": "1.0",
+            "command": "sweep",
+            "params": {},
+        }
+        with pytest.raises(SystemExit) as exc_info:
+            _apply_json_overlay(req)
+        assert exc_info.value.code == 2
+
+    def test_sweep_out_dir_routed(self):
+        req = {
+            "schema_version": "1.0",
+            "command": "sweep",
+            "params": {"config_path": "sweep.yaml", "out_dir": "outputs/stepbit"},
+        }
+        args, _ = _apply_json_overlay(req)
+        assert args.sweep == "sweep.yaml"
+        assert args.sweep_outdir == "outputs/stepbit"

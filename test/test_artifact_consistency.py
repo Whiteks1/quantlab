@@ -34,19 +34,17 @@ def test_run_report_dual_writing(tmp_path):
         "config_path": "config.yaml",
         "config_hash": "hash"
     }
-    with open(run_dir / "meta.json", "w") as f:
+    with open(run_dir / "metadata.json", "w") as f:
         json.dump(meta, f)
     
     # Execute
     write_run_report(str(run_dir))
     
-    # Assert dual writing
+    # Assert canonical writing
     assert os.path.exists(run_dir / "report.json"), "Canonical report.json missing"
-    assert os.path.exists(run_dir / "run_report.json"), "Legacy run_report.json missing"
     
     # Verify summary schema
     verify_summary(run_dir / "report.json")
-    verify_summary(run_dir / "run_report.json")
 
 def test_forward_report_dual_writing(tmp_path):
     fwd_dir = tmp_path / "fwd_test"

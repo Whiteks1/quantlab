@@ -112,7 +112,7 @@ def handle_run_command(args) -> bool:
                 ticker=args.ticker,
                 strategy_name=strat.name,
                 backtest_metrics=metrics,
-                trades_path=trades_path,
+                trades_path=csv_path,
             )
             print(f"\nSaved: {report_path}")
 

@@ -53,7 +53,7 @@ def runs_dir(tmp_path: Path) -> Path:
                 }
             ],
         }
-        (run_dir / "run_report.json").write_text(
+        (run_dir / "report.json").write_text(
             json.dumps(report), encoding="utf-8"
         )
 
@@ -153,7 +153,7 @@ class TestRunsBest:
         runs_root.mkdir()
         run_dir = runs_root / "run_C"
         run_dir.mkdir()
-        (run_dir / "run_report.json").write_text(
+        (run_dir / "report.json").write_text(
             json.dumps({"header": {"run_id": "run_C"}, "results": []}),
             encoding="utf-8",
         )

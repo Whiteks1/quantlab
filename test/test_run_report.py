@@ -19,7 +19,7 @@ def test_run_report_grid(tmp_path):
         "config_path": "configs/test.yaml",
         "config_hash": "hash123"
     }
-    with open(run_dir / "meta.json", "w") as f:
+    with open(run_dir / "metadata.json", "w") as f:
         json.dump(meta, f)
         
     experiments_data = [
@@ -35,7 +35,7 @@ def test_run_report_grid(tmp_path):
     assert os.path.exists(md_path)
     assert os.path.basename(md_path) == "run_report.md"
     assert os.path.exists(json_path)
-    assert os.path.basename(json_path) == "run_report.json"
+    assert os.path.basename(json_path) == "report.json"
     
     with open(json_path, "r") as f:
         report = json.load(f)
@@ -45,6 +45,8 @@ def test_run_report_grid(tmp_path):
     assert report["results"][0]["rsi_buy_max"] == 50
     assert "artifacts" in report
     assert len(report["artifacts"]) > 0
+    assert report["machine_contract"]["command"] == "sweep"
+    assert report["machine_contract"]["artifacts"]["report"] == "report.json"
 
 def test_run_report_walkforward(tmp_path):
     # Setup fake walkforward run dir
@@ -60,7 +62,7 @@ def test_run_report_walkforward(tmp_path):
         "config_path": "configs/test_wf.yaml",
         "config_hash": "hash789"
     }
-    with open(run_dir / "meta.json", "w") as f:
+    with open(run_dir / "metadata.json", "w") as f:
         json.dump(meta, f)
         
     oos_data = [
@@ -80,7 +82,7 @@ def test_run_report_walkforward(tmp_path):
     assert os.path.exists(md_path)
     assert os.path.basename(md_path) == "run_report.md"
     assert os.path.exists(json_path)
-    assert os.path.basename(json_path) == "run_report.json"
+    assert os.path.basename(json_path) == "report.json"
     
     with open(json_path, "r") as f:
         report = json.load(f)
@@ -112,7 +114,7 @@ def test_run_report_markdown_headings(tmp_path):
         "config_path": "configs/test.yaml",
         "config_hash": "headhash",
     }
-    with open(run_dir / "meta.json", "w") as f:
+    with open(run_dir / "metadata.json", "w") as f:
         json.dump(meta, f)
 
     experiments_data = [
@@ -143,7 +145,7 @@ def test_run_report_strict_json(tmp_path):
     run_dir.mkdir()
     
     meta = {"mode": "grid", "run_id": "test"}
-    with open(run_dir / "meta.json", "w") as f:
+    with open(run_dir / "metadata.json", "w") as f:
         json.dump(meta, f)
         
     # Data with NaN
@@ -184,7 +186,7 @@ def _make_run_dir(tmp_path: Path) -> Path:
         "config_path": "configs/test.yaml",
         "config_hash": "cli01hash",
     }
-    with open(run_dir / "meta.json", "w") as f:
+    with open(run_dir / "metadata.json", "w") as f:
         json.dump(meta, f)
     pd.DataFrame([{"sharpe_simple": 1.0, "total_return": 0.1}]).to_csv(
         run_dir / "experiments.csv", index=False

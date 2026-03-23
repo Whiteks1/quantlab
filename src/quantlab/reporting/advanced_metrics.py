@@ -37,6 +37,7 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
+from quantlab.runs.artifacts import CANONICAL_REPORT_FILENAME, LEGACY_REPORT_FILENAMES, load_json_with_fallback
 
 
 # ---------------------------------------------------------------------------
@@ -454,13 +455,14 @@ def _load_round_trips(run_path: Path) -> Optional[pd.DataFrame]:
 
 
 def _load_run_report(run_path: Path) -> Dict[str, Any]:
-    """Load run_report.json if available, else {}."""
-    p = run_path / "run_report.json"
-    if not p.exists():
-        return {}
+    """Load report.json if available, else fall back to legacy report artifacts."""
     try:
-        with open(p, "r", encoding="utf-8") as fh:
-            return json.load(fh)
+        payload, _ = load_json_with_fallback(
+            run_path,
+            CANONICAL_REPORT_FILENAME,
+            *LEGACY_REPORT_FILENAMES,
+        )
+        return payload
     except Exception:
         return {}
 
@@ -473,8 +475,8 @@ def build_advanced_metrics(run_dir: str | Path) -> Dict[str, Any]:
     """
     Build a comprehensive advanced metrics payload for a run directory.
 
-    Loads whatever artifacts are available (trades.csv, run_report.json,
-    meta.json) and computes metrics gracefully, skipping unavailable
+    Loads whatever artifacts are available (trades.csv, report.json,
+    metadata.json) and computes metrics gracefully, skipping unavailable
     analytics rather than crashing.
 
     Parameters
@@ -517,7 +519,7 @@ def build_advanced_metrics(run_dir: str | Path) -> Dict[str, Any]:
     else:
         payload["trade_distribution"] = {"n_trades": 0}
 
-    # --- Summary from run_report.json (top result row) ---
+    # --- Summary from report.json (top result row) ---
     run_results = report.get("results", report.get("oos_leaderboard", []))
     payload["top_result_summary"] = run_results[0] if run_results else {}
 

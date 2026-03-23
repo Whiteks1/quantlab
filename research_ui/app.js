@@ -1,7 +1,7 @@
 const CONFIG = {
     registryPath: "/outputs/runs/runs_index.json",
     refreshInterval: 30000,
-    detailArtifacts: ["run_report.json", "report.json"],
+    detailArtifacts: ["report.json", "run_report.json"],
 };
 
 const state = {

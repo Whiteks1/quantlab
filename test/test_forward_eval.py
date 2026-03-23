@@ -70,7 +70,7 @@ def _make_grid_run_dir(tmp_path: Path) -> Path:
         "fee_rate": 0.002,
         "slippage_bps": 8.0,
     }
-    with open(run_dir / "meta.json", "w") as f:
+    with open(run_dir / "metadata.json", "w") as f:
         json.dump(meta, f)
 
     lb = pd.DataFrame([
@@ -89,7 +89,7 @@ def _make_walkforward_run_dir(tmp_path: Path) -> Path:
     run_dir.mkdir()
 
     meta = {"run_id": "wf_run", "mode": "walkforward", "ticker": "BTC-USD"}
-    with open(run_dir / "meta.json", "w") as f:
+    with open(run_dir / "metadata.json", "w") as f:
         json.dump(meta, f)
 
     oos = pd.DataFrame([
@@ -130,7 +130,7 @@ class TestLoadCandidate:
         run_dir = tmp_path / "empty_run"
         run_dir.mkdir()
         meta = {"run_id": "empty_run", "mode": "grid"}
-        with open(run_dir / "meta.json", "w") as f:
+        with open(run_dir / "metadata.json", "w") as f:
             json.dump(meta, f)
         with pytest.raises(ValueError, match="Could not derive a candidate"):
             load_candidate_from_run(run_dir)

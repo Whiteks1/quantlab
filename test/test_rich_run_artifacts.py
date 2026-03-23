@@ -182,14 +182,14 @@ def test_build_advanced_metrics_uses_oos_equity(tmp_path):
     run_dir = tmp_path / "wf_run"
     run_dir.mkdir()
 
-    # Write run_report.json
+    # Write report.json
     report = {
         "header": {"run_id": "wf_run", "mode": "walkforward",
                    "created_at": "2023-01-01", "git_commit": "abc"},
         "results": [],
         "config_resolved": {},
     }
-    with open(run_dir / "run_report.json", "w") as f:
+    with open(run_dir / "report.json", "w") as f:
         json.dump(report, f)
 
     # Persist OOS equity

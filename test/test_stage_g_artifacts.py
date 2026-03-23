@@ -73,10 +73,13 @@ def test_grid_artifacts(tmp_path):
     run_dir = newest_run_dir(out_dir)
     assert (run_dir / "experiments.csv").exists()
     assert (run_dir / "leaderboard.csv").exists()
-    assert (run_dir / "meta.json").exists()
+    assert (run_dir / "metadata.json").exists()
+    assert (run_dir / "config.json").exists()
+    assert (run_dir / "metrics.json").exists()
+    assert (run_dir / "report.json").exists()
     assert (run_dir / "config_resolved.yaml").exists()
     
-    with open(run_dir / "meta.json", "r") as f:
+    with open(run_dir / "metadata.json", "r") as f:
         meta = json.load(f)
         assert meta["mode"] == "grid"
         assert "run_id" in meta
@@ -152,10 +155,13 @@ def test_walkforward_artifacts(tmp_path):
     assert (run_dir / "walkforward.csv").exists()
     assert (run_dir / "walkforward_summary.csv").exists()
     assert (run_dir / "oos_leaderboard.csv").exists()
-    assert (run_dir / "meta.json").exists()
+    assert (run_dir / "metadata.json").exists()
+    assert (run_dir / "config.json").exists()
+    assert (run_dir / "metrics.json").exists()
+    assert (run_dir / "report.json").exists()
     assert (run_dir / "config_resolved.yaml").exists()
     
-    with open(run_dir / "meta.json", "r") as f:
+    with open(run_dir / "metadata.json", "r") as f:
         meta = json.load(f)
         assert meta["mode"] == "walkforward"
         # Check specific walkforward meta fields

@@ -51,6 +51,19 @@ Stepbit invokes QuantLab as a subprocess via its CLI.
 
 `[done]` `schema_version` validation and `request_id` propagation are implemented.
 
+### `command: "sweep"` contract `[done]`
+
+Required under `params`:
+
+- `config_path` — non-empty string path to the sweep YAML file
+
+Optional under `params`:
+
+- `out_dir` — target parent directory for the generated run directory
+- `sweep_outdir` — legacy-compatible alias for `out_dir`
+
+Invalid or missing `config_path` fails deterministically with exit code `2`.
+
 ---
 
 ## 3. Response (Output)
@@ -60,6 +73,19 @@ Stepbit invokes QuantLab as a subprocess via its CLI.
 QuantLab writes artifacts to a mode-specific output directory upon completion. Stepbit reads results from these files.
 
 QuantLab does **not** emit a JSON response envelope to stdout. This is by current design.
+
+For `command: "sweep"`, the canonical machine-readable artifact is `report.json`, and it includes:
+
+- `machine_contract.schema_version = "1.0"`
+- `machine_contract.contract_type = "quantlab.sweep.result"`
+- `machine_contract.command = "sweep"`
+- `machine_contract.status`
+- `machine_contract.request_id` when provided
+- `machine_contract.run_id`
+- `machine_contract.mode`
+- `machine_contract.summary`
+- `machine_contract.best_result` when available
+- `machine_contract.artifacts`
 
 ### JSON Response Envelope `[planned]`
 
@@ -160,16 +186,25 @@ For session-oriented flows, it is expected inside the produced run/session direc
 
 - **Typical pattern**: `outputs/runs/<run_id>/report.json`
 
+Canonical run artifact set for new sweep-produced runs:
+
+- `outputs/runs/<run_id>/metadata.json`
+- `outputs/runs/<run_id>/config.json`
+- `outputs/runs/<run_id>/metrics.json`
+- `outputs/runs/<run_id>/report.json`
+
+Legacy `meta.json` and `run_report.json` remain read-compatible only.
+
 ---
 
-## 7. Health and Versioning `[done]`
+## 7. Health and Versioning `[planned]`
 
 QuantLab provides machine-verifiable flags for runtime validation.
 
 | Flag | Status | Description |
 |---|---|---|
-| `--version` | `[done]` | Prints the current QuantLab version. |
-| `--check` | `[done]` | Performs a minimal runtime health check. |
+| `--version` | `[planned]` | Prints the current QuantLab version. |
+| `--check` | `[planned]` | Performs a minimal runtime health check. |
 
 ---
 

@@ -1,5 +1,24 @@
 # Session Log - QuantLab
 
+## 2026-03-23 — Stable Sweep Contract and Canonical Run Artifacts (Issue #53)
+- **Session Focus**: Define and implement a stable machine-facing `sweep` output contract for Stepbit while normalizing run artifacts.
+- **Tasks Completed**:
+  - Added canonical run artifact handling around `metadata.json`, `config.json`, `metrics.json`, and `report.json`.
+  - Updated the sweep path to validate `params.config_path`, return stable context, and require canonical `report.json` after execution.
+  - Extended `report.json` with a `machine_contract` block for `sweep` consumption.
+  - Switched new sweep-generated runs away from writing `meta.json` and `run_report.json`; kept legacy read compatibility in reporting/index/forward-loading code.
+  - Fixed the backtest initial-entry bug where the first bar could skip trade counting and costs when `positions[0] == 1`.
+  - Fixed `--report` with `--trades_csv` so validation and report generation use the same path.
+  - Added regression and contract-oriented tests for the new sweep/reporting behavior.
+- **Key Decisions**:
+  - `report.json` remains the canonical machine-readable artifact; the stable `sweep` contract lives inside `report.json.machine_contract`.
+  - Legacy artifact names remain read-compatible only.
+  - `run_report.md` remains the human-readable Markdown artifact name for run directories.
+- **Validation Notes**:
+  - `pytest` is not installed in the local venv, so full test execution could not be completed in-session.
+  - Verified syntax with `python -m compileall src test main.py`.
+  - Verified the new sweep contract path with a focused smoke test that generated and read a canonical `report.json`.
+
 ## 2026-03-23 — Research Dashboard UI Polish
 - **Session Focus**: Upgrade the research dashboard from MVP registry table to a richer, read-only analysis surface.
 - **Tasks Completed**:
