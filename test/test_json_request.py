@@ -23,6 +23,9 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
     """Minimal argparse-like namespace for unit-testing the JSON overlay logic."""
     defaults = dict(
         json_request=None,
+        signal_file=None,
+        version=False,
+        check=False,
         ticker="ETH-USD",
         start="2023-01-01",
         end="2023-12-31",

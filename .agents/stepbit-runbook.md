@@ -35,20 +35,28 @@ python main.py --version
 
 Expected result:
 
-prints the current QuantLab version
-exits with code 0
-Health Check
+- prints the current QuantLab version as a stable string
+- exits with code 0
+
+#### Health Check
+```bash
 python main.py --check
+```
 
 Expected result:
 
-prints a stable environment summary including:
-project_root
-interpreter
-venv_active
-quantlab_import
-python_version
-exits with code 0 on success
+- prints a stable JSON environment summary including:
+  - status
+  - project_root
+  - main_path
+  - src_root
+  - interpreter
+  - venv_active
+  - quantlab_import
+  - python_version
+  - version
+- exits with code 0 on success
+- exits with code 2 on runtime/config failure
 Runtime Resolution Notes
 
 The current CLI includes minimal runtime hardening:
@@ -58,6 +66,16 @@ src/ is anchored into sys.path
 default outdir is anchored to PROJECT_ROOT / "outputs" when --outdir is not explicitly provided
 
 This reduces current-working-directory fragility for local automated execution.
+
+### Smoke Validation
+
+For a reproducible machine-facing smoke validation, use the existing `--json-request` sweep path and verify the generated `report.json.machine_contract`.
+
+Recommended focused test command:
+
+```bash
+pytest test/test_cli_health.py test/test_machine_sweep_smoke.py -q
+```
 
 2. Operation: Invoke (Headless Execution)
 

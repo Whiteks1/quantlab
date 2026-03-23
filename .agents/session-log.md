@@ -1,5 +1,22 @@
 # Session Log - QuantLab
 
+## 2026-03-23 — Preflight Checks and Sweep Smoke Validation (Issue #57)
+- **Session Focus**: Add lightweight CLI preflight checks and a reproducible validation path for the machine-facing `sweep` contract.
+- **Tasks Completed**:
+  - Added `--version` to print the stable QuantLab version string.
+  - Added `--check` to emit a deterministic JSON runtime health report.
+  - Anchored `src/` into `sys.path` before CLI imports so preflight commands can run without depending on the caller's current working directory.
+  - Deferred heavy runtime imports until after `--version` / `--check` so the health path can validate missing runtime dependencies instead of crashing before argument handling.
+  - Added CLI regression tests for `--version` and `--check`.
+  - Added a smoke test that drives `main.py --json-request` with `command: "sweep"` and validates the emitted session context against `report.json.machine_contract`.
+- **Key Decisions**:
+  - `--version` stays intentionally simple and prints the bare project version.
+  - `--check` prints a JSON object to stdout and exits with code `0` on success or `2` on invalid runtime state.
+  - The existing machine-facing `--json-request` route remains the single smoke-validation surface for `sweep`; no new execution interface was added.
+- **Validation Notes**:
+  - Full `pytest` execution still depends on installing the repo's `dev` extras in the local venv.
+  - Focused validation now has dedicated tests for CLI health and machine-facing `sweep` smoke coverage.
+
 ## 2026-03-23 — Stable Sweep Contract and Canonical Run Artifacts (Issue #53)
 - **Session Focus**: Define and implement a stable machine-facing `sweep` output contract for Stepbit while normalizing run artifacts.
 - **Tasks Completed**:
