@@ -197,14 +197,26 @@ Legacy `meta.json` and `run_report.json` remain read-compatible only.
 
 ---
 
-## 7. Health and Versioning `[planned]`
+## 7. Health and Versioning `[done]`
 
 QuantLab provides machine-verifiable flags for runtime validation.
 
 | Flag | Status | Description |
 |---|---|---|
-| `--version` | `[planned]` | Prints the current QuantLab version. |
-| `--check` | `[planned]` | Performs a minimal runtime health check. |
+| `--version` | `[done]` | Prints the current QuantLab version as a stable string. |
+| `--check` | `[done]` | Prints a deterministic JSON health summary and exits `0` on success or `2` on runtime/config failure. |
+
+`--check` currently reports:
+
+- `status`
+- `project_root`
+- `main_path`
+- `src_root`
+- `interpreter`
+- `venv_active`
+- `quantlab_import`
+- `python_version`
+- `version`
 
 ---
 

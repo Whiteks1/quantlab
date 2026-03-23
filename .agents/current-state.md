@@ -3,7 +3,7 @@
 ## Active Stage
 - **Stage**: Stage O — Stepbit Automation Readiness
 - **Last Updated**: 2026-03-23
-- **Focus**: Stable machine-facing `sweep` contract and canonical run artifacts
+- **Focus**: Preflight CLI checks and smoke validation for the machine-facing `sweep` contract
 
 ## Completed/Planned Stages
 
@@ -27,11 +27,14 @@
 
 ## Active Work
 - **Stage Open**: Stage O is the current focus.
-- **Current Priority**: Issue #53 — stable `sweep` output contract for Stepbit consumption.
+- **Current Priority**: Issue #57 — add `--version`, `--check`, and a reproducible smoke validation path for machine-facing `sweep`.
 - **Implemented Direction**:
   - canonical run artifacts now center on `metadata.json`, `config.json`, `metrics.json`, and `report.json`
   - legacy `meta.json` / `run_report.json` remain read-compatible only
   - machine-facing `sweep` output is exposed through canonical `report.json` plus CLI/session context metadata
+  - `main.py --version` returns a stable CLI version string
+  - `main.py --check` returns a deterministic JSON health summary for runtime preflight
+  - the CLI keeps the existing `--json-request` `sweep` path as the smoke-validation surface
 
 ## Known Issues / Technical Debt
 - Duplicate workflow files in `.agents/workflows/`: `strategy-research.md` vs `strategy_research.md` — the underscore version is stale.

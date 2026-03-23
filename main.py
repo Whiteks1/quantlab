@@ -1,6 +1,4 @@
 # Backward compatibility for tests
-from quantlab.data.sources import fetch_ohlc
-
 import argparse
 import json
 import os
@@ -11,24 +9,32 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-# CLI Handlers
-from quantlab.cli.sweep import handle_sweep_command
-from quantlab.cli.portfolio import handle_portfolio_commands
-from quantlab.cli.forward import handle_forward_commands
-from quantlab.cli.report import handle_report_commands
-from quantlab.cli.run import handle_run_command
-from quantlab.cli.runs import handle_runs_commands
+PROJECT_ROOT = Path(__file__).resolve().parent
+SRC_ROOT = PROJECT_ROOT / "src"
+if SRC_ROOT.exists():
+    src_root_str = str(SRC_ROOT)
+    if src_root_str not in sys.path:
+        sys.path.insert(0, src_root_str)
 
-# Real Implementation Dependencies
-from quantlab.experiments import run_sweep
-from quantlab.reporting.run_report import write_report as write_run_report
-from quantlab.reporting.advanced_report import write_advanced_report
-from quantlab.reporting.run_index import write_runs_index, build_runs_index
-from quantlab.reporting.compare_runs import write_comparison
-from quantlab.reporting.portfolio_report import write_portfolio_report
-from quantlab.reporting.portfolio_mode_compare import write_mode_comparison_report
-
+from quantlab import __version__
+from quantlab.cli.health import build_health_report
 from quantlab.errors import QuantLabError, ConfigError, DataError, StrategyError
+
+fetch_ohlc = None
+handle_sweep_command = None
+handle_portfolio_commands = None
+handle_forward_commands = None
+handle_report_commands = None
+handle_run_command = None
+handle_runs_commands = None
+run_sweep = None
+write_run_report = None
+write_advanced_report = None
+write_runs_index = None
+build_runs_index = None
+write_comparison = None
+write_portfolio_report = None
+write_mode_comparison_report = None
 
 
 class SignalEmitter:
@@ -77,6 +83,108 @@ def _validate_json_request_contract(command: str, params: object) -> None:
             )
 
 
+def _emit_version() -> None:
+    print(__version__)
+
+
+def _emit_health_check() -> int:
+    report = build_health_report(
+        project_root=PROJECT_ROOT,
+        main_path=PROJECT_ROOT / "main.py",
+        src_root=SRC_ROOT,
+        interpreter=sys.executable,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0 if report["status"] == "ok" else 2
+
+
+def _load_runtime_dependencies() -> None:
+    global fetch_ohlc
+    global handle_sweep_command
+    global handle_portfolio_commands
+    global handle_forward_commands
+    global handle_report_commands
+    global handle_run_command
+    global handle_runs_commands
+    global run_sweep
+    global write_run_report
+    global write_advanced_report
+    global write_runs_index
+    global build_runs_index
+    global write_comparison
+    global write_portfolio_report
+    global write_mode_comparison_report
+
+    if fetch_ohlc is None:
+        from quantlab.data.sources import fetch_ohlc as _fetch_ohlc
+
+        fetch_ohlc = _fetch_ohlc
+    if handle_sweep_command is None:
+        from quantlab.cli.sweep import handle_sweep_command as _handle_sweep_command
+
+        handle_sweep_command = _handle_sweep_command
+    if handle_portfolio_commands is None:
+        from quantlab.cli.portfolio import (
+            handle_portfolio_commands as _handle_portfolio_commands,
+        )
+
+        handle_portfolio_commands = _handle_portfolio_commands
+    if handle_forward_commands is None:
+        from quantlab.cli.forward import handle_forward_commands as _handle_forward_commands
+
+        handle_forward_commands = _handle_forward_commands
+    if handle_report_commands is None:
+        from quantlab.cli.report import handle_report_commands as _handle_report_commands
+
+        handle_report_commands = _handle_report_commands
+    if handle_run_command is None:
+        from quantlab.cli.run import handle_run_command as _handle_run_command
+
+        handle_run_command = _handle_run_command
+    if handle_runs_commands is None:
+        from quantlab.cli.runs import handle_runs_commands as _handle_runs_commands
+
+        handle_runs_commands = _handle_runs_commands
+    if run_sweep is None:
+        from quantlab.experiments import run_sweep as _run_sweep
+
+        run_sweep = _run_sweep
+    if write_run_report is None:
+        from quantlab.reporting.run_report import write_report as _write_run_report
+
+        write_run_report = _write_run_report
+    if write_advanced_report is None:
+        from quantlab.reporting.advanced_report import (
+            write_advanced_report as _write_advanced_report,
+        )
+
+        write_advanced_report = _write_advanced_report
+    if write_runs_index is None or build_runs_index is None:
+        from quantlab.reporting.run_index import (
+            write_runs_index as _write_runs_index,
+            build_runs_index as _build_runs_index,
+        )
+
+        write_runs_index = _write_runs_index
+        build_runs_index = _build_runs_index
+    if write_comparison is None:
+        from quantlab.reporting.compare_runs import write_comparison as _write_comparison
+
+        write_comparison = _write_comparison
+    if write_portfolio_report is None:
+        from quantlab.reporting.portfolio_report import (
+            write_portfolio_report as _write_portfolio_report,
+        )
+
+        write_portfolio_report = _write_portfolio_report
+    if write_mode_comparison_report is None:
+        from quantlab.reporting.portfolio_mode_compare import (
+            write_mode_comparison_report as _write_mode_comparison_report,
+        )
+
+        write_mode_comparison_report = _write_mode_comparison_report
+
+
 def main() -> None:
     load_dotenv()
 
@@ -91,6 +199,16 @@ def main() -> None:
     parser.add_argument(
         "--signal-file",
         help="Path to an append-only JSON Lines file for session signals.",
+    )
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help="Print the current QuantLab version and exit.",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Run lightweight runtime health checks and exit.",
     )
 
     parser.add_argument("--ticker", default="ETH-USD")
@@ -221,6 +339,15 @@ def main() -> None:
     if getattr(args, "best_from", None) and not getattr(args, "runs_best", None):
         args.runs_best = args.best_from
 
+    if args.version:
+        _emit_version()
+        sys.exit(0)
+
+    if args.check:
+        sys.exit(_emit_health_check())
+
+    _load_runtime_dependencies()
+
     emitter = SignalEmitter(args.signal_file)
     session_metadata = {"mode": "unknown", "request_id": None}
 
@@ -344,11 +471,14 @@ def main() -> None:
             result_ctx = handle_run_command(args)
 
         extra_ctx = result_ctx if isinstance(result_ctx, dict) else {}
+        completion_ctx = dict(session_metadata)
+        completion_ctx.update(extra_ctx)
+        completion_ctx.pop("status", None)
+        completion_ctx.pop("event", None)
         emitter.emit(
             "SESSION_COMPLETED",
             "success",
-            **session_metadata,
-            **extra_ctx,
+            **completion_ctx,
         )
         sys.exit(0)
 
