@@ -21,7 +21,7 @@ from quantlab.reporting.run_index import (
 # ---------------------------------------------------------------------------
 
 def _make_meta(run_dir: Path, mode: str = "grid", run_id: str | None = None) -> None:
-    """Write a minimal meta.json into run_dir."""
+    """Write a minimal metadata.json into run_dir."""
     run_id = run_id or run_dir.name
     meta = {
         "run_id": run_id,
@@ -33,12 +33,12 @@ def _make_meta(run_dir: Path, mode: str = "grid", run_id: str | None = None) -> 
         "config_hash": "testhash",
         "top10": [{"sharpe_simple": 1.5, "total_return": 0.2, "max_drawdown": -0.1, "trades": 10}],
     }
-    with open(run_dir / "meta.json", "w") as f:
+    with open(run_dir / "metadata.json", "w") as f:
         json.dump(meta, f)
 
 
 def _make_report_json(run_dir: Path, sharpe: float = 1.0) -> None:
-    """Write a minimal run_report.json into run_dir."""
+    """Write a minimal report.json into run_dir."""
     report = {
         "header": {
             "run_id": run_dir.name,
@@ -51,7 +51,7 @@ def _make_report_json(run_dir: Path, sharpe: float = 1.0) -> None:
         ],
         "config_resolved": {"ticker": "BTC-USD", "start": "2023-01-01", "end": "2024-01-01"},
     }
-    with open(run_dir / "run_report.json", "w") as f:
+    with open(run_dir / "report.json", "w") as f:
         json.dump(report, f)
 
 
@@ -60,7 +60,7 @@ def _make_report_json(run_dir: Path, sharpe: float = 1.0) -> None:
 # ---------------------------------------------------------------------------
 
 def test_scan_runs_finds_valid_dirs(tmp_path):
-    """Only directories with meta.json or run_report.json should be yielded."""
+    """Only directories with canonical or legacy run artifacts should be yielded."""
     valid1 = tmp_path / "run_001"
     valid1.mkdir()
     _make_meta(valid1)
@@ -91,24 +91,24 @@ def test_scan_runs_nonexistent_root(tmp_path):
 
 
 def test_load_run_summary_from_report_json(tmp_path):
-    """load_run_summary should prefer run_report.json over meta.json."""
+    """load_run_summary should prefer report.json over metadata.json."""
     run_dir = tmp_path / "run_a"
     run_dir.mkdir()
-    _make_meta(run_dir, run_id="from_meta")          # meta says run_id=from_meta
-    _make_report_json(run_dir, sharpe=2.0)            # report has a different commit
+    _make_meta(run_dir, run_id="from_meta")
+    _make_report_json(run_dir, sharpe=2.0)
 
     summary = load_run_summary(run_dir)
 
     assert summary["path"] == str(run_dir)
     assert summary["sharpe_simple"] == 2.0
-    # run_report.json header wins over meta.json for git_commit
+    # report.json header wins over metadata.json for git_commit
     assert summary["git_commit"] == "def5678"
     # config_resolved should supply ticker
     assert summary["ticker"] == "BTC-USD"
 
 
 def test_load_run_summary_fallback_to_meta(tmp_path):
-    """When run_report.json is absent, load_run_summary must use meta.json."""
+    """When report.json is absent, load_run_summary must use metadata.json."""
     run_dir = tmp_path / "run_b"
     run_dir.mkdir()
     _make_meta(run_dir, mode="walkforward", run_id="meta_only_run")
@@ -186,13 +186,13 @@ def test_runs_index_strict_json_no_nan(tmp_path):
     """NaN metrics must be serialised as null so JSON is strict-valid."""
     run_dir = tmp_path / "nan_run"
     run_dir.mkdir()
-    # Write a run_report.json that has NaN in results
+    # Write a report.json that has NaN in results
     report = {
         "header": {"run_id": "nan_run", "mode": "grid", "created_at": "", "git_commit": ""},
         "results": [{"sharpe_simple": float("nan"), "total_return": float("inf")}],
         "config_resolved": {},
     }
-    with open(run_dir / "run_report.json", "w") as f:
+    with open(run_dir / "report.json", "w") as f:
         json.dump(report, f)
 
     _, json_p, _ = write_runs_index(tmp_path)

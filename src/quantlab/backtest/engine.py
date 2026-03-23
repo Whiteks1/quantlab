@@ -24,11 +24,6 @@ def run_backtest(
             out[col] = pd.Series(dtype=float)
         return out
 
-    if out.empty:
-        raise ValueError(
-            "run_backtest received an empty DataFrame. Check data loading, date range, and preprocessing."
-        )
-
     # Señales alineadas
     sig = signals.reindex(out.index).fillna(0).astype(int).to_numpy()
     out["signal"] = sig
@@ -56,7 +51,8 @@ def run_backtest(
     out["strategy_ret"] = out["ret"].to_numpy() * pos_shift
 
     # Trades: entry/exit
-    trade = np.diff(positions, prepend=positions[0])
+    prev_positions = np.concatenate(([0], positions[:-1]))
+    trade = positions - prev_positions
     out["trade"] = trade
 
     # Costes

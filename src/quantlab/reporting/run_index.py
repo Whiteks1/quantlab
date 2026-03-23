@@ -26,6 +26,14 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import pandas as pd
+from quantlab.runs.artifacts import (
+    CANONICAL_METADATA_FILENAME,
+    CANONICAL_METRICS_FILENAME,
+    CANONICAL_REPORT_FILENAME,
+    LEGACY_METADATA_FILENAMES,
+    LEGACY_REPORT_FILENAMES,
+    load_json_with_fallback,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -56,8 +64,16 @@ _SUMMARY_FIELDS = [
 
 
 def _is_valid_run_dir(path: Path) -> bool:
-    """A folder is a valid run if it has meta.json or run_report.json."""
-    return (path / "meta.json").exists() or (path / "run_report.json").exists()
+    """A folder is a valid run if it has canonical or legacy metadata/report artifacts."""
+    return any(
+        (path / name).exists()
+        for name in (
+            CANONICAL_METADATA_FILENAME,
+            CANONICAL_REPORT_FILENAME,
+            *LEGACY_METADATA_FILENAMES,
+            *LEGACY_REPORT_FILENAMES,
+        )
+    )
 
 
 def _extract_top_metric(report: Dict[str, Any], key: str) -> Optional[float]:
@@ -83,7 +99,7 @@ def scan_runs(root_dir: str | Path) -> Iterator[Path]:
     Yield valid run sub-directories inside *root_dir*.
 
     A directory is considered valid when it contains at least one of:
-    ``meta.json`` or ``run_report.json``.  Invalid or missing directories
+    canonical metadata/report artifacts or their legacy equivalents. Invalid or missing directories
     are silently skipped.
 
     Parameters
@@ -110,8 +126,10 @@ def load_run_summary(run_dir: str | Path) -> Dict[str, Any]:
     Load a normalised summary dict for a single run directory.
 
     Resolution order:
-    1. ``run_report.json`` (preferred – already sanitised)
-    2. ``meta.json`` (fallback)
+    1. ``report.json`` (preferred – canonical machine artifact)
+    2. ``run_report.json`` (legacy fallback)
+    3. ``metadata.json`` (canonical metadata fallback)
+    4. ``meta.json`` (legacy metadata fallback)
 
     Missing fields are set to ``None``.  The function never raises; it
     returns a partial dict with at minimum ``{"path": str(run_dir)}``.
@@ -130,37 +148,44 @@ def load_run_summary(run_dir: str | Path) -> Dict[str, Any]:
     summary: Dict[str, Any] = {f: None for f in _SUMMARY_FIELDS}
     summary["path"] = str(path)
 
-    # --- Attempt to load run_report.json first ---
-    report_json = path / "run_report.json"
-    meta_json = path / "meta.json"
-
     source: Dict[str, Any] = {}
+    metrics_source: Dict[str, Any] = {}
     try:
-        if report_json.exists():
-            with open(report_json, "r", encoding="utf-8") as fh:
-                source = json.load(fh)
-        elif meta_json.exists():
-            with open(meta_json, "r", encoding="utf-8") as fh:
-                source = json.load(fh)
+        source, _ = load_json_with_fallback(
+            path,
+            CANONICAL_REPORT_FILENAME,
+            *LEGACY_REPORT_FILENAMES,
+            CANONICAL_METADATA_FILENAME,
+            *LEGACY_METADATA_FILENAMES,
+        )
+        metrics_source, _ = load_json_with_fallback(path, CANONICAL_METRICS_FILENAME)
     except Exception as exc:  # noqa: BLE001
         warnings.warn(f"[run_index] Could not read {run_dir}: {exc}")
         return summary
 
     # --- Header / meta fields ---
-    header = source.get("header", source)  # run_report.json has "header"; meta.json is flat
+    header = source.get("header", source)  # report.json has "header"; metadata.json is flat
     for field in ("run_id", "mode", "created_at", "git_commit"):
         summary[field] = header.get(field)
 
-    # Config fields may be nested inside run_report.json → config_resolved
+    # Config fields may be nested inside report.json → config_resolved
     config = source.get("config_resolved", {}) or {}
     for field in ("ticker", "start", "end"):
         summary[field] = config.get(field) or header.get(field)
 
-    # --- Metric fields: top result row OR top10 in meta.json ---
+    # --- Metric fields: top result row OR summary/top10 from metadata ---
     for metric in ("sharpe_simple", "total_return", "max_drawdown", "trades"):
         val = _extract_top_metric(source, metric)
         if val is None:
-            # Try meta.json top10
+            metrics_summary = metrics_source.get("summary", {}) if isinstance(metrics_source, dict) else {}
+            raw_metric = metrics_summary.get(metric)
+            if raw_metric is not None:
+                try:
+                    val = float(raw_metric)
+                except (TypeError, ValueError):
+                    pass
+        if val is None:
+            # Try metadata top10
             top10 = source.get("top10", [])
             if top10 and isinstance(top10[0], dict):
                 raw = top10[0].get(metric)

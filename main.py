@@ -63,6 +63,20 @@ class SignalEmitter:
             )
 
 
+def _validate_json_request_contract(command: str, params: object) -> None:
+    if params is None:
+        params = {}
+    if not isinstance(params, dict):
+        raise ConfigError("'params' in JSON request must be an object.")
+
+    if command == "sweep":
+        config_path = params.get("config_path") or params.get("sweep")
+        if not isinstance(config_path, str) or not config_path.strip():
+            raise ConfigError(
+                "JSON request for 'sweep' requires params.config_path as a non-empty string."
+            )
+
+
 def main() -> None:
     load_dotenv()
 
@@ -236,13 +250,18 @@ def main() -> None:
 
                 # 4) Map params
                 params = req.get("params", {})
+                _validate_json_request_contract(_json_command, params)
                 for k, v in params.items():
                     if hasattr(args, k):
                         setattr(args, k, v)
 
                 # 5) Explicit param routing for nested/non-obvious flags
-                if _json_command == "sweep" and "config_path" in params:
-                    args.sweep = params["config_path"]
+                if _json_command == "sweep":
+                    args.sweep = params.get("config_path") or params.get("sweep")
+                    if "out_dir" in params:
+                        args.sweep_outdir = params["out_dir"]
+                    elif "sweep_outdir" in params:
+                        args.sweep_outdir = params["sweep_outdir"]
                 elif _json_command == "forward" and "run_dir" in params:
                     args.forward_eval = params["run_dir"]
 

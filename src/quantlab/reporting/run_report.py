@@ -8,6 +8,16 @@ from typing import Dict, Any, Tuple, Optional
 
 import pandas as pd
 from quantlab.reporting.report_summary import build_standard_summary
+from quantlab.runs.artifacts import (
+    CANONICAL_CONFIG_FILENAME,
+    CANONICAL_METADATA_FILENAME,
+    CANONICAL_METRICS_FILENAME,
+    CANONICAL_REPORT_FILENAME,
+    CONFIG_RESOLVED_YAML_FILENAME,
+    LEGACY_METADATA_FILENAMES,
+    canonical_run_artifact_names,
+    load_json_with_fallback,
+)
 
 def _sanitize_for_json(obj: Any) -> Any:
     """
@@ -27,17 +37,23 @@ def build_report(run_dir: str) -> Dict[str, Any]:
     Builds a standardized report dictionary from run artifacts.
     """
     run_path = Path(run_dir)
-    meta_path = run_path / "meta.json"
-    
-    if not meta_path.exists():
-        raise FileNotFoundError(f"meta.json not found in {run_dir}")
-        
-    with open(meta_path, "r", encoding="utf-8") as f:
-        meta = json.load(f)
+    meta, meta_path = load_json_with_fallback(
+        run_path,
+        CANONICAL_METADATA_FILENAME,
+        *LEGACY_METADATA_FILENAMES,
+    )
+    if not meta_path:
+        raise FileNotFoundError(f"metadata.json not found in {run_dir}")
+
+    metrics, _metrics_path = load_json_with_fallback(run_path, CANONICAL_METRICS_FILENAME)
+    config_json, _config_json_path = load_json_with_fallback(run_path, CANONICAL_CONFIG_FILENAME)
         
     mode = meta.get("mode", "grid")
     
     report = {
+        "schema_version": "1.0",
+        "artifact_type": "quantlab_run_report",
+        "status": meta.get("status", "success"),
         "header": {
             "run_id": meta.get("run_id"),
             "mode": mode,
@@ -46,6 +62,7 @@ def build_report(run_dir: str) -> Dict[str, Any]:
             "python_version": meta.get("python_version"),
             "config_path": meta.get("config_path"),
             "config_hash": meta.get("config_hash"),
+            "request_id": meta.get("request_id"),
         }
     }
     
@@ -57,8 +74,10 @@ def build_report(run_dir: str) -> Dict[str, Any]:
         "command": f"python main.py --sweep {config_path} --sweep_outdir {run_path.parent}"
     }
 
-    config_resolved_path = run_path / "config_resolved.yaml"
-    if config_resolved_path.exists():
+    config_resolved_path = run_path / CONFIG_RESOLVED_YAML_FILENAME
+    if config_json:
+        report["config_resolved"] = config_json
+    elif config_resolved_path.exists():
         import yaml
         with open(config_resolved_path, "r", encoding="utf-8") as f:
             try:
@@ -106,6 +125,19 @@ def build_report(run_dir: str) -> Dict[str, Any]:
             
     # Standardized summary for Stepbit
     standard_summary = build_standard_summary(report)
+    best_result = (report.get("results") or report.get("oos_leaderboard") or [None])[0]
+    report["machine_contract"] = {
+        "schema_version": "1.0",
+        "contract_type": "quantlab.sweep.result",
+        "command": "sweep",
+        "status": report["status"],
+        "request_id": meta.get("request_id"),
+        "run_id": report["header"].get("run_id"),
+        "mode": mode,
+        "summary": metrics.get("summary") or standard_summary,
+        "best_result": best_result,
+        "artifacts": canonical_run_artifact_names(),
+    }
 
     # Preserve legacy summary structures (e.g. walkforward summary tables)
     # and add the machine-readable KPI block additively.
@@ -197,15 +229,13 @@ def write_report(run_dir: str) -> Tuple[str, str]:
     
     Writes:
     - report.json (canonical)
-    - run_report.json (legacy)
     - run_report.md
     """
     report = build_report(run_dir)
     run_path = Path(run_dir)
     
     md_path = run_path / "run_report.md"
-    json_path = run_path / "report.json"
-    legacy_json_path = run_path / "run_report.json"
+    json_path = run_path / CANONICAL_REPORT_FILENAME
     
     md_content = render_report_md(report)
     with open(md_path, "w", encoding="utf-8") as f:
@@ -214,10 +244,6 @@ def write_report(run_dir: str) -> Tuple[str, str]:
     # Write canonical artifact
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False, allow_nan=False)
-        
-    # Write legacy artifact for backward compatibility
-    with open(legacy_json_path, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2, ensure_ascii=False, allow_nan=False)
-        
-    return str(md_path), str(legacy_json_path)
+
+    return str(md_path), str(json_path)
 

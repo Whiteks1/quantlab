@@ -49,6 +49,13 @@ import pandas as pd
 
 from quantlab.backtest.costs import slippage_fixed, slippage_atr, exec_price
 from quantlab.features.indicators import add_indicators
+from quantlab.runs.artifacts import (
+    CANONICAL_METADATA_FILENAME,
+    CANONICAL_REPORT_FILENAME,
+    LEGACY_METADATA_FILENAMES,
+    LEGACY_REPORT_FILENAMES,
+    load_json_with_fallback,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -207,22 +214,24 @@ def load_candidate_from_run(
         raise FileNotFoundError(f"Run directory not found: {run_path}")
 
     meta: Dict[str, Any] = {}
-    meta_path = run_path / "meta.json"
-    if meta_path.exists():
-        try:
-            with open(meta_path, encoding="utf-8") as fh:
-                meta = json.load(fh)
-        except Exception as exc:
-            warnings.warn(f"[forward_eval] Could not read meta.json: {exc}")
+    try:
+        meta, _ = load_json_with_fallback(
+            run_path,
+            CANONICAL_METADATA_FILENAME,
+            *LEGACY_METADATA_FILENAMES,
+        )
+    except Exception as exc:
+        warnings.warn(f"[forward_eval] Could not read metadata.json: {exc}")
 
-    rr_path = run_path / "run_report.json"
     run_report: Dict[str, Any] = {}
-    if rr_path.exists():
-        try:
-            with open(rr_path, encoding="utf-8") as fh:
-                run_report = json.load(fh)
-        except Exception:
-            pass
+    try:
+        run_report, _ = load_json_with_fallback(
+            run_path,
+            CANONICAL_REPORT_FILENAME,
+            *LEGACY_REPORT_FILENAMES,
+        )
+    except Exception:
+        pass
 
     run_id: str = meta.get("run_id") or run_report.get("header", {}).get("run_id") or run_path.name
 
@@ -258,7 +267,7 @@ def load_candidate_from_run(
         raise ValueError(
             f"Could not derive a candidate from run directory: {run_path}\n"
             f"Expected at least one of: leaderboard.csv, oos_leaderboard.csv, "
-            f"or results in run_report.json."
+            f"or results in report.json."
         )
 
     _METRIC_COLS = {

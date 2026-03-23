@@ -33,7 +33,7 @@ def test_meta_strict_json_handling(tmp_path):
         config_path="unknown"
     )
     
-    meta_json_path = out_dir / "meta.json"
+    meta_json_path = out_dir / "metadata.json"
     assert meta_json_path.exists()
     
     # 1. Native JSON load should work (it wouldn't if Infinity/NaN were present and allow_nan=False was used in dump)

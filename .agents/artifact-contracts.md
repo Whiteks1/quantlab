@@ -41,10 +41,21 @@ outputs/
       ├ metadata.json
       ├ config.json
       ├ metrics.json
-      ├ report.md
       ├ report.json
-      ├ trades.csv
-      └ artifacts/
+      ├ run_report.md
+      ├ config_resolved.yaml
+      ├ leaderboard.csv / experiments.csv / walkforward.csv
+      ├ trades.csv (optional)
+      └ artifacts/ (optional)
+
+Canonical run artifacts are:
+
+- `metadata.json`
+- `config.json`
+- `metrics.json`
+- `report.json`
+
+Legacy artifacts such as `meta.json` and `run_report.json` are read-compatible only and should not be written by new run-producing flows.
 
 The `artifacts/` folder can contain optional files such as:
 
@@ -66,22 +77,24 @@ Stores identity and contextual metadata for a run.
 
 Run system / execution layer.
 
-### Minimum fields
+### Minimum fields (implemented)
 
 run_id  
 created_at  
 mode  
-strategy  
-ticker  
 status  
+command  
+config_path  
+config_hash  
 
 ### Optional fields
 
-stage  
-tags  
-notes  
-source_command  
 git_commit  
+python_executable  
+python_version  
+request_id  
+summary { ... }  
+n_runs / n_train_runs / n_selected / n_test_runs  
 
 ---
 
@@ -97,13 +110,13 @@ This ensures experiments are reproducible.
 
 Run system / execution layer.
 
-### Minimum fields
+### Minimum fields (implemented)
 
 ticker  
-start_date  
-end_date  
-initial_capital  
-strategy_params  
+start  
+end  
+interval  
+strategy parameters resolved for the run  
 
 ### Optional fields
 
@@ -131,13 +144,12 @@ Used for:
 
 Reporting / analytics layer.
 
-### Minimum fields
+### Minimum fields (implemented)
 
-total_return  
-sharpe_simple  
-max_drawdown  
-trades  
-win_rate  
+status  
+summary { total_return, sharpe_simple, max_drawdown, trades, win_rate }  
+best_result  
+leaderboard_size  
 
 ### Optional fields
 
@@ -149,7 +161,7 @@ exposure
 
 ---
 
-## outputs/runs/<run_id>/report.md
+## outputs/runs/<run_id>/run_report.md
 
 ### Purpose
 
@@ -177,17 +189,31 @@ Charts (optional)
 
 Machine-readable report used for automation and research tooling.
 
-### Minimum fields
+### Minimum fields (implemented)
 
-run_id  
-strategy  
-ticker  
-total_return  
-sharpe_simple  
-max_drawdown  
-trades  
-win_rate  
-summary { ... }  
+schema_version  
+artifact_type  
+status  
+header { run_id, mode, created_at, git_commit, config_path, config_hash }  
+artifacts [ ... ]  
+summary { ... } or kpi_summary { ... }  
+
+### Sweep machine-facing block
+
+For run directories produced by `sweep`, `report.json` must expose:
+
+machine_contract {
+  schema_version,
+  contract_type = "quantlab.sweep.result",
+  command = "sweep",
+  status,
+  request_id?,
+  run_id,
+  mode,
+  summary { total_return, sharpe_simple, max_drawdown, trades, win_rate },
+  best_result?,
+  artifacts { metadata, config, metrics, report }
+}
 
 ---
 
@@ -286,7 +312,12 @@ outputs/trades.csv
 
 These are considered **legacy outputs**.
 
-The preferred long-term structure is **run-scoped artifacts under outputs/runs/**.
+The preferred structure is **run-scoped artifacts under outputs/runs/** using canonical artifact names.
+
+Legacy read compatibility currently includes:
+
+- `meta.json` -> canonical replacement: `metadata.json`
+- `run_report.json` -> canonical replacement: `report.json`
 
 ---
 

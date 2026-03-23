@@ -19,6 +19,12 @@ from quantlab.backtest.metrics import compute_metrics
 from quantlab.execution.paper import run_paper_broker
 from quantlab.reporting.trade_analytics import compute_round_trips, aggregate_trade_metrics
 from quantlab.reporting.run_report import write_report as write_run_report
+from quantlab.reporting.report_summary import build_standard_summary
+from quantlab.runs.artifacts import (
+    CONFIG_RESOLVED_YAML_FILENAME,
+    canonical_run_artifact_paths,
+)
+from quantlab.runs.run_store import RunStore
 
 
 def _sanitize_for_json(obj):
@@ -309,32 +315,54 @@ def _save_reproducibility_pack(
     extra_meta: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
-    Save meta.json and config_resolved.yaml to the run directory.
+    Save canonical run artifacts and the human-readable YAML config snapshot.
     """
     # config_hash of the actual resolved config
     config_json = json.dumps(config, sort_keys=True)
     config_hash = hashlib.sha1(config_json.encode()).hexdigest()
 
-    meta = {
-        "run_id": out_dir.name,
+    best_result = metrics_summary[0] if metrics_summary else {}
+    summary = build_standard_summary(best_result)
+
+    metadata = {
         "mode": mode,
+        "command": "sweep",
+        "status": "success",
         "created_at": datetime.datetime.now().isoformat(),
         "git_commit": _get_git_commit(),
         "python_executable": sys.executable,
         "python_version": sys.version,
         "config_path": config_path,
         "config_hash": config_hash,
+        "summary": summary,
         "top10": metrics_summary[:10],
     }
     if extra_meta:
-        meta.update(extra_meta)
+        metadata.update(extra_meta)
 
-    meta = _sanitize_for_json(meta)
+    metrics_payload = {
+        "mode": mode,
+        "status": "success",
+        "summary": summary,
+        "best_result": best_result or None,
+        "leaderboard_size": len(metrics_summary),
+    }
+    if extra_meta:
+        metrics_payload.update(
+            {
+                key: value
+                for key, value in extra_meta.items()
+                if key not in {"request_id"}
+            }
+        )
 
-    with open(out_dir / "meta.json", "w", encoding="utf-8") as f:
-        json.dump(meta, f, indent=2, ensure_ascii=False, allow_nan=False)
+    store = RunStore(out_dir.name, base_dir=str(out_dir.parent))
+    store.initialize()
+    store.write_metadata(_sanitize_for_json(metadata))
+    store.write_config(_sanitize_for_json(config))
+    store.write_metrics(_sanitize_for_json(metrics_payload))
 
-    with open(out_dir / "config_resolved.yaml", "w", encoding="utf-8") as f:
+    with open(out_dir / CONFIG_RESOLVED_YAML_FILENAME, "w", encoding="utf-8") as f:
         yaml.dump(config, f, default_flow_style=False)
 
 
@@ -414,7 +442,13 @@ def _persist_walkforward_rich_artifacts(
         print(f"Warning: Could not persist walkforward rich artifacts: {exc}")
 
 
-def run_experiments_grid(config: Dict[str, Any], out_dir: Optional[str] = None, config_path: str = "unknown") -> pd.DataFrame:
+def run_experiments_grid(
+    config: Dict[str, Any],
+    out_dir: Optional[str] = None,
+    config_path: str = "unknown",
+    extra_meta: Optional[Dict[str, Any]] = None,
+    return_artifacts: bool = False,
+):
     base = out_dir if out_dir else "outputs/runs"
     out_dir_path = make_run_dir(base=base, mode="grid", config_path=config_path)
 
@@ -451,7 +485,7 @@ def run_experiments_grid(config: Dict[str, Any], out_dir: Optional[str] = None, 
         mode="grid",
         metrics_summary=summary_data,
         config_path=config_path,
-        extra_meta={"n_runs": len(runs)},
+        extra_meta={"n_runs": len(runs), **(extra_meta or {})},
     )
     try:
         write_run_report(str(out_dir_path))
@@ -460,10 +494,26 @@ def run_experiments_grid(config: Dict[str, Any], out_dir: Optional[str] = None, 
     _persist_grid_rich_artifacts(out_dir_path, lb_df)
     print(f"Run directory: {out_dir_path}")
 
+    if return_artifacts:
+        artifact_paths = canonical_run_artifact_paths(out_dir_path)
+        artifact_paths.update(
+            {
+                "run_dir": str(out_dir_path),
+                "mode": "grid",
+            }
+        )
+        return artifact_paths
+
     return res_df
 
 
-def run_walkforward(config: Dict[str, Any], out_dir: Optional[str] = None, config_path: str = "unknown") -> pd.DataFrame:
+def run_walkforward(
+    config: Dict[str, Any],
+    out_dir: Optional[str] = None,
+    config_path: str = "unknown",
+    extra_meta: Optional[Dict[str, Any]] = None,
+    return_artifacts: bool = False,
+):
     """
     Execute walkforward validation: train -> select -> test for each split.
     """
@@ -645,6 +695,7 @@ def run_walkforward(config: Dict[str, Any], out_dir: Optional[str] = None, confi
             "n_train_runs": total_train,
             "n_selected": total_sel,
             "n_test_runs": total_test,
+            **(extra_meta or {}),
         },
     )
     try:
@@ -657,18 +708,47 @@ def run_walkforward(config: Dict[str, Any], out_dir: Optional[str] = None, confi
     )
 
     print(f"\nWalkforward results saved to: {out_dir_path}")
-    return final_df
-def run_sweep(config_path: str, out_dir: Optional[str] = None) -> pd.DataFrame:
-    """
-    Unified entry point: loads YAML and dispatches to grid or walkforward.
 
-    If out_dir is provided (e.g. outputs/sweeps), we create a unique run
-    directory INSIDE it to avoid overwriting artifacts.
+    if return_artifacts:
+        artifact_paths = canonical_run_artifact_paths(out_dir_path)
+        artifact_paths.update(
+            {
+                "run_dir": str(out_dir_path),
+                "mode": "walkforward",
+            }
+        )
+        return artifact_paths
+
+    return final_df
+
+
+def run_sweep(
+    config_path: str,
+    out_dir: Optional[str] = None,
+    request_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Unified entry point for machine-facing sweep execution.
+
+    Returns canonical artifact paths for the created sweep run directory.
     """
     config = load_experiment_config(config_path)
+    extra_meta = {"request_id": request_id} if request_id else None
     if is_walkforward_config(config):
-        return run_walkforward(config, out_dir=out_dir, config_path=config_path)
-    return run_experiments_grid(config, out_dir=out_dir, config_path=config_path)
+        return run_walkforward(
+            config,
+            out_dir=out_dir,
+            config_path=config_path,
+            extra_meta=extra_meta,
+            return_artifacts=True,
+        )
+    return run_experiments_grid(
+        config,
+        out_dir=out_dir,
+        config_path=config_path,
+        extra_meta=extra_meta,
+        return_artifacts=True,
+    )
 
 # Backwards-compat alias (if main.py or other code still calls run_experiments)
 def run_experiments(config_path: str, out_csv: str = "outputs/experiments.csv") -> pd.DataFrame:
