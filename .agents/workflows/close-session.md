@@ -4,7 +4,7 @@ description: How to close a session properly in QuantLab
 
 # Close Session Workflow
 
-Use this workflow at the end of an Antigravity session after implementation and verification are complete.
+Use this workflow at the end of a Codex session after implementation and verification are complete.
 
 ## Purpose
 This workflow ensures that each session ends with clear project continuity, updated project state, and a documented summary of what was done.
@@ -45,7 +45,7 @@ Create a `walkthrough.md` artifact only when it adds real value, for example:
 Do not create walkthrough files for minor edits or routine documentation changes.
 
 ## Constraints
-During session closure, Antigravity must not:
+During session closure, Codex must not:
 
 - introduce new implementation work
 - expand scope beyond the completed session
@@ -55,7 +55,7 @@ During session closure, Antigravity must not:
 If verification is incomplete, the session should be closed with a clear note that follow-up work is still required.
 
 ## Expected Output Format
-Antigravity should provide:
+Codex should provide:
 
 1. **Session Summary**  
    What was completed in this session.

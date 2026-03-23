@@ -1,3 +1,5 @@
+Legacy execution prompt kept for historical reference.
+
 Current task:
 Issue #11 — Verify CLI modularization is complete.
 

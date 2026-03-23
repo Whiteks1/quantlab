@@ -37,7 +37,7 @@ If the review detects missing artifacts, incorrect outputs, failing tests, or sc
 - recommend the next corrective step
 
 ## Expected Output Format
-Antigravity should return the following sections:
+Codex should return the following sections:
 
 1. **Artifacts Check**  
    Which expected outputs are present or missing.

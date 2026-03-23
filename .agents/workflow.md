@@ -14,14 +14,16 @@ QuantLab follows a strict **Issue-Branch-PR** workflow:
 
 ## 2. Agent Collaboration Model
 
-When working with AI assistants (Antigravity), follow this protocol:
+When working with Codex or another execution-focused AI assistant, follow this protocol:
 
 ### /read-and-plan
 When starting a new issue or session:
 - Read the relevant `.agents/` context files.
 - Read the task file in scope.
 - Propose a scoped implementation or cleanup plan.
-- Wait for user approval before execution.
+- Wait for user approval when the request is plan-only, when scope is ambiguous, or when the change has non-obvious consequences.
+
+If the user has already approved execution and the scope is clear, Codex may proceed after reading the required context.
 
 ### /execute-task
 During implementation:
@@ -51,6 +53,7 @@ Active work is tracked in task files under `.agents/tasks/`.
 - Architecture changes must be reflected in `.agents/architecture.md`.
 - File placement rules must be reflected in `.agents/code-map.md`.
 - Artifact or output contract changes must be reflected in `.agents/artifact-contracts.md`.
+- Codex-specific operating guidance belongs in `.agents/prompts/codex-master-prompt.md`.
 
 ---
 
