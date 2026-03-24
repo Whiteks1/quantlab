@@ -208,6 +208,24 @@ header { run_id, mode, created_at, git_commit, config_path, config_hash }
 artifacts [ ... ]  
 summary { ... } or kpi_summary { ... }  
 
+### Run machine-facing block
+
+For run directories produced by plain `run`, `report.json` must expose:
+
+machine_contract {
+  schema_version,
+  contract_type = "quantlab.run.result",
+  command = "run",
+  status,
+  request_id?,
+  run_id,
+  mode,
+  summary { total_return, sharpe_simple, max_drawdown, trades, win_rate },
+  artifacts { metadata, config, metrics, report }
+}
+
+Top-level `summary` / `kpi_summary` remain for backward compatibility.
+
 ### Sweep machine-facing block
 
 For run directories produced by `sweep`, `report.json` must expose:
@@ -224,9 +242,6 @@ machine_contract {
   best_result?,
   artifacts { metadata, config, metrics, report }
 }
-
-For plain `run`, `report.json` is still canonical but does not currently include a dedicated
-`machine_contract` block; integrations should use the canonical artifact pack plus session context.
 
 ---
 

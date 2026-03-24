@@ -1,5 +1,19 @@
 # Session Log - QuantLab
 
+## 2026-03-24 — Canonical Run Machine Contract (Issue #62)
+- **Session Focus**: Reduce the remaining contract asymmetry between plain `run` and `sweep` inside canonical `report.json`.
+- **Tasks Completed**:
+  - Extended `src/quantlab/reporting/run_report.py` so successful plain `run` reports now expose `report.json.machine_contract`.
+  - Kept top-level `summary` / `kpi_summary` behavior unchanged for backward compatibility.
+  - Added contract-oriented tests covering the canonical `run.machine_contract` shape and CLI-produced run reports.
+  - Updated `.agents` docs and the Stepbit I/O contract docs to reflect the new machine-facing `run` surface.
+- **Key Decisions**:
+  - Plain `run` now publishes `contract_type = "quantlab.run.result"` inside the same canonical report artifact already used by `sweep`.
+  - `sweep` keeps its richer `best_result` field, while plain `run` stays narrower and summary-focused.
+  - Backward-compatible top-level KPI blocks remain in place so older consumers do not break.
+- **Validation Notes**:
+  - Verified focused behavior with `pytest` on `test_run_report.py`, `test_cli_run.py`, `test_sweep_contract.py`, and `test_machine_sweep_smoke.py`.
+
 ## 2026-03-24 — Canonical Run Outputs and Automatic Runs Index Refresh
 - **Session Focus**: Align plain `run` with the canonical run artifact model and keep the shared runs index synchronized automatically.
 - **Tasks Completed**:
@@ -13,7 +27,7 @@
 - **Key Decisions**:
   - The primary storage contract for plain `run` is now the same canonical run directory model already used by the more mature flows.
   - Automatic runs-index refresh is centralized in `main.py` after successful run-producing commands instead of being duplicated across handlers.
-  - The dedicated `machine_contract` block remains specific to `sweep`; plain `run` now aligns on artifact layout first.
+  - The dedicated `machine_contract` block was deferred for plain `run` and handled in follow-up Issue #62 after the artifact layout stabilized.
 - **Validation Notes**:
   - Verified focused behavior with `pytest` on `test_cli_run.py`, `test_runs_index_refresh.py`, `test_machine_sweep_smoke.py`, and `test_run_report.py`.
   - Verified broader artifact/index/CLI compatibility with `pytest` on `test_stage_g_artifacts.py`, `test_artifact_consistency.py`, `test_json_request.py`, `test_cli_health.py`, `test_run_index.py`, and `test_cli_runs.py`.

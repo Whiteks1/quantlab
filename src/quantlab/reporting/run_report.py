@@ -19,6 +19,32 @@ from quantlab.runs.artifacts import (
     load_json_with_fallback,
 )
 
+
+def _build_machine_contract(
+    *,
+    command: str,
+    status: str,
+    request_id: Optional[str],
+    run_id: Optional[str],
+    mode: str,
+    summary: Dict[str, Any],
+    best_result: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    contract: Dict[str, Any] = {
+        "schema_version": "1.0",
+        "contract_type": f"quantlab.{command}.result",
+        "command": command,
+        "status": status,
+        "request_id": request_id,
+        "run_id": run_id,
+        "mode": mode,
+        "summary": summary,
+        "artifacts": canonical_run_artifact_names(),
+    }
+    if best_result is not None:
+        contract["best_result"] = best_result
+    return contract
+
 def _sanitize_for_json(obj: Any) -> Any:
     """
     Recursively convert non-finite floats (NaN, Inf) to None for strict JSON.
@@ -143,19 +169,26 @@ def build_report(run_dir: str) -> Dict[str, Any]:
     # Standardized summary for Stepbit
     standard_summary = build_standard_summary(report)
     best_result = (report.get("results") or report.get("oos_leaderboard") or [None])[0]
+    machine_summary = metrics.get("summary") or standard_summary
     if command == "sweep":
-        report["machine_contract"] = {
-            "schema_version": "1.0",
-            "contract_type": "quantlab.sweep.result",
-            "command": "sweep",
-            "status": report["status"],
-            "request_id": meta.get("request_id"),
-            "run_id": report["header"].get("run_id"),
-            "mode": mode,
-            "summary": metrics.get("summary") or standard_summary,
-            "best_result": best_result,
-            "artifacts": canonical_run_artifact_names(),
-        }
+        report["machine_contract"] = _build_machine_contract(
+            command="sweep",
+            status=report["status"],
+            request_id=meta.get("request_id"),
+            run_id=report["header"].get("run_id"),
+            mode=mode,
+            summary=machine_summary,
+            best_result=best_result,
+        )
+    elif command == "run":
+        report["machine_contract"] = _build_machine_contract(
+            command="run",
+            status=report["status"],
+            request_id=meta.get("request_id"),
+            run_id=report["header"].get("run_id"),
+            mode=mode,
+            summary=machine_summary,
+        )
 
     # Preserve legacy summary structures (e.g. walkforward summary tables)
     # and add the machine-readable KPI block additively.

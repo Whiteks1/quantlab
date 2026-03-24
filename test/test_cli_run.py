@@ -115,7 +115,11 @@ def test_run_creates_canonical_run_directory_and_artifacts(monkeypatch, tmp_path
     assert report["header"]["run_id"] == run_id
     assert report["header"]["mode"] == "run"
     assert report["results"][0]["sharpe_simple"] == 1.25
-    assert "machine_contract" not in report
+    assert report["machine_contract"]["contract_type"] == "quantlab.run.result"
+    assert report["machine_contract"]["command"] == "run"
+    assert report["machine_contract"]["run_id"] == run_id
+    assert report["machine_contract"]["summary"]["sharpe_simple"] == 1.25
+    assert report["machine_contract"]["artifacts"]["report"] == "report.json"
 
 
 def test_run_copies_explicit_trades_csv_into_canonical_run_dir(monkeypatch, tmp_path):
