@@ -98,6 +98,29 @@ def _emit_health_check() -> int:
     return 0 if report["status"] == "ok" else 2
 
 
+def _refresh_runs_index_if_needed(
+    *,
+    session_mode: str,
+    result_ctx: object,
+) -> dict[str, str]:
+    if session_mode not in {"run", "sweep", "forward"}:
+        return {}
+    if not isinstance(result_ctx, dict):
+        return {}
+    if result_ctx.get("status") not in (None, "success"):
+        return {}
+
+    root = result_ctx.get("runs_index_root")
+    root_path = Path(root) if isinstance(root, str) and root.strip() else PROJECT_ROOT / "outputs" / "runs"
+    csv_path, json_path, md_path = write_runs_index(str(root_path))
+    return {
+        "runs_index_root": str(root_path),
+        "runs_index_csv": csv_path,
+        "runs_index_json": json_path,
+        "runs_index_md": md_path,
+    }
+
+
 def _load_runtime_dependencies() -> None:
     global fetch_ohlc
     global handle_sweep_command
@@ -471,6 +494,12 @@ def main() -> None:
             result_ctx = handle_run_command(args)
 
         extra_ctx = result_ctx if isinstance(result_ctx, dict) else {}
+        extra_ctx.update(
+            _refresh_runs_index_if_needed(
+                session_mode=session_metadata["mode"],
+                result_ctx=result_ctx,
+            )
+        )
         completion_ctx = dict(session_metadata)
         completion_ctx.update(extra_ctx)
         completion_ctx.pop("status", None)

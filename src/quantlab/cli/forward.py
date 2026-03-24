@@ -1,5 +1,7 @@
-import os
 import datetime as _dt
+import json
+import os
+from pathlib import Path
 from typing import Any
 
 from quantlab.execution.forward_eval import (
@@ -10,6 +12,16 @@ from quantlab.execution.forward_eval import (
 )
 from quantlab.reporting.forward_report import write_forward_report
 from quantlab.data.sources import fetch_ohlc
+
+
+def _load_forward_summary(report_path: str) -> dict[str, Any]:
+    try:
+        with open(report_path, "r", encoding="utf-8") as fh:
+            report = json.load(fh)
+    except Exception:
+        return {}
+
+    return report.get("summary", {}) or report.get("kpi_summary", {})
 
 
 def run_forward_mode(args) -> dict | None:
@@ -117,7 +129,11 @@ def run_forward_mode(args) -> dict | None:
     return {
         "run_id": os.path.basename(out_dir),
         "artifacts_path": out_dir,
-        "report_path": json_p
+        "report_path": json_p,
+        "status": "success",
+        "summary": _load_forward_summary(json_p),
+        "mode": "forward",
+        "runs_index_root": str(Path("outputs") / "runs"),
     }
 
 

@@ -27,6 +27,9 @@ outputs/runs/<run_id>/
 
 A valid run directory must contain enough artifacts to reproduce the experiment context and results.
 
+Plain `run` executions follow the same rule as `sweep`: successful executions must create
+their own canonical directory under `outputs/runs/<run_id>/`.
+
 Artifacts written outside a run directory should be considered **temporary or legacy** unless explicitly documented.
 
 ---
@@ -56,6 +59,13 @@ Canonical run artifacts are:
 - `report.json`
 
 Legacy artifacts such as `meta.json` and `run_report.json` are read-compatible only and should not be written by new run-producing flows.
+
+The shared run registry is also part of the artifact surface for downstream tooling.
+After every successful `run`, `sweep`, or `forward`, QuantLab refreshes:
+
+- `outputs/runs/runs_index.csv`
+- `outputs/runs/runs_index.json`
+- `outputs/runs/runs_index.md`
 
 The `artifacts/` folder can contain optional files such as:
 
@@ -214,6 +224,9 @@ machine_contract {
   best_result?,
   artifacts { metadata, config, metrics, report }
 }
+
+For plain `run`, `report.json` is still canonical but does not currently include a dedicated
+`machine_contract` block; integrations should use the canonical artifact pack plus session context.
 
 ---
 

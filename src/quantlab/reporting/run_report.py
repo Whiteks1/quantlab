@@ -49,6 +49,7 @@ def build_report(run_dir: str) -> Dict[str, Any]:
     config_json, _config_json_path = load_json_with_fallback(run_path, CANONICAL_CONFIG_FILENAME)
         
     mode = meta.get("mode", "grid")
+    command = meta.get("command") or ("sweep" if mode in {"grid", "walkforward"} else mode)
     
     report = {
         "schema_version": "1.0",
@@ -70,8 +71,19 @@ def build_report(run_dir: str) -> Dict[str, Any]:
     # If the exact command isn't in meta, we can try to reconstruct it
     # For now, let's just use what's in meta or a dummy if missing
     config_path = meta.get("config_path", "config.yaml")
+    if command == "run":
+        reproduce_command = (
+            "python main.py "
+            f"--ticker {config_json.get('ticker', 'ETH-USD')} "
+            f"--start {config_json.get('start', '2023-01-01')} "
+            f"--end {config_json.get('end', '2024-01-01')}"
+        )
+    else:
+        reproduce_command = (
+            f"python main.py --sweep {config_path} --sweep_outdir {run_path.parent}"
+        )
     report["reproduce"] = {
-        "command": f"python main.py --sweep {config_path} --sweep_outdir {run_path.parent}"
+        "command": reproduce_command
     }
 
     config_resolved_path = run_path / CONFIG_RESOLVED_YAML_FILENAME
@@ -112,6 +124,11 @@ def build_report(run_dir: str) -> Dict[str, Any]:
         if summary_path.exists():
             df_sum = pd.read_csv(summary_path)
             report["summary"] = df_sum.to_dict(orient="records")
+    else:
+        report["results"] = []
+        best_result = metrics.get("best_result")
+        if isinstance(best_result, dict) and best_result:
+            report["results"] = [_sanitize_for_json(best_result)]
             
     # Gather artifacts
     artifacts = []
@@ -126,18 +143,19 @@ def build_report(run_dir: str) -> Dict[str, Any]:
     # Standardized summary for Stepbit
     standard_summary = build_standard_summary(report)
     best_result = (report.get("results") or report.get("oos_leaderboard") or [None])[0]
-    report["machine_contract"] = {
-        "schema_version": "1.0",
-        "contract_type": "quantlab.sweep.result",
-        "command": "sweep",
-        "status": report["status"],
-        "request_id": meta.get("request_id"),
-        "run_id": report["header"].get("run_id"),
-        "mode": mode,
-        "summary": metrics.get("summary") or standard_summary,
-        "best_result": best_result,
-        "artifacts": canonical_run_artifact_names(),
-    }
+    if command == "sweep":
+        report["machine_contract"] = {
+            "schema_version": "1.0",
+            "contract_type": "quantlab.sweep.result",
+            "command": "sweep",
+            "status": report["status"],
+            "request_id": meta.get("request_id"),
+            "run_id": report["header"].get("run_id"),
+            "mode": mode,
+            "summary": metrics.get("summary") or standard_summary,
+            "best_result": best_result,
+            "artifacts": canonical_run_artifact_names(),
+        }
 
     # Preserve legacy summary structures (e.g. walkforward summary tables)
     # and add the machine-readable KPI block additively.
@@ -212,6 +230,14 @@ def render_report_md(report: Dict[str, Any]) -> str:
             lines.append(df_sum.to_markdown(index=False))
         else:
             lines.append("No summary results found.")
+    else:
+        lines.append("## Result Summary")
+        results = report.get("results", [])
+        if results:
+            df = pd.DataFrame(results)
+            lines.append(df.to_markdown(index=False))
+        else:
+            lines.append("No result rows found.")
             
     lines.append("\n## Artifacts")
     artifacts = report.get("artifacts", [])

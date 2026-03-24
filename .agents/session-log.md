@@ -1,5 +1,23 @@
 # Session Log - QuantLab
 
+## 2026-03-24 — Canonical Run Outputs and Automatic Runs Index Refresh
+- **Session Focus**: Align plain `run` with the canonical run artifact model and keep the shared runs index synchronized automatically.
+- **Tasks Completed**:
+  - Updated `src/quantlab/cli/run.py` so successful `run` executions create `outputs/runs/<run_id>/`.
+  - Added canonical `run` artifact persistence for `metadata.json`, `config.json`, `metrics.json`, and `report.json`.
+  - Ensured successful `run` executions always return a non-null `run_id` and canonical artifact paths.
+  - Updated `main.py` to refresh `runs_index.csv/json/md` automatically after successful `run`, `sweep`, and `forward` commands.
+  - Extended report generation so canonical `run` directories render a valid `report.json` without relying on legacy output conventions.
+  - Added contract-oriented tests for canonical `run` outputs and main-level index refresh behavior.
+  - Updated CLI, artifact-contract, and Stepbit I/O docs to reflect the new behavior.
+- **Key Decisions**:
+  - The primary storage contract for plain `run` is now the same canonical run directory model already used by the more mature flows.
+  - Automatic runs-index refresh is centralized in `main.py` after successful run-producing commands instead of being duplicated across handlers.
+  - The dedicated `machine_contract` block remains specific to `sweep`; plain `run` now aligns on artifact layout first.
+- **Validation Notes**:
+  - Verified focused behavior with `pytest` on `test_cli_run.py`, `test_runs_index_refresh.py`, `test_machine_sweep_smoke.py`, and `test_run_report.py`.
+  - Verified broader artifact/index/CLI compatibility with `pytest` on `test_stage_g_artifacts.py`, `test_artifact_consistency.py`, `test_json_request.py`, `test_cli_health.py`, `test_run_index.py`, and `test_cli_runs.py`.
+
 ## 2026-03-23 — Preflight Checks and Sweep Smoke Validation (Issue #57)
 - **Session Focus**: Add lightweight CLI preflight checks and a reproducible validation path for the machine-facing `sweep` contract.
 - **Tasks Completed**:
