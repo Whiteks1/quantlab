@@ -32,7 +32,7 @@
   - canonical run artifacts now center on `metadata.json`, `config.json`, `metrics.json`, and `report.json`
   - successful plain `run` executions now write that canonical artifact pack under `outputs/runs/<run_id>/`
   - legacy `meta.json` / `run_report.json` remain read-compatible only
-  - machine-facing `sweep` output is exposed through canonical `report.json` plus CLI/session context metadata
+  - machine-facing `run` and `sweep` outputs are exposed through canonical `report.json.machine_contract`
   - `main.py --version` returns a stable CLI version string
   - `main.py --check` returns a deterministic JSON health summary for runtime preflight
   - the CLI keeps the existing `--json-request` `sweep` path as the smoke-validation surface
@@ -40,4 +40,4 @@
 
 ## Known Issues / Technical Debt
 - Duplicate workflow files in `.agents/workflows/`: `strategy-research.md` vs `strategy_research.md` — the underscore version is stale.
-- The canonical machine-facing contract is still formally stabilized only for `sweep`; `run` now emits canonical artifacts but does not yet expose a dedicated `machine_contract` block.
+- The canonical machine-facing contract is now shared by `run` and `sweep`, but downstream consumers may still carry old assumptions about `run` using only top-level `summary` / `kpi_summary`.

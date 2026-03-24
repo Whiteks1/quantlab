@@ -100,6 +100,70 @@ def test_run_report_walkforward(tmp_path):
         report2 = json.load(f)
     assert report2["config_resolved"]["key"] == "value"
 
+
+def test_run_report_plain_run_exposes_machine_contract(tmp_path):
+    run_dir = tmp_path / "20260324_120000_run_abc123"
+    run_dir.mkdir()
+
+    (run_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_dir.name,
+                "mode": "run",
+                "command": "run",
+                "created_at": "2026-03-24T12:00:00",
+                "git_commit": "deadbee",
+                "python_version": "3.13.0",
+                "config_path": "inline_cli",
+                "config_hash": "hash123",
+                "request_id": "req_run_123",
+                "status": "success",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "config.json").write_text(
+        json.dumps({"ticker": "ETH-USD", "start": "2023-01-01", "end": "2024-01-01"}),
+        encoding="utf-8",
+    )
+    (run_dir / "metrics.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "total_return": 0.18,
+                    "sharpe_simple": 1.4,
+                    "max_drawdown": -0.08,
+                    "trades": 6,
+                    "win_rate": 0.5,
+                },
+                "best_result": {
+                    "total_return": 0.18,
+                    "sharpe_simple": 1.4,
+                    "max_drawdown": -0.08,
+                    "trades": 6,
+                    "win_rate": 0.5,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    _md_path, json_path = write_report(str(run_dir))
+
+    payload = json.loads(Path(json_path).read_text(encoding="utf-8"))
+    contract = payload["machine_contract"]
+    assert contract["schema_version"] == "1.0"
+    assert contract["contract_type"] == "quantlab.run.result"
+    assert contract["command"] == "run"
+    assert contract["request_id"] == "req_run_123"
+    assert contract["run_id"] == run_dir.name
+    assert contract["mode"] == "run"
+    assert contract["summary"]["sharpe_simple"] == 1.4
+    assert "best_result" not in contract
+    assert contract["artifacts"]["metadata"] == "metadata.json"
+    assert contract["artifacts"]["report"] == "report.json"
+    assert "summary" in payload
+
 def test_run_report_markdown_headings(tmp_path):
     """Verify that report.md contains expected headings and key fields."""
     run_dir = tmp_path / "20230305_230000_grid_head01"

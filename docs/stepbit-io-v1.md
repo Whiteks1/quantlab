@@ -76,7 +76,18 @@ QuantLab does **not** emit a JSON response envelope to stdout. This is by curren
 
 For `command: "run"`, a successful execution now writes a canonical run directory under
 `outputs/runs/<run_id>/` and returns the resolved `run_id`, `artifacts_path`, and canonical
-`report_path` through the existing session-completion context.
+`report_path` through the existing session-completion context. Its canonical `report.json`
+now also includes:
+
+- `machine_contract.schema_version = "1.0"`
+- `machine_contract.contract_type = "quantlab.run.result"`
+- `machine_contract.command = "run"`
+- `machine_contract.status`
+- `machine_contract.request_id` when provided
+- `machine_contract.run_id`
+- `machine_contract.mode`
+- `machine_contract.summary`
+- `machine_contract.artifacts`
 
 For `command: "sweep"`, the canonical machine-readable artifact is `report.json`, and it includes:
 
