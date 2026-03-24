@@ -74,6 +74,10 @@ QuantLab writes artifacts to a mode-specific output directory upon completion. S
 
 QuantLab does **not** emit a JSON response envelope to stdout. This is by current design.
 
+For `command: "run"`, a successful execution now writes a canonical run directory under
+`outputs/runs/<run_id>/` and returns the resolved `run_id`, `artifacts_path`, and canonical
+`report_path` through the existing session-completion context.
+
 For `command: "sweep"`, the canonical machine-readable artifact is `report.json`, and it includes:
 
 - `machine_contract.schema_version = "1.0"`
@@ -157,6 +161,7 @@ Includes result location metadata (when available):
 - `run_id`: Unique identifier for the run.
 - `artifacts_path`: Directory containing the run artifacts.
 - `report_path`: Path to the canonical `report.json`.
+- `runs_index_json`: Refreshed registry artifact for `outputs/runs/` after successful `run`, `sweep`, and `forward`.
 
 #### SESSION_FAILED
 Includes failure metadata:
@@ -186,12 +191,18 @@ For session-oriented flows, it is expected inside the produced run/session direc
 
 - **Typical pattern**: `outputs/runs/<run_id>/report.json`
 
-Canonical run artifact set for new sweep-produced runs:
+Canonical run artifact set for new `run`- and `sweep`-produced runs:
 
 - `outputs/runs/<run_id>/metadata.json`
 - `outputs/runs/<run_id>/config.json`
 - `outputs/runs/<run_id>/metrics.json`
 - `outputs/runs/<run_id>/report.json`
+
+Successful `run`, `sweep`, and `forward` executions refresh the shared registry:
+
+- `outputs/runs/runs_index.csv`
+- `outputs/runs/runs_index.json`
+- `outputs/runs/runs_index.md`
 
 Legacy `meta.json` and `run_report.json` remain read-compatible only.
 

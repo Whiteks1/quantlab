@@ -48,6 +48,7 @@ def handle_sweep_command(
             "status": machine_contract.get("status", "success"),
             "summary": machine_contract.get("summary", {}),
             "mode": machine_contract.get("mode"),
+            "runs_index_root": str(run_dir.parent),
         }
 
     return None
