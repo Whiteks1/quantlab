@@ -1,6 +1,6 @@
 # QuantLab Roadmap
 
-This roadmap reflects the current repository state and the remaining stages needed to reach a broker-connected, supervised live-capable system without compromising QuantLab autonomy.
+This roadmap updates the original QuantLab plan to reflect the current repository state and the remaining stages needed to reach a broker-connected, automated, live-operating system without compromising QuantLab autonomy.
 
 QuantLab should continue to evolve in this order:
 
@@ -13,7 +13,7 @@ QuantLab should continue to evolve in this order:
 
 The key rule remains the same:
 
-- do not move into broker-connected execution before the paper, safety, and observability layers are mature
+- do not move into live execution before the paper, safety, and observability layers are mature
 
 ## Current Position
 
@@ -26,7 +26,7 @@ QuantLab has already completed most of the original research foundation and quan
 - indicators and feature preparation
 - strategy abstraction and research execution flows
 - backtesting and baseline metrics
-- walk-forward and forward-evaluation flows
+- walk-forward / forward-evaluation flows
 - canonical run artifacts and run history indexing
 - stable machine-facing CLI and contract surfaces for integration
 
@@ -37,10 +37,9 @@ QuantLab has already completed most of the original research foundation and quan
 
 ### Not started as production capability
 
-- real execution safety boundary
-- broker dry-run integration
-- supervised live routing
-- controlled automation over real execution
+- broker execution boundary
+- live order routing
+- automated live trading
 
 ## Stage A - Foundations
 
@@ -130,10 +129,10 @@ Scope:
 
 - stable paper session lifecycle and session naming rules
 - operator-facing paper runbook
-- clear signal and export surface for paper actions
+- clear signal/export surface for paper actions
 - alerting hooks for paper sessions
 - stronger distinction between research backtests and paper sessions
-- explicit session health and failure reasons for paper mode
+- explicit session health / failure reasons for paper mode
 
 Exit condition:
 
@@ -168,10 +167,10 @@ Goal:
 
 Scope:
 
-- `BrokerAdapter` interface as the common execution boundary
+- `BrokerAdapter` as the broker-agnostic execution boundary
 - execution-policy model
 - max position size rules
-- daily and session loss limits
+- daily / session loss limits
 - max concurrent exposure rules
 - circuit-breaker and kill-switch behavior
 - explicit failure-state handling
@@ -211,15 +210,16 @@ Goal:
 
 Scope:
 
+- broker adapter abstraction
 - implement `KrakenBrokerAdapter` as the first concrete backend
 - dry-run order translation from QuantLab signals
-- request and response logging for broker interactions
+- request/response logging for broker interactions
 - idempotency and retry discipline
-- broker-side clock, status, and preflight validation
+- broker-side clock/status/preflight validation
 
 Exit condition:
 
-- QuantLab can build, validate, and log Kraken order intent safely without yet operating with live capital
+- QuantLab can build, validate, and log broker-intent orders safely against Kraken without yet operating with live capital
 
 ## Stage D.1.b - Second Broker Comparison
 
@@ -253,7 +253,7 @@ Scope:
 - reconciliation between intended orders and broker responses
 - handling partial fills, rejects, rate limits, and transient API failures
 - execution-state persistence
-- restart and resume behavior
+- restart/resume behavior
 
 Exit condition:
 
@@ -273,7 +273,7 @@ Scope:
 - manual approval or supervised execution gate
 - low-risk initial sizing
 - real-time alerts for order placement, rejects, and risk events
-- operator dashboard or runbook support through QuantLab artifacts and optional external tooling
+- operator dashboard / runbook support through QuantLab artifacts and optional external tooling
 
 Exit condition:
 
@@ -289,11 +289,65 @@ Goal:
 
 Scope:
 
-- guarded automation policies
-- explicit promotion gates from supervised to automated execution
-- stronger monitoring and recovery rules
-- bounded operator override model
+- scheduler / orchestrator-driven recurring execution
+- automated decision-to-order flow within approved strategy boundaries
+- automated risk gate evaluation before each live action
+- post-trade reconciliation and anomaly detection
+- automated pause-on-failure behavior
+- live performance monitoring against expected risk and drawdown limits
 
 Exit condition:
 
-- QuantLab can automate execution within a controlled envelope without surrendering safety or product authority to external orchestration
+- QuantLab can operate as an automated broker-connected system with bounded risk, observability, and deterministic stop conditions
+
+## Stage G - Mature Live System
+
+Status: long-term
+
+Goal:
+
+- become a resilient, operator-trustworthy live trading system rather than a research tool with execution attached
+
+Scope:
+
+- stronger portfolio-level capital controls
+- multi-strategy deployment governance
+- operational incident review workflow
+- broker abstraction for additional venues if justified
+- formal promotion flow from research -> paper -> supervised live -> automated live
+
+Exit condition:
+
+- strategy promotion, execution, monitoring, and rollback all behave like one coherent operating system rather than a collection of scripts
+
+## Recommended Execution Order
+
+From the current repository state, the most rational order is:
+
+1. complete Stage C.1 paper-trading operationalization
+2. continue Stage O producer-side stabilization only where real integration friction requires it
+3. harden Stage O.1 integration fixtures only if consumer feedback justifies them
+4. design and implement Stage D.0 safety boundary
+5. add Stage D.1 broker dry-run integration, starting with Kraken
+6. add the second broker comparison layer with Binance only after the abstraction proves stable
+7. validate broker behavior in Stage D.2
+8. enter Stage E supervised live execution
+9. only then move into Stage F controlled automation
+
+## What Should Not Happen Early
+
+- no direct jump from research success to live automated broker execution
+- no live broker work before safety limits and kill-switch behavior exist
+- no exchange-specific strategy or risk logic outside `BrokerAdapter`
+- no expansion of external orchestration before the paper and safety layers are operationally trustworthy
+- no collapsing of QuantLab and Stepbit responsibilities into one codebase
+
+## Related Documents
+
+- [README.md](../README.md)
+- [cli.md](./cli.md)
+- [run-artifact-contract.md](./run-artifact-contract.md)
+- [stepbit-io-v1.md](./stepbit-io-v1.md)
+- [stepbit-integration.md](./stepbit-integration.md)
+- [quantlab-stepbit-boundaries.md](./quantlab-stepbit-boundaries.md)
+- [advantages-and-future.md](./advantages-and-future.md)

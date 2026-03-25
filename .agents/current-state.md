@@ -44,7 +44,7 @@
   - `main.py --check` returns a deterministic JSON health summary for runtime preflight
   - the CLI keeps the existing `--json-request` `sweep` path as the smoke-validation surface
   - the shared `runs_index.csv/json/md` registry is refreshed automatically after successful run-producing commands
-  - Stage O remains useful, but it does not set the next QuantLab-owned milestone
+
 
 ## Known Issues / Technical Debt
 - Duplicate workflow files in `.agents/workflows/`: `strategy-research.md` vs `strategy_research.md` — the underscore version is stale.
