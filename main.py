@@ -29,6 +29,7 @@ handle_run_command = None
 handle_runs_commands = None
 handle_paper_session_commands = None
 handle_broker_dry_run_commands = None
+handle_broker_dry_runs_commands = None
 run_sweep = None
 write_run_report = None
 write_advanced_report = None
@@ -133,6 +134,7 @@ def _load_runtime_dependencies() -> None:
     global handle_runs_commands
     global handle_paper_session_commands
     global handle_broker_dry_run_commands
+    global handle_broker_dry_runs_commands
     global run_sweep
     global write_run_report
     global write_advanced_report
@@ -184,6 +186,12 @@ def _load_runtime_dependencies() -> None:
         )
 
         handle_broker_dry_run_commands = _handle_broker_dry_run_commands
+    if handle_broker_dry_runs_commands is None:
+        from quantlab.cli.broker_dry_runs import (
+            handle_broker_dry_runs_commands as _handle_broker_dry_runs_commands,
+        )
+
+        handle_broker_dry_runs_commands = _handle_broker_dry_runs_commands
     if run_sweep is None:
         from quantlab.experiments import run_sweep as _run_sweep
 
@@ -367,6 +375,35 @@ def main() -> None:
         default=None,
         help="Persist a local Kraken dry-run audit artifact in a directory.",
     )
+    parser.add_argument(
+        "--kraken-dry-run-session",
+        action="store_true",
+        help="Persist a canonical Kraken dry-run session under outputs/broker_dry_runs.",
+    )
+    parser.add_argument(
+        "--broker-dry-runs-root",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Root directory for canonical broker dry-run sessions.",
+    )
+    parser.add_argument(
+        "--broker-dry-runs-list",
+        metavar="ROOT_DIR",
+        default=None,
+        help="List broker dry-run sessions in a directory.",
+    )
+    parser.add_argument(
+        "--broker-dry-runs-show",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Show details for a single broker dry-run session.",
+    )
+    parser.add_argument(
+        "--broker-dry-runs-index",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Refresh the shared broker dry-run index artifacts in a directory.",
+    )
     parser.add_argument("--broker-symbol", default=None)
     parser.add_argument("--broker-side", default=None)
     parser.add_argument("--broker-quantity", type=float, default=None)
@@ -507,7 +544,13 @@ def main() -> None:
             or args.paper_sessions_index
         ):
             session_metadata["mode"] = "paper_sessions"
-        elif args.kraken_dry_run_outdir:
+        elif (
+            args.kraken_dry_run_outdir
+            or args.kraken_dry_run_session
+            or args.broker_dry_runs_list
+            or args.broker_dry_runs_show
+            or args.broker_dry_runs_index
+        ):
             session_metadata["mode"] = "broker_dry_run"
         elif args.runs_list or args.runs_show or args.runs_best:
             session_metadata["mode"] = "runs"
@@ -542,6 +585,9 @@ def main() -> None:
         # --- Standard flag-driven routing (human CLI use) ---
         if result_ctx in (None, False):
             result_ctx = handle_broker_dry_run_commands(args)
+
+        if result_ctx in (None, False):
+            result_ctx = handle_broker_dry_runs_commands(args)
 
         if result_ctx in (None, False):
             result_ctx = handle_paper_session_commands(args)
