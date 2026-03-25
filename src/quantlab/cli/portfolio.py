@@ -70,8 +70,8 @@ def handle_portfolio_commands(
             latest_per_source_run=args.portfolio_latest_per_source_run,
         )
         print(f"  Portfolio report generated ({args.portfolio_mode}):")
-        print(f"    → {json_p}")
-        print(f"    → {md_p}")
+        print(f"    -> {json_p}")
+        print(f"    -> {md_p}")
         return True
 
     # --- PORTFOLIO COMPARISON MODE ---
@@ -110,8 +110,8 @@ def handle_portfolio_commands(
             latest_per_source_run=args.portfolio_latest_per_source_run,
         )
         print("  Comparison report generated:")
-        print(f"    → {json_p}")
-        print(f"    → {md_p}")
+        print(f"    -> {json_p}")
+        print(f"    -> {md_p}")
         return True
 
     return False

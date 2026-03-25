@@ -90,7 +90,7 @@ def run_forward_mode(args) -> dict | None:
     except Exception:
         pass
 
-    print(f"\n[2/4] Fetching OHLC data ({ticker}, {fetch_start} → {active_end}, {interval})...")
+    print(f"\n[2/4] Fetching OHLC data ({ticker}, {fetch_start} -> {active_end}, {interval})...")
     df = fetch_ohlc(ticker, fetch_start, active_end, interval=interval)
     print(f"  Bars fetched: {len(df)}")
 
@@ -124,7 +124,7 @@ def run_forward_mode(args) -> dict | None:
     written_files += [json_p, md_p]
 
     for f in written_files:
-        print(f"  → {f}")
+        print(f"  -> {f}")
 
     return {
         "run_id": os.path.basename(out_dir),
