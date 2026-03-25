@@ -269,7 +269,7 @@ def main() -> None:
         "--slippage_bps",
         type=float,
         default=8.0,
-        help="Slippage fijo en bps (10bps=0.10%)",
+        help="Slippage fijo en bps (10bps=0.10%%)",
     )
     parser.add_argument("--slippage_mode", default="fixed", choices=["fixed", "atr"])
     parser.add_argument(

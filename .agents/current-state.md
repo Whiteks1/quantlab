@@ -2,8 +2,8 @@
 
 ## Active Stage
 - **Stage**: Stage O — Stepbit Automation Readiness
-- **Last Updated**: 2026-03-24
-- **Focus**: Canonical `run` outputs and automatic `runs_index` refresh for run-producing commands
+- **Last Updated**: 2026-03-25
+- **Focus**: Stage O is centered on execution-surface stability for local automation and machine-to-machine integration.
 
 ## Completed/Planned Stages
 
@@ -27,7 +27,12 @@
 
 ## Active Work
 - **Stage Open**: Stage O is the current focus.
-- **Current Priority**: Align plain `run` with the canonical run artifact model and keep `outputs/runs/runs_index.*` synchronized automatically after successful `run`, `sweep`, and `forward` executions.
+- **Current Priority**: Keep the public execution contract stable for the next integration step.
+- **Active Focus Areas**:
+  - stabilize plain `run` output behavior around the canonical run artifact model
+  - preserve `sweep` contract stability as the existing machine-facing automation path
+  - keep `report.json.machine_contract` as the shared canonical machine-facing surface for `run` and `sweep`
+  - keep `outputs/runs/runs_index.*` refreshed automatically after successful `run`, `sweep`, and `forward` executions
 - **Implemented Direction**:
   - canonical run artifacts now center on `metadata.json`, `config.json`, `metrics.json`, and `report.json`
   - successful plain `run` executions now write that canonical artifact pack under `outputs/runs/<run_id>/`

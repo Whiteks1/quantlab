@@ -1,107 +1,265 @@
-#  QuantLab
+# QuantLab
 
-QuantLab is a personal quantitative research laboratory designed to explore, validate, and evolve trading strategies through a modular, reproducible, and research-focused architecture.
+QuantLab is a CLI-first quantitative research system for running reproducible strategy experiments, forward evaluation workflows, run indexing, and portfolio-level reporting.
 
-## What is QuantLab
+It is intentionally split from Stepbit:
 
-QuantLab is a **CLI-first quantitative research system** focused on:
-
-- market data ingestion and caching
-- technical indicators and feature preparation
-- modular trading strategies
-- backtesting with performance metrics
-- forward validation workflows
-- report generation and research artifacts
-- portfolio-oriented comparison and analysis
-
-The project is intended as a **quantitative experimentation environment** where strategies can be developed, tested, compared, and refined through structured and reproducible workflows.
-
-## Project Goal
-
-QuantLab begins as a **personal research laboratory** focused on strategy research, reproducible experimentation, and portfolio-level reasoning.
-
-The current priority is not building a SaaS platform or a complex service layer.  
-The goal is to establish a strong research core first, then evolve toward higher-level automation, broker integration, and broader execution capabilities only if the project maturity justifies it.
-
-## Current Direction
-
-QuantLab is being developed with a strong emphasis on:
-
-- modular boundaries
-- reproducible runs
-- contract-driven outputs
-- research traceability
-- clean CLI workflows
-- future extensibility without compromising the core design
-
-This means the repository is not just a collection of scripts, but an evolving research engine with clear architectural intent.
-
-## QuantLab × Stepbit
-
-QuantLab and Stepbit operate at different but complementary layers.
-
-- **QuantLab** provides the quantitative engine: backtesting, forward validation, reporting, and research artifacts.
-- **Stepbit / stepbit-core** provides the orchestration layer: pipelines, reasoning graphs, scheduling, event automation, and observability.
-
-The goal of the integration is not to merge responsibilities, but to connect them cleanly:
-
-- **Stepbit acts as the control plane**
-- **QuantLab acts as the execution engine**
-
-This makes it possible to run quantitative research as a structured, local-first workflow: reproducible, traceable, automatable, and grounded in objective metrics.
+- QuantLab is the execution engine for research, artifacts, and reporting.
+- Stepbit is the orchestration/control layer for automation, scheduling, and higher-level workflows.
 
 ## Current Status
 
-QuantLab is currently in an active architecture and research-core development stage.
+QuantLab is currently in **Stage O - Stepbit Automation Readiness**.
 
-The project is centered on establishing a reliable foundation for:
+The active goal is to keep the execution surface stable for local automation and machine-to-machine integration:
 
-- backtesting
-- forward validation
-- research reporting
-- portfolio comparison
-- stable execution contracts
+- stable `run` and `sweep` behavior
+- stable `report.json.machine_contract`
+- automatic refresh of `outputs/runs/runs_index.*`
+- reliable health/version surfaces via `--check` and `--version`
 
-Higher-level automation and orchestration are planned to grow on top of this foundation rather than being mixed into the core prematurely.
+Known technical debt still tracked internally:
+
+- duplicate workflow docs in `.agents/workflows/`: `strategy-research.md` vs `strategy_research.md`
 
 ## Requirements
 
 - Windows 11 or Ubuntu
-- Python 3.10+ (recommended 3.11 / 3.12)
+- Python 3.10+
 - Git
 
-## Installation
+Documented support starts at Python 3.10. The recommended target remains Python 3.11 or 3.12.
+As of 2026-03-25, the local CLI preflight in this repository also passes on Python 3.13.3.
+
+## Clean Installation
 
 ```bash
+git clone <your-fork-or-repo-url>
+cd quant_lab
 python -m venv .venv
-Windows (PowerShell)
-.\.venv\Scripts\Activate.ps1
-pip install -e .
-Linux / macOS
-source .venv/bin/activate
-pip install -e .
-
-## Usage
-
-Example entrypoint:
-
-python main.py --help 
 ```
 
-Depending on the current stage of the repository, available commands may include research execution, reporting, forward validation, and portfolio-related workflows.
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+pip install -e .
+```
+
+Linux / macOS:
+
+```bash
+source .venv/bin/activate
+pip install -e .
+```
+
+Developer dependencies:
+
+```bash
+pip install -e .[dev]
+```
+
+## Quick Health Check
+
+Version:
+
+```bash
+python main.py --version
+```
+
+Typical output:
+
+```text
+0.1.0
+```
+
+Preflight health:
+
+```bash
+python main.py --check
+```
+
+Typical output shape:
+
+```json
+{
+  "status": "ok",
+  "version": "0.1.0",
+  "quantlab_import": true,
+  "project_root": "..."
+}
+```
+
+CLI help:
+
+```bash
+python main.py --help
+```
+
+## Current Capabilities
+
+- `--json-request`: machine-facing request entrypoint for `run`, `sweep`, `forward`, and `portfolio`
+- `--signal-file`: optional JSONL lifecycle signalling for machine-driven execution
+- `--version`: stable CLI version string
+- `--check`: deterministic runtime health summary
+- `--runs-list`: list indexed runs under a root directory
+- `--runs-show`: inspect a single run directory
+- `--runs-best`: rank runs by a metric such as `sharpe_simple`
+- `--forward-eval`: launch a forward evaluation from a prior run directory
+- `--portfolio-report`: aggregate forward sessions into a portfolio report
+- `--portfolio-compare`: compare allocation modes across forward sessions
+
+See also:
+
+- [docs/cli.md](./docs/cli.md)
+- [docs/run-artifact-contract.md](./docs/run-artifact-contract.md)
+- [docs/stepbit-io-v1.md](./docs/stepbit-io-v1.md)
+
+## Real CLI Usage
+
+### Run
+
+Single research run:
+
+```bash
+python main.py --ticker ETH-USD --start 2022-01-01 --end 2023-12-31 --paper --report
+```
+
+This produces a canonical run directory under:
+
+```text
+outputs/runs/<run_id>/
+```
+
+### Runs
+
+List all runs:
+
+```bash
+python main.py --runs-list outputs/runs
+```
+
+Show one run:
+
+```bash
+python main.py --runs-show outputs/runs/20260324_005008_run_a468850
+```
+
+Best run by metric:
+
+```bash
+python main.py --runs-best outputs/runs --metric sharpe_simple
+```
+
+### Forward
+
+Forward evaluation from a prior grid/walkforward run directory:
+
+```bash
+python main.py --forward-eval outputs/runs/<grid_or_walkforward_run_id> --forward-start 2024-01-01 --forward-end 2024-06-01 --forward-outdir outputs/forward_runs/fwd_demo
+```
+
+Resume a previous forward session:
+
+```bash
+python main.py --resume-forward outputs/forward_runs/<session_id>
+```
+
+### Portfolio
+
+Aggregate forward sessions:
+
+```bash
+python main.py --portfolio-report outputs/forward_runs
+```
+
+Compare allocation modes:
+
+```bash
+python main.py --portfolio-compare outputs/forward_runs
+```
+
+Portfolio selection and weighting example:
+
+```bash
+python main.py --portfolio-report outputs/forward_runs --portfolio-mode custom_weight --portfolio-weights path/to/weights.json --portfolio-top-n 5 --portfolio-rank-metric total_return
+```
+
+## Canonical Artifact Structure
+
+Canonical run-producing artifacts are centered on:
+
+```text
+outputs/runs/<run_id>/
+  metadata.json
+  config.json
+  metrics.json
+  report.json
+  run_report.md
+  trades.csv                 # optional
+  artifacts/                 # optional
+```
+
+Shared run history index:
+
+```text
+outputs/runs/
+  runs_index.csv
+  runs_index.json
+  runs_index.md
+```
+
+`report.json` is the canonical public artifact.
+Its machine-facing result block lives at:
+
+```text
+report.json.machine_contract
+```
+
+Legacy read-compatible artifacts still exist for older consumers:
+
+- `meta.json` -> canonical replacement: `metadata.json`
+- `run_report.json` -> canonical replacement: `report.json`
+
+## Machine Request Example
+
+Short `run` request:
+
+```bash
+python main.py --json-request "{\"schema_version\":\"1.0\",\"request_id\":\"req_demo_001\",\"command\":\"run\",\"params\":{\"ticker\":\"ETH-USD\",\"start\":\"2023-01-01\",\"end\":\"2023-12-31\",\"interval\":\"1d\"}}"
+```
+
+With lifecycle signalling:
+
+```bash
+python main.py --json-request "{\"schema_version\":\"1.0\",\"request_id\":\"req_demo_002\",\"command\":\"sweep\",\"params\":{\"config_path\":\"configs/experiments/eth_2023_grid.yaml\",\"out_dir\":\"outputs/stepbit\"}}" --signal-file logs/quantlab-signals.jsonl
+```
+
+## Recent Stabilization Highlights
+
+- PR #63 added the canonical `report.json.machine_contract` for plain `run`
+- PR #60 aligned plain `run` with canonical artifacts and automatic `runs_index` refresh
+- PR #58 added CLI preflight checks and smoke validation for the machine-facing sweep path
+- PR #55 stabilized the sweep contract for Stepbit-oriented consumption
+
+## Repo Signals
+
+The repository already exposes a professional baseline for continued integration work:
+
+- Apache-2.0 licensed
+- GitHub Actions CI under `.github/workflows`
+- source under `src/quantlab`
+- public docs in `docs/`
+- internal architecture memory in `.agents/`
+- automated test coverage in `test/`
+
 ## Design Principles
 
-QuantLab is being built around a few core principles:
-
-research first over productization
-
-modularity over monolithic growth
-
-reproducibility over ad hoc experimentation
-
-clear contracts over implicit behavior
-
-extensibility without collapsing architectural boundaries
+- research-first before productization
+- modular boundaries over monolithic growth
+- reproducibility over ad hoc experimentation
+- explicit contracts over implicit behavior
+- extensibility without collapsing QuantLab/Stepbit separation
 
 ## License
 
