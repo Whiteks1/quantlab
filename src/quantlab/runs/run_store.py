@@ -2,6 +2,10 @@ from pathlib import Path
 from typing import Any, Dict
 
 from quantlab.runs.serializers import save_json
+from quantlab.runs.artifacts import (
+    PAPER_SESSION_METADATA_FILENAME,
+    PAPER_SESSION_STATUS_FILENAME,
+)
 
 
 class RunStore:
@@ -72,3 +76,57 @@ class RunStore:
         Return the absolute path to the run directory.
         """
         return self.run_path.resolve()
+
+
+class PaperSessionStore:
+    """
+    Manage the directory structure and core artifacts for a paper session.
+
+    Paper sessions are distinct from research runs and live under
+    ``outputs/paper_sessions/<session_id>/``.
+    """
+
+    def __init__(self, session_id: str, base_dir: str = "outputs/paper_sessions"):
+        self.session_id = session_id
+        self.base_dir = Path(base_dir)
+        self.session_path = self.base_dir / session_id
+
+    def initialize(self) -> Path:
+        self.session_path.mkdir(parents=True, exist_ok=True)
+        (self.session_path / "artifacts").mkdir(exist_ok=True)
+        return self.session_path
+
+    def _ensure_initialized(self) -> None:
+        self.session_path.mkdir(parents=True, exist_ok=True)
+
+    def write_metadata(self, metadata: Dict[str, Any]) -> None:
+        """
+        Persist both the generic metadata.json used by report builders and the
+        paper-specific session_metadata.json for operator-facing lifecycle work.
+        """
+        self._ensure_initialized()
+
+        data = dict(metadata)
+        data["session_id"] = self.session_id
+        data["run_id"] = data.get("run_id", self.session_id)
+
+        save_json(data, self.session_path / "metadata.json")
+        save_json(data, self.session_path / PAPER_SESSION_METADATA_FILENAME)
+
+    def write_config(self, config: Dict[str, Any]) -> None:
+        self._ensure_initialized()
+        save_json(config, self.session_path / "config.json")
+
+    def write_metrics(self, metrics: Dict[str, Any]) -> None:
+        self._ensure_initialized()
+        save_json(metrics, self.session_path / "metrics.json")
+
+    def write_status(self, status: Dict[str, Any]) -> None:
+        self._ensure_initialized()
+
+        data = dict(status)
+        data["session_id"] = self.session_id
+        save_json(data, self.session_path / PAPER_SESSION_STATUS_FILENAME)
+
+    def get_session_path(self) -> Path:
+        return self.session_path.resolve()

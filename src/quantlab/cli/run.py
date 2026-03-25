@@ -23,7 +23,8 @@ from quantlab.reporting.trade_analytics import (
     compute_round_trips,
 )
 from quantlab.runs.run_id import generate_run_id
-from quantlab.runs.run_store import RunStore
+from quantlab.runs.run_store import PaperSessionStore, RunStore
+from quantlab.errors import DataError
 
 
 def _build_run_config(args) -> dict[str, Any]:
@@ -122,6 +123,29 @@ def _build_metrics_payload(
     return payload, summary
 
 
+def _paper_status_payload(
+    *,
+    session_id: str,
+    status: str,
+    request_id: str | None,
+    message: str | None = None,
+    error_type: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "session_id": session_id,
+        "mode": "paper",
+        "command": "paper",
+        "status": status,
+        "request_id": request_id,
+        "updated_at": dt.datetime.now().isoformat(),
+    }
+    if message:
+        payload["message"] = message
+    if error_type:
+        payload["error_type"] = error_type
+    return payload
+
+
 def handle_run_command(args) -> bool:
     """
     Execute the standard single-run backtest simulation.
@@ -129,140 +153,258 @@ def handle_run_command(args) -> bool:
     Returns True because this is the fallback executable run mode.
     """
 
-    # 1) Data
-    df = fetch_ohlc(args.ticker, args.start, args.end, interval=args.interval)
+    config = _build_run_config(args)
+    request_id = getattr(args, "_request_id", None)
 
-    # 2) Indicators
-    df = add_indicators(df)
-    if df.empty:
-        print("ERROR: No data remaining after applying indicators (need more history for lookbacks).")
-        return False
-
-    # 3) Signals
-    strat = RsiMaAtrStrategy(
-        rsi_buy_max=args.rsi_buy_max,
-        rsi_sell_min=args.rsi_sell_min,
-        cooldown_days=args.cooldown_days,
-    )
-    signals = pd.Series(strat.generate_signals(df))
-
-    buys = int((signals == 1).sum())
-    sells = int((signals == -1).sum())
-    print("\n=== SIGNALS ===")
-    print(f"strategy: {strat.name}")
-    print(f"BUY signals:  {buys}")
-    print(f"SELL signals: {sells}")
-
-    # 4) Backtest
-    bt = run_backtest(
-        df=df,
-        signals=signals,
-        fee_rate=args.fee,
-        slippage_bps=args.slippage_bps,
-        slippage_mode=args.slippage_mode,
-        k_atr=args.k_atr,
-    )
-    metrics = compute_metrics(bt)
-
-    print("\n=== BACKTEST METRICS ===")
-    for k, v in metrics.items():
-        print(f"{k}: {v}")
-
-    # 5) Paper broker (optional)
-    trades_df = None
+    paper_store = None
+    paper_session_id = None
+    paper_session_dir = None
     if args.paper:
-        trades_df = run_paper_broker(
+        paper_session_id = generate_run_id("paper", config)
+        paper_sessions_root = (Path("outputs") / "paper_sessions").resolve()
+        paper_store = PaperSessionStore(paper_session_id, base_dir=str(paper_sessions_root))
+        paper_session_dir = paper_store.initialize().resolve()
+
+        paper_metadata = {
+            "session_id": paper_session_id,
+            "run_id": paper_session_id,
+            "mode": "paper",
+            "command": "paper",
+            "status": "running",
+            "created_at": dt.datetime.now().isoformat(),
+            "git_commit": _get_git_commit(),
+            "python_executable": sys.executable,
+            "python_version": sys.version,
+            "config_path": "inline_cli",
+            "config_hash": _config_hash(config),
+            "request_id": request_id,
+        }
+        paper_store.write_metadata(paper_metadata)
+        paper_store.write_config(config)
+        paper_store.write_status(
+            _paper_status_payload(
+                session_id=paper_session_id,
+                status="running",
+                request_id=request_id,
+            )
+        )
+
+    try:
+        # 1) Data
+        df = fetch_ohlc(args.ticker, args.start, args.end, interval=args.interval)
+
+        # 2) Indicators
+        df = add_indicators(df)
+        if df.empty:
+            if args.paper:
+                raise DataError(
+                    "No data remaining after applying indicators (need more history for lookbacks)."
+                )
+            print("ERROR: No data remaining after applying indicators (need more history for lookbacks).")
+            return False
+
+        # 3) Signals
+        strat = RsiMaAtrStrategy(
+            rsi_buy_max=args.rsi_buy_max,
+            rsi_sell_min=args.rsi_sell_min,
+            cooldown_days=args.cooldown_days,
+        )
+        signals = pd.Series(strat.generate_signals(df))
+
+        buys = int((signals == 1).sum())
+        sells = int((signals == -1).sum())
+        print("\n=== SIGNALS ===")
+        print(f"strategy: {strat.name}")
+        print(f"BUY signals:  {buys}")
+        print(f"SELL signals: {sells}")
+
+        # 4) Backtest
+        bt = run_backtest(
             df=df,
             signals=signals,
-            initial_cash=args.initial_cash,
             fee_rate=args.fee,
             slippage_bps=args.slippage_bps,
             slippage_mode=args.slippage_mode,
             k_atr=args.k_atr,
         )
+        metrics = compute_metrics(bt)
 
-        print("\n=== PAPER BROKER ===")
-        print(f"Initial cash: {args.initial_cash}")
-        print(f"Trades logged: {len(trades_df)}")
+        print("\n=== BACKTEST METRICS ===")
+        for k, v in metrics.items():
+            print(f"{k}: {v}")
 
-        if not trades_df.empty:
-            print("\nLast trades (paper broker):")
-            print(trades_df.tail(5))
+        # 5) Paper broker (optional)
+        trades_df = None
+        if args.paper:
+            trades_df = run_paper_broker(
+                df=df,
+                signals=signals,
+                initial_cash=args.initial_cash,
+                fee_rate=args.fee,
+                slippage_bps=args.slippage_bps,
+                slippage_mode=args.slippage_mode,
+                k_atr=args.k_atr,
+            )
 
-    config = _build_run_config(args)
-    run_id = generate_run_id("run", config)
-    runs_root = (Path("outputs") / "runs").resolve()
-    store = RunStore(run_id, base_dir=str(runs_root))
-    run_dir = store.initialize().resolve()
-    artifacts_dir = run_dir / "artifacts"
+            print("\n=== PAPER BROKER ===")
+            print(f"Initial cash: {args.initial_cash}")
+            print(f"Trades logged: {len(trades_df)}")
 
-    created_at = dt.datetime.now().isoformat()
-    config_hash = _config_hash(config)
+            if not trades_df.empty:
+                print("\nLast trades (paper broker):")
+                print(trades_df.tail(5))
 
-    trade_metrics: dict[str, Any] = {}
-    if args.paper:
-        trades_path = run_dir / "trades.csv"
-        save_trades_csv(trades_df, str(trades_path))
-        print(f"Saved: {trades_path}")
-    elif getattr(args, "trades_csv", None):
-        trades_df = _load_external_trades_csv(args, run_dir)
-        if trades_df is None:
-            return None
+        run_id = generate_run_id("run", config)
+        runs_root = (Path("outputs") / "runs").resolve()
+        store = RunStore(run_id, base_dir=str(runs_root))
+        run_dir = store.initialize().resolve()
+        artifacts_dir = run_dir / "artifacts"
 
-    if trades_df is not None and not trades_df.empty:
-        round_trips = compute_round_trips(trades_df)
-        trade_metrics = aggregate_trade_metrics(round_trips)
+        created_at = dt.datetime.now().isoformat()
+        config_hash = _config_hash(config)
 
-    metrics_payload, summary = _build_metrics_payload(
-        bt_metrics=metrics,
-        trade_metrics=trade_metrics,
-    )
+        trade_metrics: dict[str, Any] = {}
+        if args.paper:
+            assert paper_session_dir is not None
+            trades_path = paper_session_dir / "trades.csv"
+            save_trades_csv(trades_df, str(trades_path))
+            print(f"Saved: {trades_path}")
+        elif getattr(args, "trades_csv", None):
+            trades_df = _load_external_trades_csv(args, run_dir)
+            if trades_df is None:
+                return None
 
-    metadata = {
-        "run_id": run_id,
-        "mode": "run",
-        "command": "run",
-        "status": "success",
-        "created_at": created_at,
-        "git_commit": _get_git_commit(),
-        "python_executable": sys.executable,
-        "python_version": sys.version,
-        "config_path": "inline_cli",
-        "config_hash": config_hash,
-        "request_id": getattr(args, "_request_id", None),
-        "summary": summary,
-    }
+        if trades_df is not None and not trades_df.empty:
+            round_trips = compute_round_trips(trades_df)
+            trade_metrics = aggregate_trade_metrics(round_trips)
 
-    store.write_metadata(metadata)
-    store.write_config(config)
-    store.write_metrics(metrics_payload)
+        metrics_payload, summary = _build_metrics_payload(
+            bt_metrics=metrics,
+            trade_metrics=trade_metrics,
+        )
 
-    equity_path = artifacts_dir / "equity.png"
-    plot_basic_equity(bt, str(equity_path), args.ticker, strat.name)
-    print(f"\nSaved: {equity_path}")
+        metadata = {
+            "run_id": run_id,
+            "mode": "run",
+            "command": "run",
+            "status": "success",
+            "created_at": created_at,
+            "git_commit": _get_git_commit(),
+            "python_executable": sys.executable,
+            "python_version": sys.version,
+            "config_path": "inline_cli",
+            "config_hash": config_hash,
+            "request_id": request_id,
+            "summary": summary,
+        }
 
-    if args.save_price_plot:
-        price_path = artifacts_dir / "price_signals.png"
-        plot_price_signals(df, signals, str(price_path), args.ticker, strat.name)
-        print(f"Saved: {price_path}")
+        if args.paper:
+            assert paper_store is not None and paper_session_dir is not None and paper_session_id is not None
 
-    report_md_path, report_path = write_run_report(str(run_dir))
-    print(f"Saved: {report_md_path}")
-    print(f"Saved: {report_path}")
+            paper_metrics = dict(metrics_payload)
+            paper_metrics.update({"mode": "paper", "command": "paper"})
 
-    if args.report is True:
-        print("\n=== REPORT ===")
-        print("Canonical run report generated for the current execution.")
+            paper_metadata = {
+                "session_id": paper_session_id,
+                "run_id": paper_session_id,
+                "mode": "paper",
+                "command": "paper",
+                "status": "success",
+                "created_at": created_at,
+                "git_commit": _get_git_commit(),
+                "python_executable": sys.executable,
+                "python_version": sys.version,
+                "config_path": "inline_cli",
+                "config_hash": config_hash,
+                "request_id": request_id,
+                "summary": summary,
+            }
+            paper_store.write_metadata(paper_metadata)
+            paper_store.write_config(config)
+            paper_store.write_metrics(paper_metrics)
+        else:
+            store.write_metadata(metadata)
+            store.write_config(config)
+            store.write_metrics(metrics_payload)
 
-    return {
-        "run_id": run_id,
-        "artifacts_path": str(run_dir),
-        "report_path": str(report_path),
-        "status": "success",
-        "summary": summary,
-        "mode": "run",
-        "runs_index_root": str(runs_root),
-    }
+        target_dir = paper_session_dir if args.paper else run_dir
+        assert target_dir is not None
+        artifacts_dir = target_dir / "artifacts"
+
+        equity_path = artifacts_dir / "equity.png"
+        plot_basic_equity(bt, str(equity_path), args.ticker, strat.name)
+        print(f"\nSaved: {equity_path}")
+
+        if args.save_price_plot:
+            price_path = artifacts_dir / "price_signals.png"
+            plot_price_signals(df, signals, str(price_path), args.ticker, strat.name)
+            print(f"Saved: {price_path}")
+
+        report_md_path, report_path = write_run_report(str(target_dir))
+        print(f"Saved: {report_md_path}")
+        print(f"Saved: {report_path}")
+
+        if args.paper:
+            assert paper_store is not None and paper_session_id is not None
+            paper_store.write_status(
+                _paper_status_payload(
+                    session_id=paper_session_id,
+                    status="success",
+                    request_id=request_id,
+                )
+            )
+
+            if args.report is True:
+                print("\n=== REPORT ===")
+                print("Canonical paper session report generated for the current execution.")
+
+            return {
+                "run_id": paper_session_id,
+                "session_id": paper_session_id,
+                "artifacts_path": str(target_dir),
+                "report_path": str(report_path),
+                "status": "success",
+                "summary": summary,
+                "mode": "paper",
+            }
+
+        if args.report is True:
+            print("\n=== REPORT ===")
+            print("Canonical run report generated for the current execution.")
+
+        return {
+            "run_id": run_id,
+            "artifacts_path": str(run_dir),
+            "report_path": str(report_path),
+            "status": "success",
+            "summary": summary,
+            "mode": "run",
+            "runs_index_root": str(runs_root),
+        }
+    except KeyboardInterrupt:
+        if paper_store is not None and paper_session_id is not None:
+            paper_store.write_status(
+                _paper_status_payload(
+                    session_id=paper_session_id,
+                    status="aborted",
+                    request_id=request_id,
+                    message="Aborted by user",
+                    error_type="KeyboardInterrupt",
+                )
+            )
+        raise
+    except Exception as exc:
+        if paper_store is not None and paper_session_id is not None:
+            paper_store.write_status(
+                _paper_status_payload(
+                    session_id=paper_session_id,
+                    status="failed",
+                    request_id=request_id,
+                    message=str(exc),
+                    error_type=exc.__class__.__name__,
+                )
+            )
+        raise
 
 
 # Backward-compatible alias for older refactor paths / tests
