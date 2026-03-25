@@ -159,7 +159,7 @@ Exit condition:
 
 ## Stage D.0 - Real Execution Safety Boundary
 
-Status: not started
+Status: initial boundary slice implemented
 
 Goal:
 
@@ -176,6 +176,14 @@ Scope:
 - explicit failure-state handling
 - broker credential boundaries and secret handling
 - dry-run execution audit format
+
+Initial slice already present:
+
+- `ExecutionIntent`
+- `ExecutionPolicy`
+- `ExecutionPreflight`
+- `BrokerAdapter` contract
+- deterministic local rejection before any exchange-specific adapter work
 
 Exit condition:
 

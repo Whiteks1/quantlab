@@ -49,6 +49,7 @@
   - external signal mode for paper-backed `run` remains `run` to preserve contract stability
   - public operator guidance for paper sessions now lives in `docs/paper-session-runbook.md`
   - paper sessions now support a shared index surface under `outputs/paper_sessions/paper_sessions_index.*`
+  - Stage D.0 now has an initial broker-agnostic safety boundary in `src/quantlab/brokers/boundary.py`
 
 
 ## Known Issues / Technical Debt
