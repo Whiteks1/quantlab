@@ -230,6 +230,7 @@ Initial slice already present:
 - `KrakenBrokerAdapter` behind `BrokerAdapter`
 - deterministic Kraken payload translation for validated intent
 - dry-run audit snapshot without real broker connectivity
+- local dry-run artifact persistence via `broker_dry_run.json`
 
 Exit condition:
 

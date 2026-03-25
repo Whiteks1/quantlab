@@ -69,6 +69,7 @@ Current Stage D.1 scope covered:
 - shared preflight validation through the Stage D.0 boundary
 - deterministic Kraken-style payload translation
 - stable dry-run audit snapshot for local review
+- local `broker_dry_run.json` artifact generation through the CLI
 
 Still intentionally out of scope:
 

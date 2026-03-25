@@ -51,6 +51,7 @@
   - paper sessions now support a shared index surface under `outputs/paper_sessions/paper_sessions_index.*`
   - Stage D.0 now has an initial broker-agnostic safety boundary in `src/quantlab/brokers/boundary.py`
   - Stage D.1 now has a first dry-run `KrakenBrokerAdapter` built on that boundary
+  - Kraken dry-run can now materialize a local `broker_dry_run.json` audit artifact
 
 
 ## Known Issues / Technical Debt
