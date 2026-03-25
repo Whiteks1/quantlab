@@ -402,6 +402,12 @@ def main() -> None:
         help="Persist a local Kraken authenticated account snapshot and intent readiness artifact in a directory.",
     )
     parser.add_argument(
+        "--kraken-order-validate-outdir",
+        metavar="DIR",
+        default=None,
+        help="Persist a local Kraken validate-only order probe artifact in a directory.",
+    )
+    parser.add_argument(
         "--kraken-preflight-timeout",
         type=float,
         default=10.0,
@@ -586,6 +592,8 @@ def main() -> None:
             or args.kraken_account_readiness_outdir
         ):
             session_metadata["mode"] = "broker_preflight"
+        elif args.kraken_order_validate_outdir:
+            session_metadata["mode"] = "broker_validate"
         elif (
             args.kraken_dry_run_outdir
             or args.kraken_dry_run_session

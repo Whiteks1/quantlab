@@ -14,6 +14,7 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "kraken_preflight_outdir": None,
         "kraken_auth_preflight_outdir": None,
         "kraken_account_readiness_outdir": None,
+        "kraken_order_validate_outdir": None,
         "kraken_preflight_timeout": 10.0,
         "broker_symbol": None,
         "ticker": None,
@@ -285,5 +286,94 @@ def test_writes_account_readiness_artifact(monkeypatch, tmp_path):
 
 def test_account_readiness_requires_intent_inputs(tmp_path):
     args = _make_args(kraken_account_readiness_outdir=str(tmp_path / "account_readiness"))
+    with pytest.raises(ConfigError):
+        handle_broker_preflight_commands(args)
+
+
+def test_writes_order_validate_artifact(monkeypatch, tmp_path):
+    from quantlab.cli import broker_preflight as module
+
+    def fake_report(self, intent, policy, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.kraken.order_validate",
+                    "adapter_name": "kraken",
+                    "generated_at": "2026-03-26T08:00:00",
+                    "authenticated_preflight": {
+                        "artifact_type": "quantlab.kraken.auth_preflight",
+                        "adapter_name": "kraken",
+                        "generated_at": "2026-03-26T08:00:00",
+                        "credentials_present": True,
+                        "authenticated": True,
+                        "api_key_env": "KRAKEN_API_KEY",
+                        "api_secret_env": "KRAKEN_API_SECRET",
+                        "key_name": "quantlab-demo",
+                        "permissions": {"orders": "create_modify"},
+                        "restrictions": {},
+                        "created_at": None,
+                        "updated_at": None,
+                        "errors": [],
+                    },
+                    "intent": {
+                        "broker_target": "kraken",
+                        "symbol": intent.symbol,
+                        "side": intent.side,
+                        "quantity": intent.quantity,
+                        "notional": intent.notional,
+                        "account_id": intent.account_id,
+                        "strategy_id": intent.strategy_id,
+                        "request_id": intent.request_id,
+                        "dry_run": True,
+                    },
+                    "policy": {
+                        "kill_switch_active": False,
+                        "max_notional_per_order": None,
+                        "allowed_symbols": [],
+                        "require_account_id": True,
+                    },
+                    "local_preflight": {"allowed": True, "reasons": []},
+                    "validate_payload": {
+                        "pair": "ETH/USD",
+                        "type": "buy",
+                        "ordertype": "market",
+                        "volume": "0.25",
+                        "validate": "true",
+                    },
+                    "remote_validation_called": True,
+                    "validation_accepted": True,
+                    "validation_reasons": [],
+                    "exchange_response": {"error": [], "result": {"descr": {"order": "buy 0.25 ETHUSD @ market"}}},
+                    "errors": [],
+                }
+
+        return _Fake()
+
+    monkeypatch.setattr(module.KrakenBrokerAdapter, "build_order_validate_report", fake_report)
+
+    outdir = tmp_path / "order_validate"
+    args = _make_args(
+        kraken_order_validate_outdir=str(outdir),
+        broker_symbol="ETH-USD",
+        broker_side="buy",
+        broker_quantity=0.25,
+        broker_notional=500.0,
+        broker_account_id="acct_demo",
+    )
+    result = handle_broker_preflight_commands(args)
+
+    assert isinstance(result, dict)
+    assert result["validation_accepted"] is True
+    artifact_path = outdir / "broker_order_validate.json"
+    assert artifact_path.exists()
+
+    payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert payload["artifact_type"] == "quantlab.kraken.order_validate"
+    assert payload["remote_validation_called"] is True
+    assert payload["validation_accepted"] is True
+
+
+def test_order_validate_requires_intent_inputs(tmp_path):
+    args = _make_args(kraken_order_validate_outdir=str(tmp_path / "order_validate"))
     with pytest.raises(ConfigError):
         handle_broker_preflight_commands(args)

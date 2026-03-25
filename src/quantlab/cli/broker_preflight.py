@@ -23,6 +23,7 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
     - ``--kraken-preflight-outdir <DIR>`` : run read-only Kraken readiness probes and persist artifact
     - ``--kraken-auth-preflight-outdir <DIR>`` : run authenticated Kraken read-only preflight and persist artifact
     - ``--kraken-account-readiness-outdir <DIR>`` : run authenticated account snapshot and intent readiness check
+    - ``--kraken-order-validate-outdir <DIR>`` : run validate-only Kraken order probe and persist artifact
     """
     if getattr(args, "kraken_preflight_outdir", None):
         symbol = getattr(args, "broker_symbol", None) or getattr(args, "ticker", None)
@@ -124,6 +125,42 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
             "authenticated": report["authenticated_preflight"]["authenticated"],
             "account_snapshot_available": report["account_snapshot_available"],
             "readiness_allowed": readiness["allowed"],
+        }
+
+    if getattr(args, "kraken_order_validate_outdir", None):
+        intent = _build_execution_intent_from_args(args)
+        policy = _build_execution_policy_from_args(args)
+
+        outdir = Path(args.kraken_order_validate_outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
+
+        adapter = KrakenBrokerAdapter()
+        report = adapter.build_order_validate_report(
+            intent,
+            policy,
+            api_key=getattr(args, "kraken_api_key", None),
+            api_secret=getattr(args, "kraken_api_secret", None),
+            api_key_env=getattr(args, "kraken_api_key_env", "KRAKEN_API_KEY"),
+            api_secret_env=getattr(args, "kraken_api_secret_env", "KRAKEN_API_SECRET"),
+            timeout_seconds=float(getattr(args, "kraken_preflight_timeout", 10.0)),
+        ).to_dict()
+
+        artifact_path = outdir / "broker_order_validate.json"
+        with open(artifact_path, "w", encoding="utf-8") as fh:
+            json.dump(report, fh, indent=2, ensure_ascii=False)
+
+        print("\nKraken order validate generated:\n")
+        print(f"  artifact_path           : {artifact_path}")
+        print(f"  remote_validation_called: {report['remote_validation_called']}")
+        print(f"  validation_accepted     : {report['validation_accepted']}")
+
+        return {
+            "status": "success",
+            "mode": "broker_order_validate",
+            "adapter_name": report["adapter_name"],
+            "artifact_path": str(artifact_path),
+            "remote_validation_called": report["remote_validation_called"],
+            "validation_accepted": report["validation_accepted"],
         }
 
     return False

@@ -416,3 +416,98 @@ def test_account_snapshot_respects_pair_minimums():
 
     assert report["intent_readiness"]["allowed"] is False
     assert "below_pair_costmin" in report["intent_readiness"]["reasons"]
+
+
+def test_order_validate_reports_local_preflight_rejection_without_remote_call():
+    adapter = KrakenBrokerAdapter()
+    policy = ExecutionPolicy(max_notional_per_order=100.0)
+
+    report = adapter.build_order_validate_report(
+        _make_intent(notional=500.0),
+        policy,
+    ).to_dict()
+
+    assert report["artifact_type"] == "quantlab.kraken.order_validate"
+    assert report["remote_validation_called"] is False
+    assert report["validation_accepted"] is False
+    assert "max_notional_exceeded" in report["validation_reasons"]
+    assert "local_preflight_rejected" in report["errors"]
+
+
+def test_order_validate_accepts_successful_mocked_exchange_validation():
+    adapter = KrakenBrokerAdapter()
+    policy = ExecutionPolicy(
+        max_notional_per_order=1000.0,
+        allowed_symbols=frozenset({"ETH/USD"}),
+        require_account_id=True,
+    )
+
+    def fake_private_json(path, **kwargs):
+        if path == "/0/private/GetAPIKeyInfo":
+            return {
+                "error": [],
+                "result": {
+                    "name": "quantlab-demo",
+                    "permissions": {"orders": "create_modify"},
+                },
+            }
+        if path == "/0/private/AddOrder":
+            assert kwargs["payload"]["validate"] == "true"
+            return {
+                "error": [],
+                "result": {
+                    "descr": {"order": "buy 0.25 ETHUSD @ market"},
+                },
+            }
+        raise AssertionError(path)
+
+    report = adapter.build_order_validate_report(
+        _make_intent(symbol="ETH/USD", side="buy", quantity=0.25, notional=500.0),
+        policy,
+        api_key="demo-key",
+        api_secret="ZGVtby1zZWNyZXQ=",
+        fetch_private_json=fake_private_json,
+    ).to_dict()
+
+    assert report["remote_validation_called"] is True
+    assert report["validation_accepted"] is True
+    assert report["validate_payload"]["validate"] == "true"
+    assert report["exchange_response"]["result"]["descr"]["order"] == "buy 0.25 ETHUSD @ market"
+
+
+def test_order_validate_reports_exchange_side_validation_errors():
+    adapter = KrakenBrokerAdapter()
+    policy = ExecutionPolicy(
+        max_notional_per_order=1000.0,
+        allowed_symbols=frozenset({"ETH/USD"}),
+        require_account_id=True,
+    )
+
+    def fake_private_json(path, **kwargs):
+        if path == "/0/private/GetAPIKeyInfo":
+            return {
+                "error": [],
+                "result": {
+                    "name": "quantlab-demo",
+                    "permissions": {"orders": "create_modify"},
+                },
+            }
+        if path == "/0/private/AddOrder":
+            return {
+                "error": ["EOrder:Insufficient funds"],
+                "result": {},
+            }
+        raise AssertionError(path)
+
+    report = adapter.build_order_validate_report(
+        _make_intent(symbol="ETH/USD", side="buy", quantity=0.25, notional=500.0),
+        policy,
+        api_key="demo-key",
+        api_secret="ZGVtby1zZWNyZXQ=",
+        fetch_private_json=fake_private_json,
+    ).to_dict()
+
+    assert report["remote_validation_called"] is True
+    assert report["validation_accepted"] is False
+    assert "EOrder:Insufficient funds" in report["validation_reasons"]
+    assert "EOrder:Insufficient funds" in report["errors"]

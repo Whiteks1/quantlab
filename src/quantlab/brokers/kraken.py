@@ -229,6 +229,47 @@ class KrakenAccountSnapshotReport:
         }
 
 
+@dataclass(frozen=True)
+class KrakenOrderValidateReport:
+    adapter_name: str
+    generated_at: str
+    authenticated_preflight: KrakenAuthPreflightReport
+    intent: ExecutionIntent
+    policy: ExecutionPolicy
+    local_preflight: ExecutionPreflight
+    validate_payload: dict[str, object] | None
+    remote_validation_called: bool
+    validation_accepted: bool
+    validation_reasons: tuple[str, ...]
+    exchange_response: dict[str, object] | None
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact_type": "quantlab.kraken.order_validate",
+            "adapter_name": self.adapter_name,
+            "generated_at": self.generated_at,
+            "authenticated_preflight": self.authenticated_preflight.to_dict(),
+            "intent": asdict(self.intent),
+            "policy": {
+                "kill_switch_active": self.policy.kill_switch_active,
+                "max_notional_per_order": self.policy.max_notional_per_order,
+                "allowed_symbols": sorted(self.policy.allowed_symbols),
+                "require_account_id": self.policy.require_account_id,
+            },
+            "local_preflight": {
+                "allowed": self.local_preflight.allowed,
+                "reasons": list(self.local_preflight.reasons),
+            },
+            "validate_payload": self.validate_payload,
+            "remote_validation_called": self.remote_validation_called,
+            "validation_accepted": self.validation_accepted,
+            "validation_reasons": list(self.validation_reasons),
+            "exchange_response": self.exchange_response,
+            "errors": list(self.errors),
+        }
+
+
 class KrakenBrokerAdapter(BrokerAdapter):
     """
     First dry-run broker adapter target for QuantLab.
@@ -275,6 +316,15 @@ class KrakenBrokerAdapter(BrokerAdapter):
             policy=policy,
             payload=payload,
         )
+
+    def build_validate_only_payload(self, intent: ExecutionIntent) -> dict[str, object]:
+        return {
+            "pair": _normalize_kraken_pair(intent.symbol),
+            "type": intent.side.lower(),
+            "ordertype": "market",
+            "volume": _format_quantity(intent.quantity),
+            "validate": "true",
+        }
 
     def build_public_preflight_report(
         self,
@@ -527,6 +577,104 @@ class KrakenBrokerAdapter(BrokerAdapter):
             errors=tuple(errors),
         )
 
+    def build_order_validate_report(
+        self,
+        intent: ExecutionIntent,
+        policy: ExecutionPolicy,
+        *,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        api_key_env: str = "KRAKEN_API_KEY",
+        api_secret_env: str = "KRAKEN_API_SECRET",
+        timeout_seconds: float = 10.0,
+        fetch_private_json=None,
+    ) -> KrakenOrderValidateReport:
+        auth_report = self.build_authenticated_preflight_report(
+            api_key=api_key,
+            api_secret=api_secret,
+            api_key_env=api_key_env,
+            api_secret_env=api_secret_env,
+            timeout_seconds=timeout_seconds,
+            fetch_private_json=fetch_private_json,
+        )
+        local_preflight = self.preflight(intent, policy)
+        validate_payload = self.build_validate_only_payload(intent)
+        errors: list[str] = list(auth_report.errors)
+        validation_reasons: list[str] = list(local_preflight.reasons)
+        exchange_response: dict[str, object] | None = None
+        remote_validation_called = False
+        validation_accepted = False
+
+        if not local_preflight.allowed:
+            errors.append("local_preflight_rejected")
+            return KrakenOrderValidateReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                authenticated_preflight=auth_report,
+                intent=intent,
+                policy=policy,
+                local_preflight=local_preflight,
+                validate_payload=validate_payload,
+                remote_validation_called=False,
+                validation_accepted=False,
+                validation_reasons=tuple(_unique_reasons(validation_reasons)),
+                exchange_response=None,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        if not auth_report.authenticated:
+            validation_reasons.append("private_auth_not_ready")
+            return KrakenOrderValidateReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                authenticated_preflight=auth_report,
+                intent=intent,
+                policy=policy,
+                local_preflight=local_preflight,
+                validate_payload=validate_payload,
+                remote_validation_called=False,
+                validation_accepted=False,
+                validation_reasons=tuple(_unique_reasons(validation_reasons)),
+                exchange_response=None,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        try:
+            exchange_response = fetch_kraken_add_order_validate(
+                api_key=api_key or os.getenv(api_key_env, ""),
+                api_secret=api_secret or os.getenv(api_secret_env, ""),
+                payload=validate_payload,
+                timeout_seconds=timeout_seconds,
+                fetch_private_json=fetch_private_json,
+            )
+            remote_validation_called = True
+            response_errors = exchange_response.get("error", []) if isinstance(exchange_response, dict) else []
+            if response_errors:
+                validation_reasons.extend(str(err) for err in response_errors)
+                errors.extend(str(err) for err in response_errors)
+            else:
+                validation_accepted = True
+        except Exception as exc:  # noqa: BLE001
+            remote_validation_called = True
+            failure_reason = f"order_validate_failed:{exc.__class__.__name__}"
+            validation_reasons.append(failure_reason)
+            errors.append(failure_reason)
+
+        return KrakenOrderValidateReport(
+            adapter_name=self.adapter_name,
+            generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+            authenticated_preflight=auth_report,
+            intent=intent,
+            policy=policy,
+            local_preflight=local_preflight,
+            validate_payload=validate_payload,
+            remote_validation_called=remote_validation_called,
+            validation_accepted=validation_accepted,
+            validation_reasons=tuple(_unique_reasons(validation_reasons)),
+            exchange_response=exchange_response,
+            errors=tuple(_unique_reasons(errors)),
+        )
+
 
 def _normalize_kraken_pair(symbol: str) -> str:
     raw = symbol.strip().upper().replace("-", "/")
@@ -577,6 +725,24 @@ def fetch_kraken_extended_balance(
         "/0/private/BalanceEx",
         api_key=api_key,
         api_secret=api_secret,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def fetch_kraken_add_order_validate(
+    *,
+    api_key: str,
+    api_secret: str,
+    payload: dict[str, object],
+    timeout_seconds: float = 10.0,
+    fetch_private_json=None,
+) -> dict[str, object]:
+    fetcher = fetch_private_json or _fetch_private_json
+    return fetcher(
+        "/0/private/AddOrder",
+        api_key=api_key,
+        api_secret=api_secret,
+        payload=payload,
         timeout_seconds=timeout_seconds,
     )
 
