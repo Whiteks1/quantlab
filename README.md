@@ -128,6 +128,7 @@ python main.py --help
 - `--paper-sessions-alerts`: emit a deterministic alert snapshot for paper sessions
 - `--paper-sessions-index`: refresh a shared paper-session index under the paper root
 - `--kraken-preflight-outdir`: persist a read-only Kraken public preflight artifact
+- `--kraken-auth-preflight-outdir`: persist a read-only Kraken authenticated preflight artifact
 - `--kraken-dry-run-outdir`: persist a local Kraken dry-run audit artifact
 - `--kraken-dry-run-session`: persist a canonical broker dry-run session
 - `--broker-dry-runs-list`: inspect broker dry-run sessions under a root
@@ -381,6 +382,12 @@ And it can run a read-only public preflight probe with:
 
 ```bash
 python main.py --kraken-preflight-outdir outputs/broker_preflight/demo --broker-symbol ETH-USD
+```
+
+And it can run a read-only authenticated preflight probe with Kraken credentials available in `KRAKEN_API_KEY` and `KRAKEN_API_SECRET`:
+
+```bash
+python main.py --kraken-auth-preflight-outdir outputs/broker_preflight/auth_demo
 ```
 
 And it can now persist canonical broker dry-run sessions under:

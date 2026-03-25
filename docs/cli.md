@@ -234,6 +234,42 @@ The artifact currently includes:
 
 This surface is read-only and does not use private Kraken authentication.
 
+### `--kraken-auth-preflight-outdir`
+
+Persist a read-only Kraken authenticated preflight artifact:
+
+```bash
+python main.py --kraken-auth-preflight-outdir outputs/broker_preflight/auth_demo
+```
+
+By default this reads credentials from:
+
+- `KRAKEN_API_KEY`
+- `KRAKEN_API_SECRET`
+
+Optional overrides:
+
+- `--kraken-api-key`
+- `--kraken-api-secret`
+- `--kraken-api-key-env`
+- `--kraken-api-secret-env`
+
+This writes:
+
+- `outputs/broker_preflight/auth_demo/broker_auth_preflight.json`
+
+The artifact currently includes:
+
+- whether credentials were present
+- whether private authentication succeeded
+- key name where available
+- permissions snapshot where available
+- restrictions snapshot where available
+- created/updated timestamps where available
+- explicit auth or credential errors
+
+This surface is read-only and does not place or cancel orders.
+
 ### `--kraken-dry-run-outdir`
 
 Persist a local Kraken dry-run audit artifact:
