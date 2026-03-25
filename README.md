@@ -124,6 +124,7 @@ python main.py --help
 - `--paper-sessions-list`: list paper sessions under a root directory
 - `--paper-sessions-show`: inspect a single paper session directory
 - `--paper-sessions-health`: summarize health across paper sessions
+- `--paper-sessions-alerts`: emit a deterministic alert snapshot for paper sessions
 - `--forward-eval`: launch a forward evaluation from a prior run directory
 - `--portfolio-report`: aggregate forward sessions into a portfolio report
 - `--portfolio-compare`: compare allocation modes across forward sessions
@@ -203,6 +204,12 @@ Summarize paper session health:
 
 ```bash
 python main.py --paper-sessions-health outputs/paper_sessions
+```
+
+Emit a paper-session alert snapshot:
+
+```bash
+python main.py --paper-sessions-alerts outputs/paper_sessions --paper-stale-minutes 60
 ```
 
 ### Forward

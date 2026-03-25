@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
 import types
 from pathlib import Path
@@ -7,6 +8,8 @@ from pathlib import Path
 import pytest
 
 from quantlab.cli.paper_sessions import (
+    DEFAULT_PAPER_STALE_MINUTES,
+    build_paper_sessions_alerts,
     build_paper_sessions_health,
     handle_paper_session_commands,
 )
@@ -21,7 +24,8 @@ def paper_sessions_root(tmp_path: Path) -> Path:
     for session_id, status, request_id, created_at, updated_at in [
         ("paper_001", "success", "req_001", "2026-03-25T12:00:00", "2026-03-25T12:05:00"),
         ("paper_002", "failed", "req_002", "2026-03-25T12:10:00", "2026-03-25T12:15:00"),
-        ("paper_003", "running", "req_003", "2026-03-25T12:20:00", "2026-03-25T12:25:00"),
+        ("paper_003", "aborted", "req_003", "2026-03-25T12:20:00", "2026-03-25T12:22:00"),
+        ("paper_004", "running", "req_004", "2026-03-25T12:30:00", "2026-03-25T12:35:00"),
     ]:
         session_dir = root / session_id
         session_dir.mkdir()
@@ -50,8 +54,16 @@ def paper_sessions_root(tmp_path: Path) -> Path:
                     "status": status,
                     "request_id": request_id,
                     "updated_at": updated_at,
-                    "message": "boom" if status == "failed" else None,
-                    "error_type": "DataError" if status == "failed" else None,
+                    "message": (
+                        "boom"
+                        if status == "failed"
+                        else "Aborted by user" if status == "aborted" else None
+                    ),
+                    "error_type": (
+                        "DataError"
+                        if status == "failed"
+                        else "KeyboardInterrupt" if status == "aborted" else None
+                    ),
                 }
             ),
             encoding="utf-8",
@@ -76,6 +88,9 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
     defaults = {
         "paper_sessions_list": None,
         "paper_sessions_show": None,
+        "paper_sessions_health": None,
+        "paper_sessions_alerts": None,
+        "paper_stale_minutes": DEFAULT_PAPER_STALE_MINUTES,
     }
     defaults.update(kwargs)
     return types.SimpleNamespace(**defaults)
@@ -107,13 +122,14 @@ class TestPaperSessionsHealth:
     def test_builds_compact_health_summary(self, paper_sessions_root: Path):
         health = build_paper_sessions_health(paper_sessions_root)
 
-        assert health["total_sessions"] == 3
+        assert health["total_sessions"] == 4
         assert health["status_counts"]["success"] == 1
         assert health["status_counts"]["failed"] == 1
+        assert health["status_counts"]["aborted"] == 1
         assert health["status_counts"]["running"] == 1
-        assert health["latest_session_id"] == "paper_003"
+        assert health["latest_session_id"] == "paper_004"
         assert health["latest_session_status"] == "running"
-        assert health["latest_issue_session_id"] == "paper_003"
+        assert health["latest_issue_session_id"] == "paper_004"
         assert health["latest_issue_status"] == "running"
 
     def test_prints_health_summary(self, paper_sessions_root: Path, capsys):
@@ -124,7 +140,7 @@ class TestPaperSessionsHealth:
         out = capsys.readouterr().out
         assert "total_sessions" in out
         assert "latest_session_id" in out
-        assert "paper_003" in out
+        assert "paper_004" in out
         assert "failed" in out
         assert "running" in out
 
@@ -155,6 +171,48 @@ class TestPaperSessionsShow:
         args = _make_args(paper_sessions_show=str(invalid_dir))
         with pytest.raises(ConfigError):
             handle_paper_session_commands(args)
+
+
+class TestPaperSessionsAlerts:
+    def test_builds_machine_readable_alert_snapshot(self, paper_sessions_root: Path):
+        alerts = build_paper_sessions_alerts(
+            paper_sessions_root,
+            stale_after_minutes=60,
+            now=dt.datetime.fromisoformat("2026-03-25T13:45:00"),
+        )
+
+        assert alerts["alert_status"] == "critical"
+        assert alerts["has_alerts"] is True
+        assert alerts["status_counts"]["success"] == 1
+        assert alerts["status_counts"]["failed"] == 1
+        assert alerts["status_counts"]["aborted"] == 1
+        assert alerts["status_counts"]["running"] == 1
+        assert alerts["latest_success_session_id"] == "paper_001"
+        assert alerts["latest_alert_session_id"] == "paper_004"
+        assert alerts["alert_counts"]["critical"] == 1
+        assert alerts["alert_counts"]["warning"] == 2
+        assert {entry["alert_code"] for entry in alerts["alerts"]} == {
+            "PAPER_SESSION_FAILED",
+            "PAPER_SESSION_ABORTED",
+            "PAPER_SESSION_STALE",
+        }
+
+    def test_prints_alert_snapshot(self, paper_sessions_root: Path, capsys):
+        args = _make_args(
+            paper_sessions_alerts=str(paper_sessions_root),
+            paper_stale_minutes=60,
+        )
+        result = handle_paper_session_commands(args)
+        assert result is True
+
+        out = capsys.readouterr().out
+        assert '"alert_status"' in out
+        assert '"PAPER_SESSION_FAILED"' in out
+        assert '"PAPER_SESSION_STALE"' in out
+
+    def test_invalid_stale_threshold_raises_config_error(self, paper_sessions_root: Path):
+        with pytest.raises(ConfigError):
+            build_paper_sessions_alerts(paper_sessions_root, stale_after_minutes=0)
 
 
 class TestNoMatch:

@@ -175,6 +175,21 @@ The health summary is operator-facing and currently includes:
 - latest session id / activity time
 - latest non-success session if present
 
+### `--paper-sessions-alerts`
+
+Emit a deterministic alert snapshot for paper sessions:
+
+```bash
+python main.py --paper-sessions-alerts outputs/paper_sessions --paper-stale-minutes 60
+```
+
+The alert snapshot is machine-readable JSON and currently makes these situations explicit:
+
+- latest success visibility
+- failed sessions
+- aborted sessions
+- running sessions that have become stale relative to the chosen threshold
+
 ## 5. Forward Evaluation
 
 ### `--forward-eval`
