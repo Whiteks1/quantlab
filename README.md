@@ -4,19 +4,35 @@ QuantLab is a CLI-first quantitative research system for running reproducible st
 
 It is intentionally split from Stepbit:
 
-- QuantLab is the execution engine for research, artifacts, and reporting.
-- Stepbit is the orchestration/control layer for automation, scheduling, and higher-level workflows.
+- QuantLab is the primary system for research, paper-trading discipline, execution safety, and future broker-connected operation.
+- Stepbit is an optional external system that can provide AI, reasoning, workflow, and automation capabilities.
+
+The architectural rule is simple:
+
+- QuantLab remains autonomous
+- Stepbit does not govern QuantLab
+- QuantLab may consume Stepbit capabilities through a narrow, reversible boundary
 
 ## Current Status
 
-QuantLab is currently in **Stage O - Stepbit Automation Readiness**.
+QuantLab is currently prioritizing **Stage C.1 - Paper Trading Operationalization**.
 
-The active goal is to keep the execution surface stable for local automation and machine-to-machine integration:
+The primary goal is to turn the existing paper-trading capabilities into an operationally disciplined layer:
+
+- stable paper session lifecycle
+- operator-facing traceability and session health
+- clearer distinction between research runs and paper sessions
+- stronger confidence in repeated paper operation before real broker work
+
+A secondary boundary track remains active:
 
 - stable `run` and `sweep` behavior
 - stable `report.json.machine_contract`
 - automatic refresh of `outputs/runs/runs_index.*`
 - reliable health/version surfaces via `--check` and `--version`
+
+External integration work remains subordinate to QuantLab-owned priorities.
+Stepbit-facing hardening is valid when it reduces real boundary friction, but it does not set the product roadmap.
 
 Known technical debt still tracked internally:
 
@@ -112,6 +128,7 @@ python main.py --help
 See also:
 
 - [docs/cli.md](./docs/cli.md)
+- [docs/workflow-operativo-codex.md](./docs/workflow-operativo-codex.md)
 - [docs/run-artifact-contract.md](./docs/run-artifact-contract.md)
 - [docs/stepbit-io-v1.md](./docs/stepbit-io-v1.md)
 

@@ -1,9 +1,10 @@
 # Current State - QuantLab
 
 ## Active Stage
-- **Stage**: Stage O — Stepbit Automation Readiness
+- **Stage**: Stage C.1 — Paper Trading Operationalization
 - **Last Updated**: 2026-03-25
-- **Focus**: Stage O is centered on execution-surface stability for local automation and machine-to-machine integration.
+- **Focus**: Stage C.1 is centered on turning the existing paper-oriented flows into a repeatable operational paper-trading discipline.
+- **Authority Note**: Stepbit-facing integration remains a secondary boundary track. QuantLab stays autonomous and external consumer needs do not override QuantLab-owned priorities.
 
 ## Completed/Planned Stages
 
@@ -23,16 +24,17 @@
 | M.3 | Portfolio Selection / Session Inclusion Rules | ✅ Done |
 | M.4 | Portfolio Mode Comparison | ✅ Done |
 | N | Run Lifecycle Management (`quantlab runs`) | ✅ Done |
+| C.1 | Paper Trading Operationalization | 🟨 In Progress |
 | O | Stepbit Automation Readiness (I/O & CLI Stability) | 🟨 In Progress |
 
 ## Active Work
-- **Stage Open**: Stage O is the current focus.
-- **Current Priority**: Keep the public execution contract stable for the next integration step.
+- **Stage Open**: Stage C.1 is the primary product focus.
+- **Current Priority**: Strengthen paper-session discipline, traceability, and operator confidence before advancing into real execution safety work.
 - **Active Focus Areas**:
-  - stabilize plain `run` output behavior around the canonical run artifact model
-  - preserve `sweep` contract stability as the existing machine-facing automation path
-  - keep `report.json.machine_contract` as the shared canonical machine-facing surface for `run` and `sweep`
-  - keep `outputs/runs/runs_index.*` refreshed automatically after successful `run`, `sweep`, and `forward` executions
+  - define a clearer paper-session lifecycle and operator expectations
+  - strengthen distinction between research artifacts and paper-trading artifacts
+  - make paper-mode failures and health signals more explicit
+  - keep the external execution contract stable only where real consumer friction appears
 - **Implemented Direction**:
   - canonical run artifacts now center on `metadata.json`, `config.json`, `metrics.json`, and `report.json`
   - successful plain `run` executions now write that canonical artifact pack under `outputs/runs/<run_id>/`
@@ -42,6 +44,7 @@
   - `main.py --check` returns a deterministic JSON health summary for runtime preflight
   - the CLI keeps the existing `--json-request` `sweep` path as the smoke-validation surface
   - the shared `runs_index.csv/json/md` registry is refreshed automatically after successful run-producing commands
+  - Stage O remains useful, but it does not set the next QuantLab-owned milestone
 
 ## Known Issues / Technical Debt
 - Duplicate workflow files in `.agents/workflows/`: `strategy-research.md` vs `strategy_research.md` — the underscore version is stale.
