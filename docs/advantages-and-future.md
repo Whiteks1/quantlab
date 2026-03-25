@@ -1,43 +1,101 @@
-# Sinergia Stepbit + QuantLab: Ventajas y Futuro
+# Stepbit As Optional AI Augmentation For QuantLab
 
-Este documento detalla los beneficios actuales de integrar **Stepbit-core** en el flujo de trabajo de **QuantLab** y qué desarrollos adicionales podrían llevar esta colaboración al siguiente nivel.
+This document describes the value Stepbit can add to QuantLab without becoming its controlling authority.
 
-## 1. Ventajas Actuales de utilizar Stepbit-core
+The architectural rule is:
 
-### A. Motor de Razonamiento Autónomo (Reasoning Engine)
-- **Ventaja**: El usuario no necesita programar scripts de "grid search" complejos. Stepbit puede razonar sobre los resultados de un backtest ("El Sharpe es alto pero el drawdown es inaceptable") y proponer cambios en la estrategia de forma lógica.
-- **Impacto**: Acelera la fase de descubrimiento de estrategias de días a minutos.
+- Stepbit may amplify QuantLab
+- Stepbit must not define QuantLab
 
-### B. Sistema de Eventos Global (Event Bus)
-- **Ventaja**: Permite desacoplar la detección de señales (QuantLab) de la ejecución de lógica compleja (Stepbit). 
-- **Impacto**: Un script de QuantLab puede emitir un evento simple y Stepbit se encarga de la orquestación distribuida, alertas y logs duraderos.
+## 1. Current Benefits Of Connecting Stepbit
 
-### C. Persistencia Analítica (DuckDB)
-- **Ventaja**: Ambos sistemas hablan el mismo idioma (SQL sobre DuckDB). 
-- **Impacto**: Stepbit puede leer directamente las tablas de resultados de QuantLab para realizar análisis comparativos entre miles de ejecuciones sin necesidad de costosos procesos de exportación/importación.
+### A. Reasoning-Assisted Analysis
 
-### D. Distribución Nativa (Controller/Workers)
-- **Ventaja**: Stepbit ya tiene la infraestructura para delegar tareas a otros nodos.
-- **Impacto**: QuantLab escala horizontalmente de forma gratuita. Un "Sweep" masivo se reparte entre todos los equipos de la red local automáticamente.
+Stepbit can help interpret QuantLab outputs:
 
----
+- compare competing runs
+- explain trade-offs between return, drawdown, and stability
+- suggest follow-up experiments
 
-## 2. Desarrollos Futuros para Mejorar la Interacción
+Impact:
 
-Para que la unión sea aún más potente, se proponen los siguientes avances técnicos:
+- faster research iteration without moving the research core out of QuantLab
 
-### A. Puente de Python Persistente (Persistent Python Bridge)
-- **Problema actual**: El comando MCP lanza un nuevo proceso de Python cada vez (latencia de arranque).
-- **Mejora**: Un servicio en segundo plano (Python-side) que mantenga el entorno cargado y responda a peticiones vía gRPC o Sockets, reduciendo la latencia de ejecución a milisegundos.
+### B. Workflow Assistance
 
-### B. Caché de Datos Compartida
-- **Problema actual**: Cada sistema lee los datos OHLC de disco de forma independiente.
-- **Mejora**: Una capa de memoria compartida (Shared Memory) donde Stepbit y QuantLab puedan acceder a los mismos buffers de datos en tiempo real, vital para estrategias de alta frecuencia o de reacción rápida.
+Stepbit can automate auxiliary workflows around QuantLab:
 
-### C. Visualización en Tiempo Real vía SSE
-- **Problema actual**: Las gráficas de QuantLab son estáticas (.png).
-- **Mejora**: Integrar el sistema de streaming SSE de Stepbit con las librerías de visualización para que el usuario vea cómo evoluciona la "equity curve" de un backtest o un forward-test en vivo desde el dashboard de Stepbit.
+- post-run analysis
+- report interpretation
+- recurring research routines
+- human-in-the-loop workflow guidance
 
-### D. Auto-Generación de Interfaces de Usuario
-- **Problema actual**: La interacción es principalmente vía CLI o Markdown.
-- **Mejora**: Utilizar los esquemas JSON de las estrategias de QuantLab para que Stepbit genere automáticamente formularios de entrada y paneles de control dinámicos para cada experimento.
+Impact:
+
+- less manual glue work around the QuantLab core
+
+### C. MCP-Based Access To Stable Artifacts
+
+Stepbit can consume QuantLab's machine-facing surfaces:
+
+- canonical artifacts
+- `report.json.machine_contract`
+- health and preflight surfaces
+- run history outputs
+
+Impact:
+
+- cleaner external consumption without making QuantLab dependent on Stepbit
+
+## 2. What This Integration Should Not Become
+
+Stepbit should not:
+
+- own QuantLab's internal lifecycle
+- own QuantLab's risk logic
+- become the sovereign operator of QuantLab
+- absorb QuantLab's trading authority
+
+If those boundaries are crossed, the integration stops being optional and starts eroding QuantLab autonomy.
+
+## 3. Future Improvements That Respect The Boundary
+
+### A. Better External Analysis Flows
+
+- richer AI interpretation of research artifacts
+- comparison narratives over multiple runs
+- structured strategy review workflows
+
+### B. Cleaner Operator Interfaces
+
+- dashboards over QuantLab outputs
+- better visualization of paper sessions and live-safe telemetry
+- guided execution review flows
+
+### C. Reusable AI Workflow Templates
+
+- post-run review templates
+- paper-trading oversight workflows
+- broker dry-run validation checklists
+
+## 4. Boundary Rule For Future Work
+
+Future integration work is good when it:
+
+- improves the usefulness of QuantLab outputs
+- improves operator understanding
+- reduces friction at the external boundary
+
+Future integration work is bad when it:
+
+- makes QuantLab dependent on Stepbit to remain coherent
+- relocates core authority away from QuantLab
+- turns MCP into a total-control channel
+
+## 5. Strategic Conclusion
+
+The strongest future for both systems is:
+
+- QuantLab continues to mature as an autonomous research, paper-trading, and future broker-execution system
+- Stepbit remains an optional AI and workflow augmentation layer
+- the integration stays contract-based, reversible, and non-invasive

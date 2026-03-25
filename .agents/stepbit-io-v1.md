@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This document defines the formal communication contract between **Stepbit-core** (Orchestrator) and **QuantLab** (Research Engine).
+This document defines the formal communication contract between **Stepbit-core** (external AI/workflow consumer) and **QuantLab** (research and execution system).
 
-QuantLab is a research-first, CLI-driven system. This contract provides a stable, machine-readable wrapper for headless integration.
+QuantLab is a research-first, CLI-driven system that remains autonomous. This contract provides a stable, machine-readable wrapper for optional headless integration.
 
 Each field and section is labeled with its current implementation status:
 
@@ -17,7 +17,7 @@ Each field and section is labeled with its current implementation status:
 
 ## 1. Invocation
 
-Stepbit invokes QuantLab as a subprocess via its CLI.
+Stepbit invokes QuantLab as an external consumer via its CLI boundary.
 
 ```bash
 <EXPLICIT_PYTHON_INTERPRETER> main.py --json-request '<JSON_PAYLOAD>'
