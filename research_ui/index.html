@@ -20,7 +20,7 @@
                     <span class="logo-icon">QL</span>
                     <div>
                         <div class="logo-text">QuantLab</div>
-                        <div class="version">Research Dashboard</div>
+                        <div class="version">Stage C.1 Surface</div>
                     </div>
                 </div>
             </div>
@@ -55,8 +55,8 @@
             </nav>
 
             <section class="sidebar-panel">
-                <div class="panel-label">Focus</div>
-                <div class="panel-text">Read-only surface for `runs_index.json` and per-run research artifacts.</div>
+                <div class="panel-label">Stage Focus</div>
+                <div class="panel-text">Read-only surface for registry triage plus paper-session visibility during `Stage C.1`.</div>
             </section>
 
             <div class="sidebar-footer">
@@ -71,8 +71,8 @@
         <main class="content">
             <header class="content-header">
                 <div>
-                    <div class="eyebrow">Quantitative Research Surface</div>
-                    <div class="breadcrumb" id="breadcrumb">Run Registry</div>
+                    <div class="eyebrow">QuantLab Sovereign Interface</div>
+                    <div class="breadcrumb" id="breadcrumb">Research Registry + Paper Ops</div>
                 </div>
 
                 <div class="header-actions">
@@ -92,7 +92,7 @@
                             </svg>
                             Sync Registry
                         </button>
-                        <span class="action-hint">Reloads `outputs/runs/runs_index.json`</span>
+                        <span class="action-hint">Reloads runs registry and paper-session health</span>
                     </div>
                 </div>
             </header>
@@ -104,8 +104,9 @@
                             <div class="hero-kicker">
                                 <span class="pill pill-live" id="hero-registry-pill">Registry online</span>
                                 <span class="pill pill-static" id="hero-root-pill">Source: outputs/runs</span>
+                                <span class="pill pill-stage">Stage C.1 active</span>
                             </div>
-                            <h1>Research runs with faster triage, cleaner read paths, and deeper context.</h1>
+                            <h1>Research context for strategy triage, with paper operations finally visible in the same room.</h1>
                             <p id="hero-summary">Loading registry snapshot...</p>
                         </div>
 
@@ -116,9 +117,9 @@
                                 <div class="insight-meta" id="hero-best-meta">Waiting for registry</div>
                             </article>
                             <article class="insight-card">
-                                <div class="insight-label">Mode Mix</div>
-                                <div class="mode-strip" id="mode-strip"></div>
-                                <div class="insight-meta" id="hero-mode-meta">No runs loaded</div>
+                                <div class="insight-label">Paper Ops</div>
+                                <div class="paper-strip" id="paper-strip"></div>
+                                <div class="insight-meta" id="paper-health-meta">Paper session health not loaded yet</div>
                             </article>
                         </div>
                     </div>
@@ -131,7 +132,7 @@
                         </div>
 
                         <div class="stat-card glass">
-                            <div class="stat-label">Executions (24h)</div>
+                            <div class="stat-label">Fresh Runs (24h)</div>
                             <div class="stat-value" id="stats-active-sessions">-</div>
                             <div class="stat-foot">Recent activity pulse</div>
                         </div>
@@ -146,6 +147,32 @@
                             <div class="stat-label">Average Return</div>
                             <div class="stat-value" id="stats-avg-return">-</div>
                             <div class="stat-foot" id="stats-drawdown-floor">Drawdown floor: -</div>
+                        </div>
+                    </div>
+
+                    <div class="ops-overview">
+                        <div class="ops-card glass">
+                            <div class="stat-label">Paper Sessions</div>
+                            <div class="stat-value" id="paper-total-sessions">-</div>
+                            <div class="stat-foot" id="paper-availability">Waiting for paper root</div>
+                        </div>
+
+                        <div class="ops-card glass">
+                            <div class="stat-label">Open Paper Issues</div>
+                            <div class="stat-value" id="paper-open-issues">-</div>
+                            <div class="stat-foot">Failed, aborted, or still running</div>
+                        </div>
+
+                        <div class="ops-card glass">
+                            <div class="stat-label">Latest Session</div>
+                            <div class="stat-value" id="paper-latest-session">-</div>
+                            <div class="stat-foot" id="paper-latest-session-meta">No paper activity yet</div>
+                        </div>
+
+                        <div class="ops-card glass">
+                            <div class="stat-label">Latest Issue</div>
+                            <div class="stat-value" id="paper-latest-issue">-</div>
+                            <div class="stat-foot" id="paper-latest-issue-meta">No visible issues</div>
                         </div>
                     </div>
 

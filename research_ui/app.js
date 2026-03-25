@@ -1,5 +1,6 @@
 const CONFIG = {
     registryPath: "/outputs/runs/runs_index.json",
+    paperHealthPath: "/api/paper-sessions-health",
     refreshInterval: 30000,
     detailArtifacts: ["report.json", "run_report.json"],
 };
@@ -16,6 +17,7 @@ const state = {
     isLoading: false,
     currentRunId: null,
     detailCache: new Map(),
+    paperHealth: null,
 };
 
 const elements = {
@@ -48,11 +50,18 @@ const elements = {
     heroBestMeta: document.getElementById("hero-best-meta"),
     heroRootPill: document.getElementById("hero-root-pill"),
     heroRegistryPill: document.getElementById("hero-registry-pill"),
-    heroModeMeta: document.getElementById("hero-mode-meta"),
-    modeStrip: document.getElementById("mode-strip"),
+    paperStrip: document.getElementById("paper-strip"),
+    paperHealthMeta: document.getElementById("paper-health-meta"),
     modePills: document.getElementById("mode-pills"),
     tableSummary: document.getElementById("table-summary"),
     toastContainer: document.getElementById("toast-container"),
+    paperTotalSessions: document.getElementById("paper-total-sessions"),
+    paperOpenIssues: document.getElementById("paper-open-issues"),
+    paperLatestSession: document.getElementById("paper-latest-session"),
+    paperLatestSessionMeta: document.getElementById("paper-latest-session-meta"),
+    paperLatestIssue: document.getElementById("paper-latest-issue"),
+    paperLatestIssueMeta: document.getElementById("paper-latest-issue-meta"),
+    paperAvailability: document.getElementById("paper-availability"),
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -95,7 +104,10 @@ async function fetchRegistry(showToast = false, silent = false) {
     setRegistryState("syncing");
 
     try {
-        const response = await fetch(`${CONFIG.registryPath}?t=${Date.now()}`);
+        const [response] = await Promise.all([
+            fetch(`${CONFIG.registryPath}?t=${Date.now()}`),
+            fetchPaperHealth(true),
+        ]);
         if (!response.ok) {
             throw new Error(`Artifact not found: ${response.status}`);
         }
@@ -125,6 +137,27 @@ async function fetchRegistry(showToast = false, silent = false) {
     } finally {
         state.isLoading = false;
         renderTable();
+    }
+}
+
+async function fetchPaperHealth(silent = false) {
+    try {
+        const response = await fetch(`${CONFIG.paperHealthPath}?t=${Date.now()}`);
+        if (!response.ok) {
+            throw new Error(`Paper session health unavailable: ${response.status}`);
+        }
+        state.paperHealth = await response.json();
+    } catch (error) {
+        state.paperHealth = {
+            status: "error",
+            available: false,
+            total_sessions: 0,
+            status_counts: {},
+            message: error.message,
+        };
+        if (!silent) {
+            notify(`Paper health fetch failed: ${error.message}`, "error");
+        }
     }
 }
 
@@ -192,7 +225,8 @@ function updateDashboard() {
     const avgReturn = average(state.runs.map((run) => run.total_return).filter(isNumber));
     const minDrawdown = state.runs.map((run) => run.max_drawdown).filter(isNumber).reduce((min, value) => Math.min(min, value), Infinity);
     const activeRuns = state.runs.filter((run) => run.created_at && Date.now() - new Date(run.created_at).getTime() <= 86400000).length;
-    const modeCounts = state.runs.reduce((acc, run) => ({ ...acc, [run.mode || "unknown"]: (acc[run.mode || "unknown"] || 0) + 1 }), {});
+    const paperHealth = state.paperHealth || { total_sessions: 0, status_counts: {} };
+    const openPaperIssues = statusCount(paperHealth, "failed") + statusCount(paperHealth, "aborted") + statusCount(paperHealth, "running");
 
     elements.totalRuns.textContent = String(state.nRuns);
     elements.activeSessions.textContent = String(activeRuns);
@@ -201,13 +235,24 @@ function updateDashboard() {
     elements.avgReturn.textContent = formatPercent(avgReturn);
     elements.drawdownFloor.textContent = `Drawdown floor: ${isFinite(minDrawdown) ? formatPercent(minDrawdown) : "-"}`;
     elements.generatedAt.textContent = `Artifact generated: ${formatDateTime(state.generatedAt)}`;
-    elements.heroSummary.textContent = state.runs.length ? `${state.filteredRuns.length} visible of ${state.nRuns} indexed runs. Drill into canonical artifacts without leaving the dashboard.` : "No indexed runs available yet.";
+    elements.heroSummary.textContent = state.runs.length
+        ? `${state.filteredRuns.length} visible of ${state.nRuns} indexed runs, with ${paperHealth.total_sessions || 0} paper sessions visible for operational context.`
+        : "No indexed runs available yet. Paper-session health will appear when the local root exists.";
     elements.heroBestRun.textContent = topRun ? topRun.run_id : "No best run yet";
     elements.heroBestMeta.textContent = topRun ? `${titleCase(topRun.mode)} · Sharpe ${formatNumber(topRun.sharpe_simple)} · Return ${formatPercent(topRun.total_return)}` : "Waiting for usable metrics";
-    elements.heroModeMeta.textContent = state.runs.length ? `${Object.keys(modeCounts).length} active modes in the current registry` : "Mode distribution appears after sync";
     elements.heroRootPill.textContent = "Source: outputs/runs";
     elements.tableSummary.textContent = state.runs.length ? `Sorted by ${titleCase(state.sortField.replace(/_/g, " "))} (${state.sortDir}). ${state.filteredRuns.length} rows visible.` : "Registry rows will appear here after the first successful sync.";
-    elements.modeStrip.innerHTML = Object.entries(modeCounts).sort((a, b) => b[1] - a[1]).map(([mode, count]) => `<div class="mode-chip"><span>${titleCase(mode)}</span><span class="mode-chip-bar" style="width:${Math.max(18, count * 28)}px"></span><strong>${count}</strong></div>`).join("") || `<span class="mode-chip muted">No active modes</span>`;
+    elements.paperStrip.innerHTML = buildPaperStrip(paperHealth);
+    elements.paperHealthMeta.textContent = buildPaperMeta(paperHealth);
+    elements.paperTotalSessions.textContent = String(paperHealth.total_sessions || 0);
+    elements.paperOpenIssues.textContent = String(openPaperIssues);
+    elements.paperLatestSession.textContent = paperHealth.latest_session_id || "No sessions";
+    elements.paperLatestSessionMeta.textContent = [titleCase(paperHealth.latest_session_status || "unknown"), formatDateTime(paperHealth.latest_session_at)].filter((value) => value && value !== "-").join(" · ") || "No paper activity yet";
+    elements.paperLatestIssue.textContent = paperHealth.latest_issue_session_id || "No visible issues";
+    elements.paperLatestIssueMeta.textContent = paperHealth.latest_issue_session_id
+        ? [titleCase(paperHealth.latest_issue_status || "unknown"), paperHealth.latest_issue_error_type || null, formatDateTime(paperHealth.latest_issue_at)].filter(Boolean).join(" · ")
+        : "Failed, aborted, or running sessions will surface here";
+    elements.paperAvailability.textContent = paperHealth.available ? `Root: ${normalizeDisplayPath(paperHealth.root_dir || "outputs/paper_sessions")}` : (paperHealth.message || "No paper root found yet");
 }
 
 function renderTable() {
@@ -249,7 +294,7 @@ function route() {
     state.currentRunId = null;
     elements.views.runs.classList.add("active");
     elements.navItems.runs.classList.add("active");
-    elements.breadcrumb.textContent = "Run Registry";
+    elements.breadcrumb.textContent = "Research Registry + Paper Ops";
 }
 
 async function loadRunDetail(runId, silent = false) {
@@ -406,12 +451,8 @@ function notify(message, type = "info") {
 }
 
 function normalizePath(path) { return `/${String(path).replace(/\\/g, "/").replace(/^\.?\//, "")}`; }
-function preferredReportHref(run) {
-    const markdown = run.mode === "grid" || run.mode === "walkforward" || run.mode === "sweep"
-        ? "run_report.md"
-        : "report.md";
-    return `${run.path}/${markdown}`;
-}
+function normalizeDisplayPath(path) { return String(path || "").replace(/\\/g, "/"); }
+function preferredReportHref(run) { return `${run.path}/run_report.md`; }
 function toNumber(value) { const number = Number(value); return Number.isFinite(number) ? number : null; }
 function average(values) { return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null; }
 function isNumber(value) { return typeof value === "number" && Number.isFinite(value); }
@@ -425,3 +466,26 @@ function titleCase(value) { return String(value || "").split(/[_\s-]+/).filter(B
 function escapeHtml(value) { return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
 function modeBadge(mode) { return mode === "grid" || mode === "sweep" ? "badge-purple" : mode === "walkforward" || mode === "forward" ? "badge-green" : "badge-blue"; }
 function tone(value, positiveIsGood) { if (value == null) { return "tone-neutral"; } return positiveIsGood ? (value >= 0 ? "tone-positive" : "tone-negative") : (value <= -0.15 ? "tone-negative" : "tone-positive"); }
+function statusCount(health, key) { return Number(health?.status_counts?.[key] || 0); }
+function buildPaperStrip(health) {
+    if (!health?.available && !health?.total_sessions) {
+        return `<span class="paper-status-pill is-muted">No paper root yet</span>`;
+    }
+    const statuses = [
+        ["success", statusCount(health, "success"), "is-good"],
+        ["failed", statusCount(health, "failed"), "is-bad"],
+        ["aborted", statusCount(health, "aborted"), "is-warning"],
+        ["running", statusCount(health, "running"), "is-live"],
+    ].filter(([, count]) => count > 0);
+    return statuses.length
+        ? statuses.map(([label, count, toneClass]) => `<span class="paper-status-pill ${toneClass}"><strong>${count}</strong>${titleCase(label)}</span>`).join("")
+        : `<span class="paper-status-pill is-muted">No paper sessions yet</span>`;
+}
+function buildPaperMeta(health) {
+    if (!health?.available) {
+        return health?.message || "Paper session health will appear when outputs/paper_sessions exists";
+    }
+    const latestId = health.latest_session_id || "no sessions";
+    const latestState = titleCase(health.latest_session_status || "unknown");
+    return `Latest paper session: ${latestId} · ${latestState}`;
+}

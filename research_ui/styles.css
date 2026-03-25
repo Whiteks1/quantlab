@@ -15,6 +15,7 @@
     --font-ui: "Inter", "Segoe UI", sans-serif;
     --font-mono: "IBM Plex Mono", monospace;
     --font-display: "Space Grotesk", sans-serif;
+    --paper: #9ae870;
 }
 
 * {
@@ -463,6 +464,12 @@ a {
     border-color: rgba(95, 209, 194, 0.24);
 }
 
+.pill-stage {
+    background: rgba(154, 232, 112, 0.12);
+    color: var(--paper);
+    border-color: rgba(154, 232, 112, 0.22);
+}
+
 .hero-insights {
     flex-direction: column;
     gap: 14px;
@@ -497,7 +504,8 @@ a {
 }
 
 .mode-strip,
-.artifact-list {
+.artifact-list,
+.paper-strip {
     display: grid;
     gap: 10px;
 }
@@ -519,14 +527,79 @@ a {
     justify-content: center;
 }
 
+.ops-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
+    padding: 18px;
+    min-width: 0;
+}
+
+.ops-card::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(154, 232, 112, 0.7), rgba(95, 209, 194, 0));
+}
+
+.paper-strip {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.paper-status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 11px 13px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.035);
+    color: var(--text);
+}
+
+.paper-status-pill strong {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.paper-status-pill.is-good {
+    border-color: rgba(95, 209, 194, 0.22);
+    color: #9ff0e3;
+}
+
+.paper-status-pill.is-bad {
+    border-color: rgba(240, 107, 107, 0.24);
+    color: #ffb3b3;
+}
+
+.paper-status-pill.is-warning {
+    border-color: rgba(240, 179, 93, 0.24);
+    color: #ffd18b;
+}
+
+.paper-status-pill.is-live {
+    border-color: rgba(154, 232, 112, 0.24);
+    color: var(--paper);
+}
+
+.paper-status-pill.is-muted {
+    justify-content: center;
+    color: var(--muted);
+}
+
 .stats-overview,
 .metric-grid,
-.detail-grid {
+.detail-grid,
+.ops-overview {
     gap: 16px;
 }
 
 .stats-overview,
-.metric-grid {
+.metric-grid,
+.ops-overview {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
     margin-bottom: 22px;
