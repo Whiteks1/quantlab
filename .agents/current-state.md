@@ -53,6 +53,7 @@
   - Stage D.1 now has a first dry-run `KrakenBrokerAdapter` built on that boundary
   - Kraken dry-run can now materialize a local `broker_dry_run.json` audit artifact
   - broker dry-run now supports canonical sessions and a shared registry under `outputs/broker_dry_runs/`
+  - Kraken preflight can now materialize a read-only public `broker_preflight.json` artifact
 
 
 ## Known Issues / Technical Debt

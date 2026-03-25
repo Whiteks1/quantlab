@@ -209,6 +209,31 @@ The index is intentionally separate from `outputs/runs/runs_index.*` and is mean
 
 ## 5. Broker Dry-Run
 
+### `--kraken-preflight-outdir`
+
+Persist a read-only Kraken public preflight artifact:
+
+```bash
+python main.py --kraken-preflight-outdir outputs/broker_preflight/demo --broker-symbol ETH-USD
+```
+
+This writes:
+
+- `outputs/broker_preflight/demo/broker_preflight.json`
+
+The artifact currently includes:
+
+- adapter name
+- generated timestamp
+- input and normalized symbol
+- public API reachability
+- server time snapshot
+- pair support result against Kraken public asset-pair metadata
+- matched pair identifiers where available
+- explicit errors when support or reachability checks fail
+
+This surface is read-only and does not use private Kraken authentication.
+
 ### `--kraken-dry-run-outdir`
 
 Persist a local Kraken dry-run audit artifact:

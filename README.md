@@ -127,6 +127,7 @@ python main.py --help
 - `--paper-sessions-health`: summarize health across paper sessions
 - `--paper-sessions-alerts`: emit a deterministic alert snapshot for paper sessions
 - `--paper-sessions-index`: refresh a shared paper-session index under the paper root
+- `--kraken-preflight-outdir`: persist a read-only Kraken public preflight artifact
 - `--kraken-dry-run-outdir`: persist a local Kraken dry-run audit artifact
 - `--kraken-dry-run-session`: persist a canonical broker dry-run session
 - `--broker-dry-runs-list`: inspect broker dry-run sessions under a root
@@ -374,6 +375,12 @@ QuantLab can now also materialize a local Kraken dry-run review artifact with:
 
 ```bash
 python main.py --kraken-dry-run-outdir outputs/broker_dry_runs/demo --broker-symbol ETH-USD --broker-side buy --broker-quantity 0.25 --broker-notional 500 --broker-account-id acct_demo --broker-max-notional 1000 --broker-allowed-symbols ETH/USD,BTC/USD
+```
+
+And it can run a read-only public preflight probe with:
+
+```bash
+python main.py --kraken-preflight-outdir outputs/broker_preflight/demo --broker-symbol ETH-USD
 ```
 
 And it can now persist canonical broker dry-run sessions under:
