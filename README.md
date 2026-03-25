@@ -21,6 +21,7 @@ The primary goal is to turn the existing paper-trading capabilities into an oper
 
 - stable paper session lifecycle
 - operator-facing traceability and session health
+- public operator guidance for repeated paper-session use
 - clearer distinction between research runs and paper sessions
 - stronger confidence in repeated paper operation before real broker work
 
@@ -132,6 +133,7 @@ python main.py --help
 See also:
 
 - [docs/cli.md](./docs/cli.md)
+- [docs/paper-session-runbook.md](./docs/paper-session-runbook.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/workflow-operativo-codex.md](./docs/workflow-operativo-codex.md)
 - [docs/run-artifact-contract.md](./docs/run-artifact-contract.md)
@@ -211,6 +213,10 @@ Emit a paper-session alert snapshot:
 ```bash
 python main.py --paper-sessions-alerts outputs/paper_sessions --paper-stale-minutes 60
 ```
+
+Operational guidance:
+
+- see [docs/paper-session-runbook.md](./docs/paper-session-runbook.md) for the recommended paper-session operating loop and response guidance
 
 ### Forward
 
