@@ -1,6 +1,8 @@
 const CONFIG = {
     registryPath: "/outputs/runs/runs_index.json",
+    paperHealthPath: "/api/paper-sessions-health",
     refreshInterval: 30000,
+    staleRegistryMs: 2 * 60 * 60 * 1000,
     detailArtifacts: ["report.json", "run_report.json"],
 };
 
@@ -16,6 +18,9 @@ const state = {
     isLoading: false,
     currentRunId: null,
     detailCache: new Map(),
+    paperHealth: null,
+    lastRegistrySyncAt: null,
+    nextRefreshDueAt: null,
 };
 
 const elements = {
@@ -30,6 +35,8 @@ const elements = {
     searchInput: document.getElementById("run-search"),
     modeFilter: document.getElementById("filter-mode"),
     refreshBtn: document.getElementById("refresh-data"),
+    clearFiltersBtn: document.getElementById("clear-filters"),
+    syncMeta: document.getElementById("sync-meta"),
     breadcrumb: document.getElementById("breadcrumb"),
     views: {
         runs: document.getElementById("run-index-view"),
@@ -50,13 +57,24 @@ const elements = {
     heroRegistryPill: document.getElementById("hero-registry-pill"),
     heroModeMeta: document.getElementById("hero-mode-meta"),
     modeStrip: document.getElementById("mode-strip"),
+    paperStrip: document.getElementById("paper-strip"),
+    paperHealthMeta: document.getElementById("paper-health-meta"),
     modePills: document.getElementById("mode-pills"),
     tableSummary: document.getElementById("table-summary"),
+    filterSummary: document.getElementById("filter-summary"),
     toastContainer: document.getElementById("toast-container"),
+    paperTotalSessions: document.getElementById("paper-total-sessions"),
+    paperOpenIssues: document.getElementById("paper-open-issues"),
+    paperLatestSession: document.getElementById("paper-latest-session"),
+    paperLatestSessionMeta: document.getElementById("paper-latest-session-meta"),
+    paperLatestIssue: document.getElementById("paper-latest-issue"),
+    paperLatestIssueMeta: document.getElementById("paper-latest-issue-meta"),
+    paperAvailability: document.getElementById("paper-availability"),
 };
 
 document.addEventListener("DOMContentLoaded", () => {
     elements.refreshBtn.addEventListener("click", () => fetchRegistry(true));
+    elements.clearFiltersBtn.addEventListener("click", clearFilters);
     elements.searchInput.addEventListener("input", (event) => {
         state.searchQuery = event.target.value.trim().toLowerCase();
         applyFilters();
@@ -70,6 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
         header.addEventListener("click", () => {
             state.sortDir = state.sortField === header.dataset.sort && state.sortDir === "desc" ? "asc" : "desc";
             state.sortField = header.dataset.sort;
+            updateSortHeaders();
             applyFilters();
         });
     });
@@ -83,10 +102,13 @@ document.addEventListener("DOMContentLoaded", () => {
         syncModePills();
         applyFilters();
     });
+    document.addEventListener("keydown", handleKeyboardShortcuts);
     window.addEventListener("hashchange", route);
+    window.setInterval(() => fetchRegistry(false, true), CONFIG.refreshInterval);
+    window.setInterval(updateSyncMeta, 1000);
+    updateSortHeaders();
     fetchRegistry();
     route();
-    window.setInterval(() => fetchRegistry(false, true), CONFIG.refreshInterval);
 });
 
 async function fetchRegistry(showToast = false, silent = false) {
@@ -95,7 +117,10 @@ async function fetchRegistry(showToast = false, silent = false) {
     setRegistryState("syncing");
 
     try {
-        const response = await fetch(`${CONFIG.registryPath}?t=${Date.now()}`);
+        const [response] = await Promise.all([
+            fetch(`${CONFIG.registryPath}?t=${Date.now()}`),
+            fetchPaperHealth(true),
+        ]);
         if (!response.ok) {
             throw new Error(`Artifact not found: ${response.status}`);
         }
@@ -103,9 +128,13 @@ async function fetchRegistry(showToast = false, silent = false) {
         state.runs = (payload.runs || []).map(normalizeRun);
         state.generatedAt = payload.generated_at || null;
         state.nRuns = Number.isFinite(payload.n_runs) ? payload.n_runs : state.runs.length;
+        state.lastRegistrySyncAt = Date.now();
+        state.nextRefreshDueAt = Date.now() + CONFIG.refreshInterval;
+        state.detailCache.clear();
         populateModeFilter();
+        updateSortHeaders();
         applyFilters();
-        setRegistryState("ready");
+        setRegistryState(isRegistryStale() ? "stale" : "ready");
         if (showToast) {
             notify("Registry synchronized", "success");
         } else if (!silent) {
@@ -118,13 +147,36 @@ async function fetchRegistry(showToast = false, silent = false) {
         state.runs = [];
         state.filteredRuns = [];
         state.nRuns = 0;
+        state.nextRefreshDueAt = Date.now() + CONFIG.refreshInterval;
         updateDashboard();
         renderTable();
         setRegistryState("error", error.message);
         notify(`Registry fetch failed: ${error.message}`, "error");
     } finally {
         state.isLoading = false;
+        updateSyncMeta();
         renderTable();
+    }
+}
+
+async function fetchPaperHealth(silent = false) {
+    try {
+        const response = await fetch(`${CONFIG.paperHealthPath}?t=${Date.now()}`);
+        if (!response.ok) {
+            throw new Error(`Paper session health unavailable: ${response.status}`);
+        }
+        state.paperHealth = await response.json();
+    } catch (error) {
+        state.paperHealth = {
+            status: "error",
+            available: false,
+            total_sessions: 0,
+            status_counts: {},
+            message: error.message,
+        };
+        if (!silent) {
+            notify(`Paper health fetch failed: ${error.message}`, "error");
+        }
     }
 }
 
@@ -149,10 +201,19 @@ function applyFilters() {
     if (state.filterMode !== "all") {
         runs = runs.filter((run) => run.mode === state.filterMode);
     }
-    runs.sort((left, right) => compareRuns(left, right));
+    runs.sort(compareRuns);
     state.filteredRuns = runs;
     updateDashboard();
     renderTable();
+}
+
+function clearFilters() {
+    state.searchQuery = "";
+    state.filterMode = "all";
+    elements.searchInput.value = "";
+    elements.modeFilter.value = "all";
+    syncModePills();
+    applyFilters();
 }
 
 function compareRuns(left, right) {
@@ -187,27 +248,54 @@ function syncModePills() {
     });
 }
 
+function updateSortHeaders() {
+    document.querySelectorAll("th[data-sort]").forEach((header) => {
+        const active = header.dataset.sort === state.sortField;
+        header.classList.toggle("sort-active", active);
+        header.classList.toggle("sort-asc", active && state.sortDir === "asc");
+        header.classList.toggle("sort-desc", active && state.sortDir === "desc");
+    });
+}
+
 function updateDashboard() {
-    const topRun = [...state.runs].filter((run) => typeof run.sharpe_simple === "number").sort((a, b) => b.sharpe_simple - a.sharpe_simple)[0];
+    const rankedRuns = [...state.runs].filter((run) => typeof run.sharpe_simple === "number").sort((a, b) => b.sharpe_simple - a.sharpe_simple);
+    const topRun = rankedRuns[0];
     const avgReturn = average(state.runs.map((run) => run.total_return).filter(isNumber));
     const minDrawdown = state.runs.map((run) => run.max_drawdown).filter(isNumber).reduce((min, value) => Math.min(min, value), Infinity);
     const activeRuns = state.runs.filter((run) => run.created_at && Date.now() - new Date(run.created_at).getTime() <= 86400000).length;
     const modeCounts = state.runs.reduce((acc, run) => ({ ...acc, [run.mode || "unknown"]: (acc[run.mode || "unknown"] || 0) + 1 }), {});
+    const paperHealth = state.paperHealth || { total_sessions: 0, status_counts: {} };
+    const openPaperIssues = statusCount(paperHealth, "failed") + statusCount(paperHealth, "aborted") + statusCount(paperHealth, "running");
 
     elements.totalRuns.textContent = String(state.nRuns);
     elements.activeSessions.textContent = String(activeRuns);
     elements.bestSharpe.textContent = topRun ? formatNumber(topRun.sharpe_simple) : "-";
     elements.bestRun.textContent = topRun ? `${topRun.run_id} · ${titleCase(topRun.mode)}` : "Awaiting best run";
     elements.avgReturn.textContent = formatPercent(avgReturn);
-    elements.drawdownFloor.textContent = `Drawdown floor: ${isFinite(minDrawdown) ? formatPercent(minDrawdown) : "-"}`;
+    elements.drawdownFloor.textContent = `Drawdown floor: ${Number.isFinite(minDrawdown) ? formatPercent(minDrawdown) : "-"}`;
     elements.generatedAt.textContent = `Artifact generated: ${formatDateTime(state.generatedAt)}`;
-    elements.heroSummary.textContent = state.runs.length ? `${state.filteredRuns.length} visible of ${state.nRuns} indexed runs. Drill into canonical artifacts without leaving the dashboard.` : "No indexed runs available yet.";
+    elements.heroSummary.textContent = state.runs.length
+        ? `${state.filteredRuns.length} visible of ${state.nRuns} indexed runs, with ${paperHealth.total_sessions || 0} paper sessions visible for operational context.`
+        : "No indexed runs available yet. Paper-session health will appear when the local root exists.";
     elements.heroBestRun.textContent = topRun ? topRun.run_id : "No best run yet";
     elements.heroBestMeta.textContent = topRun ? `${titleCase(topRun.mode)} · Sharpe ${formatNumber(topRun.sharpe_simple)} · Return ${formatPercent(topRun.total_return)}` : "Waiting for usable metrics";
-    elements.heroModeMeta.textContent = state.runs.length ? `${Object.keys(modeCounts).length} active modes in the current registry` : "Mode distribution appears after sync";
     elements.heroRootPill.textContent = "Source: outputs/runs";
+    elements.heroModeMeta.textContent = state.runs.length ? `${Object.keys(modeCounts).length} active modes across the visible registry` : "Mode distribution appears after sync";
+    elements.modeStrip.innerHTML = buildModeStrip(modeCounts);
     elements.tableSummary.textContent = state.runs.length ? `Sorted by ${titleCase(state.sortField.replace(/_/g, " "))} (${state.sortDir}). ${state.filteredRuns.length} rows visible.` : "Registry rows will appear here after the first successful sync.";
-    elements.modeStrip.innerHTML = Object.entries(modeCounts).sort((a, b) => b[1] - a[1]).map(([mode, count]) => `<div class="mode-chip"><span>${titleCase(mode)}</span><span class="mode-chip-bar" style="width:${Math.max(18, count * 28)}px"></span><strong>${count}</strong></div>`).join("") || `<span class="mode-chip muted">No active modes</span>`;
+    elements.filterSummary.textContent = buildFilterSummary();
+    elements.clearFiltersBtn.disabled = !state.searchQuery && state.filterMode === "all";
+    elements.paperStrip.innerHTML = buildPaperStrip(paperHealth);
+    elements.paperHealthMeta.textContent = buildPaperMeta(paperHealth);
+    elements.paperTotalSessions.textContent = String(paperHealth.total_sessions || 0);
+    elements.paperOpenIssues.textContent = String(openPaperIssues);
+    elements.paperLatestSession.textContent = paperHealth.latest_session_id || "No sessions";
+    elements.paperLatestSessionMeta.textContent = [titleCase(paperHealth.latest_session_status || "unknown"), formatDateTime(paperHealth.latest_session_at)].filter((value) => value && value !== "-").join(" · ") || "No paper activity yet";
+    elements.paperLatestIssue.textContent = paperHealth.latest_issue_session_id || "No visible issues";
+    elements.paperLatestIssueMeta.textContent = paperHealth.latest_issue_session_id
+        ? [titleCase(paperHealth.latest_issue_status || "unknown"), paperHealth.latest_issue_error_type || null, formatDateTime(paperHealth.latest_issue_at)].filter(Boolean).join(" · ")
+        : "Failed, aborted, or running sessions will surface here";
+    elements.paperAvailability.textContent = paperHealth.available ? `Root: ${normalizeDisplayPath(paperHealth.root_dir || "outputs/paper_sessions")}` : (paperHealth.message || "No paper root found yet");
 }
 
 function renderTable() {
@@ -215,13 +303,26 @@ function renderTable() {
         elements.runsBody.innerHTML = `<tr><td colspan="9" class="loading-state"><div class="spinner"></div>Accessing QuantLab artifacts...</td></tr>`;
         return;
     }
-    if (!state.filteredRuns.length) {
-        elements.runsBody.innerHTML = `<tr><td colspan="9" class="loading-state"><div class="empty-panel"><strong>No runs matched the current filters.</strong><span>Try another search or resync the registry.</span></div></td></tr>`;
+
+    if (!state.runs.length) {
+        elements.runsBody.innerHTML = `<tr><td colspan="9" class="loading-state"><div class="empty-panel"><strong>No registry data found.</strong><span>Expected artifact: <code>outputs/runs/runs_index.json</code>. Successful run, sweep, and forward flows refresh it automatically.</span></div></td></tr>`;
         return;
     }
+
+    if (!state.filteredRuns.length) {
+        elements.runsBody.innerHTML = `<tr><td colspan="9" class="loading-state"><div class="empty-panel"><strong>No runs matched the current filters.</strong><span>Reset filters or try a broader search to recover the registry view.</span></div></td></tr>`;
+        return;
+    }
+
+    const topRunId = [...state.runs].filter((run) => typeof run.sharpe_simple === "number").sort((a, b) => b.sharpe_simple - a.sharpe_simple)[0]?.run_id;
     elements.runsBody.innerHTML = state.filteredRuns.map((run) => `
-        <tr>
-            <td><div class="run-primary"><span class="font-mono">${escapeHtml(run.run_id || "unnamed")}</span><span class="mini-meta">${escapeHtml(shortCommit(run.git_commit) || "no-commit")}</span></div></td>
+        <tr class="${run.run_id === topRunId ? "row-top-run" : ""}">
+            <td>
+                <div class="run-primary">
+                    <span class="font-mono">${escapeHtml(run.run_id || "unnamed")}</span>
+                    <span class="mini-meta">${escapeHtml(shortCommit(run.git_commit) || "no-commit")}</span>
+                </div>
+            </td>
             <td><span class="badge ${modeBadge(run.mode)}">${escapeHtml(run.mode || "unknown")}</span></td>
             <td>${escapeHtml(run.ticker || "N/A")}</td>
             <td class="${tone(run.total_return, true)}">${formatPercent(run.total_return)}</td>
@@ -229,7 +330,12 @@ function renderTable() {
             <td class="${tone(run.max_drawdown, false)}">${formatPercent(run.max_drawdown)}</td>
             <td>${formatCount(run.trades)}</td>
             <td class="text-secondary">${formatDateTime(run.created_at)}</td>
-            <td><div class="table-actions"><a class="btn-icon" href="#/run/${encodeURIComponent(run.run_id)}" title="View details">◉</a><a class="btn-icon" href="${preferredReportHref(run)}" target="_blank" rel="noreferrer" title="Open readable report">↗</a></div></td>
+            <td>
+                <div class="table-actions">
+                    <a class="btn-icon" href="#/run/${encodeURIComponent(run.run_id)}" title="View details">◉</a>
+                    <a class="btn-icon" href="${preferredReportHref(run)}" target="_blank" rel="noreferrer" title="Open readable report">↗</a>
+                </div>
+            </td>
         </tr>
     `).join("");
 }
@@ -249,7 +355,7 @@ function route() {
     state.currentRunId = null;
     elements.views.runs.classList.add("active");
     elements.navItems.runs.classList.add("active");
-    elements.breadcrumb.textContent = "Run Registry";
+    elements.breadcrumb.textContent = "Research Registry + Paper Ops";
 }
 
 async function loadRunDetail(runId, silent = false) {
@@ -289,6 +395,8 @@ function renderDetail(run, detail) {
     const artifacts = Array.isArray(report?.artifacts) ? report.artifacts : [];
     const rows = report?.results?.length ? report.results.slice(0, 6) : report?.oos_leaderboard?.length ? report.oos_leaderboard.slice(0, 6) : report?.summary?.length ? report.summary.slice(0, 6) : [];
     const columns = rows[0] ? Object.keys(rows[0]).slice(0, 8) : [];
+    const contractType = report?.machine_contract?.contract_type || "N/A";
+    const requestId = report?.header?.request_id || "N/A";
 
     elements.detailBody.innerHTML = `
         <div class="detail-shell">
@@ -298,9 +406,18 @@ function renderDetail(run, detail) {
             </div>
             <section class="detail-hero">
                 <div>
-                    <div class="hero-kicker"><span class="badge ${modeBadge(run.mode)}">${escapeHtml(run.mode || "unknown")}</span><span class="pill">${escapeHtml(run.ticker || "Ticker unavailable")}</span></div>
+                    <div class="hero-kicker">
+                        <span class="badge ${modeBadge(run.mode)}">${escapeHtml(run.mode || "unknown")}</span>
+                        <span class="pill">${escapeHtml(run.ticker || "Ticker unavailable")}</span>
+                        <span class="pill pill-static">${escapeHtml(contractType)}</span>
+                    </div>
                     <h2>${escapeHtml(run.run_id)}</h2>
                     <p>${escapeHtml(report ? "Canonical artifact loaded from the run directory." : "No readable report artifact was found. Showing registry-level metrics only.")}</p>
+                    <div class="detail-chip-row">
+                        ${detailChip("Request", requestId)}
+                        ${detailChip("Artifacts", String(artifacts.length))}
+                        ${detailChip("Period", `${run.start || "?"} → ${run.end || "?"}`)}
+                    </div>
                 </div>
                 <div class="detail-hero-meta">
                     <div><span>Created</span><strong>${formatDateTime(run.created_at)}</strong></div>
@@ -359,6 +476,13 @@ function setRegistryState(status, detail = "") {
         elements.heroRegistryPill.textContent = "Registry online";
         return;
     }
+    if (status === "stale") {
+        elements.registryStatus.textContent = "Registry: Stale";
+        elements.registryDate.textContent = `Artifact: ${formatDateTime(state.generatedAt)}`;
+        elements.registryDot.classList.remove("pulse");
+        elements.heroRegistryPill.textContent = "Registry stale";
+        return;
+    }
     if (status === "syncing") {
         elements.registryStatus.textContent = "Registry: Syncing";
         elements.registryDate.textContent = state.generatedAt ? `Artifact: ${formatDateTime(state.generatedAt)}` : "Artifact: syncing...";
@@ -372,8 +496,33 @@ function setRegistryState(status, detail = "") {
     elements.heroRegistryPill.textContent = "Registry offline";
 }
 
+function updateSyncMeta() {
+    const lastSync = state.lastRegistrySyncAt ? timeAgo(state.lastRegistrySyncAt) : "-";
+    const secondsToNext = state.nextRefreshDueAt ? Math.max(0, Math.ceil((state.nextRefreshDueAt - Date.now()) / 1000)) : null;
+    const nextText = secondsToNext == null ? "-" : `${secondsToNext}s`;
+    elements.syncMeta.textContent = `Last sync: ${lastSync} · Next refresh: ${nextText}`;
+}
+
+function handleKeyboardShortcuts(event) {
+    if (event.key === "/" && document.activeElement !== elements.searchInput) {
+        event.preventDefault();
+        elements.searchInput.focus();
+        elements.searchInput.select();
+    }
+    if (event.key === "Escape" && document.activeElement === elements.searchInput) {
+        elements.searchInput.blur();
+        if (state.searchQuery) {
+            clearFilters();
+        }
+    }
+}
+
 function metricCard(label, value, toneClass) {
     return `<article class="metric-card glass ${toneClass}"><div class="metric-label">${escapeHtml(label)}</div><div class="metric-value">${escapeHtml(value)}</div></article>`;
+}
+
+function detailChip(label, value) {
+    return `<div class="detail-chip"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
 }
 
 function metadataItem(label, value) {
@@ -406,12 +555,8 @@ function notify(message, type = "info") {
 }
 
 function normalizePath(path) { return `/${String(path).replace(/\\/g, "/").replace(/^\.?\//, "")}`; }
-function preferredReportHref(run) {
-    const markdown = run.mode === "grid" || run.mode === "walkforward" || run.mode === "sweep"
-        ? "run_report.md"
-        : "report.md";
-    return `${run.path}/${markdown}`;
-}
+function normalizeDisplayPath(path) { return String(path || "").replace(/\\/g, "/"); }
+function preferredReportHref(run) { return `${run.path}/run_report.md`; }
 function toNumber(value) { const number = Number(value); return Number.isFinite(number) ? number : null; }
 function average(values) { return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null; }
 function isNumber(value) { return typeof value === "number" && Number.isFinite(value); }
@@ -425,3 +570,66 @@ function titleCase(value) { return String(value || "").split(/[_\s-]+/).filter(B
 function escapeHtml(value) { return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
 function modeBadge(mode) { return mode === "grid" || mode === "sweep" ? "badge-purple" : mode === "walkforward" || mode === "forward" ? "badge-green" : "badge-blue"; }
 function tone(value, positiveIsGood) { if (value == null) { return "tone-neutral"; } return positiveIsGood ? (value >= 0 ? "tone-positive" : "tone-negative") : (value <= -0.15 ? "tone-negative" : "tone-positive"); }
+function statusCount(health, key) { return Number(health?.status_counts?.[key] || 0); }
+function isRegistryStale() { return !state.generatedAt ? false : (Date.now() - new Date(state.generatedAt).getTime()) > CONFIG.staleRegistryMs; }
+
+function timeAgo(timestamp) {
+    if (!timestamp) {
+        return "-";
+    }
+    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+    if (seconds < 5) {
+        return "just now";
+    }
+    if (seconds < 60) {
+        return `${seconds}s ago`;
+    }
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) {
+        return `${minutes}m ago`;
+    }
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ago`;
+}
+
+function buildModeStrip(modeCounts) {
+    const entries = Object.entries(modeCounts).sort((a, b) => b[1] - a[1]);
+    return entries.length
+        ? entries.map(([mode, count]) => `<div class="mode-chip"><span>${titleCase(mode)}</span><span class="mode-chip-bar" style="width:${Math.max(18, count * 22)}px"></span><strong>${count}</strong></div>`).join("")
+        : `<span class="mode-chip muted">No active modes</span>`;
+}
+
+function buildFilterSummary() {
+    const parts = [];
+    if (state.filterMode !== "all") {
+        parts.push(`Mode: ${titleCase(state.filterMode)}`);
+    }
+    if (state.searchQuery) {
+        parts.push(`Search: "${state.searchQuery}"`);
+    }
+    return parts.length ? parts.join(" · ") : "No filters applied";
+}
+
+function buildPaperStrip(health) {
+    if (!health?.available && !health?.total_sessions) {
+        return `<span class="paper-status-pill is-muted">No paper root yet</span>`;
+    }
+    const statuses = [
+        ["success", statusCount(health, "success"), "is-good"],
+        ["failed", statusCount(health, "failed"), "is-bad"],
+        ["aborted", statusCount(health, "aborted"), "is-warning"],
+        ["running", statusCount(health, "running"), "is-live"],
+    ].filter(([, count]) => count > 0);
+    return statuses.length
+        ? statuses.map(([label, count, toneClass]) => `<span class="paper-status-pill ${toneClass}"><strong>${count}</strong>${titleCase(label)}</span>`).join("")
+        : `<span class="paper-status-pill is-muted">No paper sessions yet</span>`;
+}
+
+function buildPaperMeta(health) {
+    if (!health?.available) {
+        return health?.message || "Paper session health will appear when outputs/paper_sessions exists";
+    }
+    const latestId = health.latest_session_id || "no sessions";
+    const latestState = titleCase(health.latest_session_status || "unknown");
+    return `Latest paper session: ${latestId} · ${latestState}`;
+}

@@ -2,12 +2,14 @@
 
 This directory contains a strictly read-only, tangible UI layer for QuantLab research results.
 
-## Phase 1: Run Index MVP
+## Phase 1.5: Research Registry + Paper Ops Pulse
 This version supports:
 - Automatic synchronization with `outputs/runs/runs_index.json`.
+- Paper-session health visibility from `outputs/paper_sessions/` through the local preview server.
 - Sortable table by any metric column.
 - Real-time search by ticker or run ID.
 - Mode filtering (Run, Sweep, Forward).
+- Read-only operator pulse for `Stage C.1 - Paper Trading Operationalization`.
 
 ## How to Run (Local Preview)
 
@@ -21,7 +23,7 @@ This version supports:
 
 ## Constraints & Architecture
 - **Read-Only**: This dashboard cannot execute runs or modify data.
-- **Low Coupling**: It reads standard JSON artifacts from the `outputs/` directory.
+- **Low Coupling**: It reads standard JSON artifacts from the `outputs/` directory and a tiny local health endpoint for paper sessions.
 - **No Dependencies**: Built with Vanilla JS/CSS for maximum stability and zero-install preview.
 
 ---
