@@ -1,36 +1,140 @@
-# Integración con Stepbit-core
+# QuantLab Integration With Stepbit
 
-Este documento describe la arquitectura y los casos de uso para integrar **QuantLab** con **Stepbit-core**, un sistema operativo de IA local-first. Esta unión permite que la investigación cuantitativa sea guiada por inteligencia artificial autónoma.
+This document explains how QuantLab should integrate with Stepbit under the current architectural decision.
 
-## 1. Arquitectura de Conexión
+The key point is:
 
-La integración se realiza a través de la capa **MCP (Model Context Protocol)** de Stepbit-core, que trata a QuantLab como una "herramienta" especializada.
+- Stepbit is not the control plane of QuantLab
+- QuantLab is not a subordinate runtime owned by Stepbit
+- QuantLab may consume Stepbit capabilities through a narrow, reversible integration boundary
 
-### Flujo de Trabajo
-1.  **Orquestador (Stepbit)**: Recibe un objetivo (ej: "Optimizar estrategia X").
-2.  **Herramienta QuantLab (MCP)**: Llama a `main.py` de QuantLab con los parámetros generados por la IA.
-3.  **Ejecución (QuantLab)**: Procesa el backtest o la ingesta de datos y genera un `report.json`.
-4.  **Análisis (Stepbit)**: Lee el JSON, analiza las métricas y decide el siguiente paso o entrega el resultado final.
+For the authority model, see [quantlab-stepbit-boundaries.md](./quantlab-stepbit-boundaries.md).
 
-## 2. Requisitos Técnicos en QuantLab
+## 1. Correct Relationship
 
-Para que esta integración sea robusta, el repositorio de QuantLab debe cumplir con:
-- **Salida JSON Estable**: El comando `--report` debe generar siempre un archivo `report.json` con métricas clave (Sharpe, Drawdown, Win Rate).
-- **Interfaz CLI**: Mantener la compatibilidad de flags en `main.py` para permitir la automatización por subprocesos.
-- **Entorno Virtual**: Uso consistente de `.venv` para que Stepbit pueda invocar el intérprete correcto.
+The relationship is not:
 
-## 3. Casos de Uso Principales
+```text
+Stepbit -> controls -> QuantLab
+```
 
-### A. Optimización Autónoma (Estratega IA)
-La IA realiza grid-searches inteligentes, analizando no solo el retorno final sino la calidad de los trades reportados por QuantLab.
+and not:
 
-### B. Notificaciones de Inflexión (Eventos)
-QuantLab puede actuar como un emisor de eventos. Si un script de monitoreo detecta una señal, Stepbit puede disparar flujos de trabajo de análisis de riesgo complejos.
+```text
+Stepbit -> orchestrates -> QuantLab as a subordinate engine
+```
 
-### C. Investigación Distribuida
-Uso de los nodos de Stepbit para paralelizar sweeps de parámetros masivos, ejecutando múltiples instancias de QuantLab de forma coordinada.
+The intended relationship is:
 
-## 4. Roadmap de Integración
-- [ ] Creación de `QuantLabTool.rs` en Stepbit-core.
-- [ ] Pruebas de ejecución de backtest desde el Reasoning Engine.
-- [ ] Implementación de triggers basados en eventos de QuantLab.
+```text
+QuantLab -> consumes -> Stepbit capabilities
+```
+
+or, at the boundary level:
+
+```text
+QuantLab <-> Stepbit
+```
+
+with one strict authority rule:
+
+- functional authority over QuantLab remains inside QuantLab
+
+## 2. Integration Goal
+
+The purpose of the integration is to let QuantLab benefit from external AI and automation capabilities without compromising its autonomy.
+
+Good uses of Stepbit for QuantLab include:
+
+- reasoning-assisted interpretation of results
+- workflow automation around QuantLab artifacts
+- AI-generated suggestions for next actions
+- MCP-based access to stable QuantLab execution and reporting surfaces
+
+The integration should not redefine QuantLab's core identity or ownership boundaries.
+
+## 3. Allowed Boundary Surface
+
+The QuantLab boundary exposed to Stepbit should remain narrow and contract-based.
+
+Examples of good boundary surfaces:
+
+- execute a well-scoped QuantLab action
+- read canonical artifacts
+- inspect machine-readable reports
+- query run history
+- request AI analysis over QuantLab outputs
+
+In practical terms, that means Stepbit should interact with surfaces such as:
+
+- `main.py --json-request`
+- `main.py --signal-file`
+- `report.json.machine_contract`
+- canonical run artifacts under `outputs/runs/<run_id>/`
+
+## 4. What Stepbit Should Not Own
+
+Stepbit should not become the sovereign owner of:
+
+- QuantLab session lifecycle
+- QuantLab risk policy
+- QuantLab trading logic
+- strategy promotion rules
+- broker execution authority
+- capital and safety boundaries
+
+Those remain QuantLab-owned concerns.
+
+## 5. MCP Philosophy
+
+The QuantLab MCP surface exists to expose a clean interface to Stepbit, not to surrender internal control.
+
+### MCP should enable
+
+- contract-driven invocation
+- artifact access
+- external analysis
+- bounded automation
+
+### MCP should avoid
+
+- invasive lifecycle control
+- internal policy ownership
+- deep coupling to QuantLab internals
+- making QuantLab dependent on Stepbit to remain useful
+
+## 6. Roadmap Consequence
+
+Because QuantLab is sovereign, its roadmap remains QuantLab-first.
+
+That means the main product priority is still inside QuantLab itself:
+
+- `Stage C.1 - Paper Trading Operationalization`
+- then execution safety and broker dry-run stages
+
+The integration track remains secondary and reactive:
+
+- `Stage O - Stepbit Automation Readiness`
+- `Stage O.1 - Integration Hardening` only when real consumer friction justifies it
+
+## 7. Practical Integration Rule
+
+A QuantLab-side change is justified by Stepbit only when:
+
+- it improves the external contract
+- it reduces boundary friction
+- it does not compromise QuantLab independence
+
+If a change exists only to make QuantLab subordinate to Stepbit, it should be rejected or isolated outside the QuantLab core.
+
+## 8. Recommended Next Steps
+
+For QuantLab:
+
+- continue prioritizing its own paper-trading and execution-safety roadmap
+
+For integration:
+
+- keep the QuantLab boundary stable
+- let Stepbit consume it cleanly
+- avoid moving QuantLab-owned authority into Stepbit
