@@ -123,6 +123,7 @@ python main.py --help
 - `--runs-best`: rank runs by a metric such as `sharpe_simple`
 - `--paper-sessions-list`: list paper sessions under a root directory
 - `--paper-sessions-show`: inspect a single paper session directory
+- `--paper-sessions-health`: summarize health across paper sessions
 - `--forward-eval`: launch a forward evaluation from a prior run directory
 - `--portfolio-report`: aggregate forward sessions into a portfolio report
 - `--portfolio-compare`: compare allocation modes across forward sessions
@@ -196,6 +197,12 @@ Show one paper session:
 
 ```bash
 python main.py --paper-sessions-show outputs/paper_sessions/<session_id>
+```
+
+Summarize paper session health:
+
+```bash
+python main.py --paper-sessions-health outputs/paper_sessions
 ```
 
 ### Forward
