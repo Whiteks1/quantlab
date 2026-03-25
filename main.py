@@ -336,6 +336,18 @@ def main() -> None:
         help="Summarize paper session health in a directory.",
     )
     parser.add_argument(
+        "--paper-sessions-alerts",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Emit a deterministic alert snapshot for paper sessions in a directory.",
+    )
+    parser.add_argument(
+        "--paper-stale-minutes",
+        type=int,
+        default=60,
+        help="Minutes before a running paper session is treated as stale.",
+    )
+    parser.add_argument(
         "--metric",
         default="sharpe_simple",
         help="Metric to rank by (used with --runs-best, --best-from).",
@@ -457,7 +469,12 @@ def main() -> None:
             session_metadata["mode"] = "paper"
         elif args.report:
             session_metadata["mode"] = "report"
-        elif args.paper_sessions_list or args.paper_sessions_show or args.paper_sessions_health:
+        elif (
+            args.paper_sessions_list
+            or args.paper_sessions_show
+            or args.paper_sessions_health
+            or args.paper_sessions_alerts
+        ):
             session_metadata["mode"] = "paper_sessions"
         elif args.runs_list or args.runs_show or args.runs_best:
             session_metadata["mode"] = "runs"

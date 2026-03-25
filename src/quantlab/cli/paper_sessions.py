@@ -5,6 +5,7 @@ Responsibilities:
 - list paper sessions in a root directory
 - show details for a single paper session
 - summarize health across paper sessions
+- surface operator-facing alert signals for paper sessions
 
 This module intentionally keeps paper-session inspection separate from the
 research-oriented runs navigation surface.
@@ -13,6 +14,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime
+import json
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -24,6 +26,8 @@ from quantlab.runs.artifacts import (
     load_json_with_fallback,
 )
 
+DEFAULT_PAPER_STALE_MINUTES = 60
+
 
 def handle_paper_session_commands(args) -> bool:
     """
@@ -33,6 +37,7 @@ def handle_paper_session_commands(args) -> bool:
     - ``--paper-sessions-list <dir>`` : list all paper sessions in a directory
     - ``--paper-sessions-show <dir>`` : show details for a single paper session
     - ``--paper-sessions-health <dir>`` : summarize paper-session health
+    - ``--paper-sessions-alerts <dir>`` : emit a machine-readable alert snapshot
 
     Returns True if a paper-session command was handled; False otherwise.
     """
@@ -78,6 +83,15 @@ def handle_paper_session_commands(args) -> bool:
         print(f"  latest_issue_state  : {health.get('latest_issue_status')}")
         print(f"  latest_issue_at     : {health.get('latest_issue_at')}")
         print(f"  latest_issue_error  : {health.get('latest_issue_error_type')}")
+        return True
+
+    if getattr(args, "paper_sessions_alerts", None):
+        root_dir = _require_directory(args.paper_sessions_alerts, "Paper sessions root")
+        alerts = build_paper_sessions_alerts(
+            root_dir,
+            stale_after_minutes=getattr(args, "paper_stale_minutes", DEFAULT_PAPER_STALE_MINUTES),
+        )
+        print(json.dumps(alerts, indent=2, sort_keys=True))
         return True
 
     return False
@@ -175,6 +189,105 @@ def build_paper_sessions_health(root_dir: str | Path) -> dict[str, Any]:
     }
 
 
+def build_paper_sessions_alerts(
+    root_dir: str | Path,
+    *,
+    stale_after_minutes: int = DEFAULT_PAPER_STALE_MINUTES,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """
+    Build a deterministic alert snapshot for paper-session operations.
+    """
+    if stale_after_minutes <= 0:
+        raise ConfigError("paper_stale_minutes must be a positive integer.")
+
+    root = _require_directory(root_dir, "Paper sessions root")
+    sessions = [load_paper_session_summary(path) for path in scan_paper_sessions(root)]
+    generated_at = now or datetime.now()
+    alerts: list[dict[str, Any]] = []
+
+    for session in sessions:
+        status = (session.get("status") or "unknown").lower()
+        activity_at = _parse_session_activity(session)
+        age_minutes = _session_age_minutes(activity_at, generated_at)
+
+        if status == "failed":
+            alerts.append(
+                _build_alert_entry(
+                    code="PAPER_SESSION_FAILED",
+                    severity="critical",
+                    session=session,
+                    activity_at=activity_at,
+                    age_minutes=age_minutes,
+                    message=session.get("message") or "Paper session failed.",
+                )
+            )
+        elif status == "aborted":
+            alerts.append(
+                _build_alert_entry(
+                    code="PAPER_SESSION_ABORTED",
+                    severity="warning",
+                    session=session,
+                    activity_at=activity_at,
+                    age_minutes=age_minutes,
+                    message=session.get("message") or "Paper session aborted.",
+                )
+            )
+        elif status == "running" and age_minutes is not None and age_minutes >= stale_after_minutes:
+            alerts.append(
+                _build_alert_entry(
+                    code="PAPER_SESSION_STALE",
+                    severity="warning",
+                    session=session,
+                    activity_at=activity_at,
+                    age_minutes=age_minutes,
+                    message=(
+                        f"Paper session has been running for {age_minutes} minute(s), "
+                        f"exceeding stale threshold of {stale_after_minutes} minute(s)."
+                    ),
+                )
+            )
+
+    latest_success = _latest_by_activity(
+        [
+            session
+            for session in sessions
+            if (session.get("status") or "").lower() == "success"
+        ]
+    )
+    latest_alert = max(alerts, key=_alert_sort_key) if alerts else None
+    alert_counts = Counter(alert["severity"] for alert in alerts)
+
+    if alert_counts.get("critical", 0):
+        alert_status = "critical"
+    elif alerts:
+        alert_status = "warning"
+    else:
+        alert_status = "ok"
+
+    return {
+        "root_dir": str(root),
+        "generated_at": generated_at.replace(microsecond=0).isoformat(),
+        "stale_after_minutes": stale_after_minutes,
+        "total_sessions": len(sessions),
+        "status_counts": dict(Counter((session.get("status") or "unknown") for session in sessions)),
+        "running_sessions": [
+            session["session_id"]
+            for session in sessions
+            if (session.get("status") or "").lower() == "running"
+        ],
+        "alert_status": alert_status,
+        "has_alerts": bool(alerts),
+        "alert_counts": dict(alert_counts),
+        "latest_success_session_id": latest_success.get("session_id") if latest_success else None,
+        "latest_success_at": _activity_at(latest_success) if latest_success else None,
+        "latest_alert_session_id": latest_alert.get("session_id") if latest_alert else None,
+        "latest_alert_code": latest_alert.get("alert_code") if latest_alert else None,
+        "latest_alert_at": latest_alert.get("activity_at") if latest_alert else None,
+        "alerts": alerts,
+    }
+
+
 def _is_valid_paper_session_dir(path: Path) -> bool:
     return any(
         (path / name).exists()
@@ -224,6 +337,55 @@ def _latest_by_activity(sessions: list[dict[str, Any]]) -> dict[str, Any] | None
 
 def _session_activity_sort_key(session: dict[str, Any]) -> datetime:
     value = _activity_at(session)
+    if isinstance(value, str) and value.strip():
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            pass
+    return datetime.min
+
+
+def _parse_session_activity(session: dict[str, Any]) -> datetime | None:
+    value = _activity_at(session)
+    if isinstance(value, str) and value.strip():
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _session_age_minutes(activity_at: datetime | None, now: datetime) -> int | None:
+    if activity_at is None:
+        return None
+    delta = now - activity_at
+    return max(0, int(delta.total_seconds() // 60))
+
+
+def _build_alert_entry(
+    *,
+    code: str,
+    severity: str,
+    session: dict[str, Any],
+    activity_at: datetime | None,
+    age_minutes: int | None,
+    message: str,
+) -> dict[str, Any]:
+    return {
+        "alert_code": code,
+        "severity": severity,
+        "session_id": session.get("session_id"),
+        "status": session.get("status"),
+        "activity_at": activity_at.replace(microsecond=0).isoformat() if activity_at else _activity_at(session),
+        "age_minutes": age_minutes,
+        "error_type": session.get("error_type"),
+        "message": message,
+        "path": session.get("path"),
+    }
+
+
+def _alert_sort_key(alert: dict[str, Any]) -> datetime:
+    value = alert.get("activity_at")
     if isinstance(value, str) and value.strip():
         try:
             return datetime.fromisoformat(value)
