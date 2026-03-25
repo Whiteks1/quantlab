@@ -390,11 +390,21 @@ def main() -> None:
         help="Persist a local Kraken read-only preflight artifact in a directory.",
     )
     parser.add_argument(
+        "--kraken-auth-preflight-outdir",
+        metavar="DIR",
+        default=None,
+        help="Persist a local Kraken authenticated read-only preflight artifact in a directory.",
+    )
+    parser.add_argument(
         "--kraken-preflight-timeout",
         type=float,
         default=10.0,
         help="Timeout in seconds for Kraken public preflight probes.",
     )
+    parser.add_argument("--kraken-api-key", default=None)
+    parser.add_argument("--kraken-api-secret", default=None)
+    parser.add_argument("--kraken-api-key-env", default="KRAKEN_API_KEY")
+    parser.add_argument("--kraken-api-secret-env", default="KRAKEN_API_SECRET")
     parser.add_argument(
         "--kraken-dry-run-session",
         action="store_true",
@@ -564,9 +574,7 @@ def main() -> None:
             or args.paper_sessions_index
         ):
             session_metadata["mode"] = "paper_sessions"
-        elif (
-            args.kraken_preflight_outdir
-        ):
+        elif args.kraken_preflight_outdir or args.kraken_auth_preflight_outdir:
             session_metadata["mode"] = "broker_preflight"
         elif (
             args.kraken_dry_run_outdir
