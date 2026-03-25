@@ -8,6 +8,8 @@ CANONICAL_METADATA_FILENAME = "metadata.json"
 CANONICAL_CONFIG_FILENAME = "config.json"
 CANONICAL_METRICS_FILENAME = "metrics.json"
 CANONICAL_REPORT_FILENAME = "report.json"
+PAPER_SESSION_METADATA_FILENAME = "session_metadata.json"
+PAPER_SESSION_STATUS_FILENAME = "session_status.json"
 
 LEGACY_METADATA_FILENAMES = ("meta.json",)
 LEGACY_REPORT_FILENAMES = ("run_report.json",)
@@ -53,4 +55,15 @@ def canonical_run_artifact_names() -> dict[str, str]:
         "config": CANONICAL_CONFIG_FILENAME,
         "metrics": CANONICAL_METRICS_FILENAME,
         "report": CANONICAL_REPORT_FILENAME,
+    }
+
+
+def canonical_paper_artifact_names() -> dict[str, str]:
+    return {
+        "metadata": PAPER_SESSION_METADATA_FILENAME,
+        "status": PAPER_SESSION_STATUS_FILENAME,
+        "config": CANONICAL_CONFIG_FILENAME,
+        "metrics": CANONICAL_METRICS_FILENAME,
+        "report": CANONICAL_REPORT_FILENAME,
+        "trades": "trades.csv",
     }

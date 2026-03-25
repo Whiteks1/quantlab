@@ -15,6 +15,8 @@ from quantlab.runs.artifacts import (
     CANONICAL_REPORT_FILENAME,
     CONFIG_RESOLVED_YAML_FILENAME,
     LEGACY_METADATA_FILENAMES,
+    PAPER_SESSION_METADATA_FILENAME,
+    canonical_paper_artifact_names,
     canonical_run_artifact_names,
     load_json_with_fallback,
 )
@@ -45,6 +47,12 @@ def _build_machine_contract(
         contract["best_result"] = best_result
     return contract
 
+
+def _artifact_names_for_command(command: str) -> Dict[str, Any]:
+    if command == "paper":
+        return canonical_paper_artifact_names()
+    return canonical_run_artifact_names()
+
 def _sanitize_for_json(obj: Any) -> Any:
     """
     Recursively convert non-finite floats (NaN, Inf) to None for strict JSON.
@@ -66,6 +74,7 @@ def build_report(run_dir: str) -> Dict[str, Any]:
     meta, meta_path = load_json_with_fallback(
         run_path,
         CANONICAL_METADATA_FILENAME,
+        PAPER_SESSION_METADATA_FILENAME,
         *LEGACY_METADATA_FILENAMES,
     )
     if not meta_path:
@@ -192,6 +201,18 @@ def build_report(run_dir: str) -> Dict[str, Any]:
             mode=mode,
             summary=machine_summary,
         )
+    elif command == "paper":
+        report["machine_contract"] = _build_machine_contract(
+            command="paper",
+            status=report["status"],
+            request_id=meta.get("request_id"),
+            run_id=report["header"].get("run_id"),
+            mode=mode,
+            summary=machine_summary,
+        )
+
+    if "machine_contract" in report:
+        report["machine_contract"]["artifacts"] = _artifact_names_for_command(command)
 
     # Preserve legacy summary structures (e.g. walkforward summary tables)
     # and add the machine-readable KPI block additively.

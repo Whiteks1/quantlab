@@ -427,6 +427,8 @@ def main() -> None:
             session_metadata["mode"] = "forward"
         elif args.portfolio_report or args.portfolio_compare:
             session_metadata["mode"] = "portfolio"
+        elif args.paper:
+            session_metadata["mode"] = "paper"
         elif args.report:
             session_metadata["mode"] = "report"
         elif args.runs_list or args.runs_show or args.runs_best:
