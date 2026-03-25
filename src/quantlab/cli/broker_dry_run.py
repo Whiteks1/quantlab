@@ -7,11 +7,15 @@ local audit artifacts for the Kraken dry-run adapter.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 from pathlib import Path
 
 from quantlab.brokers import ExecutionIntent, ExecutionPolicy, KrakenBrokerAdapter
+from quantlab.brokers.session_store import BrokerDryRunStore
 from quantlab.errors import ConfigError
+from quantlab.reporting.broker_dry_run_index import write_broker_dry_runs_index
+from quantlab.runs.run_id import generate_run_id
 
 
 def handle_broker_dry_run_commands(args) -> dict[str, object] | bool:
@@ -20,19 +24,74 @@ def handle_broker_dry_run_commands(args) -> dict[str, object] | bool:
 
     Commands:
     - ``--kraken-dry-run-outdir <DIR>`` : build and persist a local Kraken dry-run audit
+    - ``--kraken-dry-run-session`` : build and persist a canonical broker dry-run session
     """
-    if not getattr(args, "kraken_dry_run_outdir", None):
+    if not getattr(args, "kraken_dry_run_outdir", None) and not getattr(args, "kraken_dry_run_session", False):
         return False
-
-    outdir = Path(args.kraken_dry_run_outdir)
-    outdir.mkdir(parents=True, exist_ok=True)
 
     intent = _build_execution_intent_from_args(args)
     policy = _build_execution_policy_from_args(args)
 
     adapter = KrakenBrokerAdapter()
     audit = adapter.build_dry_run_audit(intent, policy).to_dict()
+    request_id = getattr(args, "_request_id", None)
 
+    if getattr(args, "kraken_dry_run_session", False):
+        session_id = generate_run_id(
+            "broker_dry_run",
+            {
+                "broker_target": intent.broker_target,
+                "symbol": intent.symbol,
+                "side": intent.side,
+                "quantity": intent.quantity,
+                "notional": intent.notional,
+                "request_id": request_id,
+            },
+        )
+        root_dir = Path(getattr(args, "broker_dry_runs_root", None) or "outputs/broker_dry_runs").resolve()
+        store = BrokerDryRunStore(session_id, base_dir=str(root_dir))
+        session_path = store.initialize().resolve()
+
+        metadata = {
+            "session_id": session_id,
+            "adapter_name": adapter.adapter_name,
+            "status": "success" if audit["preflight"]["allowed"] else "rejected",
+            "created_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+            "request_id": request_id,
+        }
+        status = {
+            "session_id": session_id,
+            "status": metadata["status"],
+            "updated_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+            "preflight_allowed": audit["preflight"]["allowed"],
+            "preflight_reasons": audit["preflight"]["reasons"],
+        }
+        if audit["preflight"]["reasons"]:
+            status["message"] = ", ".join(audit["preflight"]["reasons"])
+
+        store.write_metadata(metadata)
+        store.write_status(status)
+        store.write_audit(audit)
+        csv_path, json_path = write_broker_dry_runs_index(root_dir)
+
+        print("\nKraken dry-run session generated:\n")
+        print(f"  session_path  : {session_path}")
+        print(f"  preflight_ok  : {audit['preflight']['allowed']}")
+        print(f"  adapter_name  : {audit['adapter_name']}")
+        print(f"  index_csv     : {csv_path}")
+        print(f"  index_json    : {json_path}")
+
+        return {
+            "status": "success",
+            "mode": "broker_dry_run",
+            "adapter_name": audit["adapter_name"],
+            "artifacts_path": str(session_path),
+            "session_id": session_id,
+            "preflight_allowed": audit["preflight"]["allowed"],
+        }
+
+    outdir = Path(args.kraken_dry_run_outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
     artifact_path = outdir / "broker_dry_run.json"
     with open(artifact_path, "w", encoding="utf-8") as fh:
         json.dump(audit, fh, indent=2, ensure_ascii=False)

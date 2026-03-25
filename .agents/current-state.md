@@ -52,6 +52,7 @@
   - Stage D.0 now has an initial broker-agnostic safety boundary in `src/quantlab/brokers/boundary.py`
   - Stage D.1 now has a first dry-run `KrakenBrokerAdapter` built on that boundary
   - Kraken dry-run can now materialize a local `broker_dry_run.json` audit artifact
+  - broker dry-run now supports canonical sessions and a shared registry under `outputs/broker_dry_runs/`
 
 
 ## Known Issues / Technical Debt

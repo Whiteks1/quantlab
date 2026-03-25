@@ -70,6 +70,7 @@ Current Stage D.1 scope covered:
 - deterministic Kraken-style payload translation
 - stable dry-run audit snapshot for local review
 - local `broker_dry_run.json` artifact generation through the CLI
+- canonical broker dry-run sessions and shared registry under `outputs/broker_dry_runs/`
 
 Still intentionally out of scope:
 

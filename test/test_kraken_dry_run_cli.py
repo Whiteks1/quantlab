@@ -105,3 +105,77 @@ def test_missing_required_broker_inputs_fails_cleanly(tmp_path):
 
     assert result.returncode == 2
     assert "broker_quantity is required" in result.stderr or "broker_quantity is required" in result.stdout
+
+
+def test_writes_canonical_kraken_dry_run_session_and_registry(tmp_path):
+    root = tmp_path / "broker_dry_runs"
+
+    result = run_main(
+        [
+            "--kraken-dry-run-session",
+            "--broker-dry-runs-root",
+            str(root),
+            "--broker-symbol",
+            "ETH-USD",
+            "--broker-side",
+            "buy",
+            "--broker-quantity",
+            "0.25",
+            "--broker-notional",
+            "500",
+            "--broker-account-id",
+            "acct_demo",
+            "--broker-max-notional",
+            "1000",
+            "--broker-allowed-symbols",
+            "ETH/USD,BTC/USD",
+        ]
+    )
+
+    assert result.returncode == 0
+    sessions = [child for child in root.iterdir() if child.is_dir()]
+    assert len(sessions) == 1
+
+    session_dir = sessions[0]
+    assert (session_dir / "broker_dry_run.json").exists()
+    assert (session_dir / "session_metadata.json").exists()
+    assert (session_dir / "session_status.json").exists()
+    assert (root / "broker_dry_runs_index.csv").exists()
+    assert (root / "broker_dry_runs_index.json").exists()
+
+    payload = json.loads((session_dir / "broker_dry_run.json").read_text(encoding="utf-8"))
+    assert payload["preflight"]["allowed"] is True
+
+
+def test_persists_rejected_canonical_kraken_dry_run_session(tmp_path):
+    root = tmp_path / "broker_dry_runs"
+
+    result = run_main(
+        [
+            "--kraken-dry-run-session",
+            "--broker-dry-runs-root",
+            str(root),
+            "--broker-symbol",
+            "SOL-USD",
+            "--broker-side",
+            "buy",
+            "--broker-quantity",
+            "0.25",
+            "--broker-notional",
+            "1500",
+            "--broker-account-id",
+            "acct_demo",
+            "--broker-max-notional",
+            "1000",
+            "--broker-allowed-symbols",
+            "ETH/USD,BTC/USD",
+        ]
+    )
+
+    assert result.returncode == 0
+    session_dir = next(child for child in root.iterdir() if child.is_dir())
+
+    status = json.loads((session_dir / "session_status.json").read_text(encoding="utf-8"))
+    assert status["status"] == "rejected"
+    assert status["preflight_allowed"] is False
+    assert "max_notional_exceeded" in status["preflight_reasons"]
