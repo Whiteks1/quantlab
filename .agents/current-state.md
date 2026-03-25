@@ -55,6 +55,7 @@
   - broker dry-run now supports canonical sessions and a shared registry under `outputs/broker_dry_runs/`
   - Kraken preflight can now materialize a read-only public `broker_preflight.json` artifact
   - Kraken auth preflight can now materialize a read-only private `broker_auth_preflight.json` artifact
+  - Kraken account readiness can now materialize a read-only `broker_account_snapshot.json` artifact with balance-aware intent readiness
 
 
 ## Known Issues / Technical Debt

@@ -396,6 +396,12 @@ def main() -> None:
         help="Persist a local Kraken authenticated read-only preflight artifact in a directory.",
     )
     parser.add_argument(
+        "--kraken-account-readiness-outdir",
+        metavar="DIR",
+        default=None,
+        help="Persist a local Kraken authenticated account snapshot and intent readiness artifact in a directory.",
+    )
+    parser.add_argument(
         "--kraken-preflight-timeout",
         type=float,
         default=10.0,
@@ -574,7 +580,11 @@ def main() -> None:
             or args.paper_sessions_index
         ):
             session_metadata["mode"] = "paper_sessions"
-        elif args.kraken_preflight_outdir or args.kraken_auth_preflight_outdir:
+        elif (
+            args.kraken_preflight_outdir
+            or args.kraken_auth_preflight_outdir
+            or args.kraken_account_readiness_outdir
+        ):
             session_metadata["mode"] = "broker_preflight"
         elif (
             args.kraken_dry_run_outdir

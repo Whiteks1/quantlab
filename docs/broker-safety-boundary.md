@@ -70,6 +70,7 @@ Current Stage D.1 scope covered:
 - deterministic Kraken-style payload translation
 - read-only Kraken public preflight probes for pair support and basic readiness
 - read-only Kraken authenticated preflight probes for private boundary readiness
+- read-only Kraken account snapshot and balance-aware intent readiness
 - stable dry-run audit snapshot for local review
 - local `broker_dry_run.json` artifact generation through the CLI
 - canonical broker dry-run sessions and shared registry under `outputs/broker_dry_runs/`
@@ -85,8 +86,7 @@ Still intentionally out of scope:
 
 After this dry-run adapter slice is stable, the next logical implementation step is:
 
-- richer dry-run audit persistence and broker-preflight artifacts
-- then real broker connectivity work only behind the same boundary
+- richer authenticated account capability checks and, only after that, more sensitive broker connectivity work behind the same boundary
 
 ## Related Documents
 

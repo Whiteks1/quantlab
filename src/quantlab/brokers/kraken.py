@@ -126,6 +126,109 @@ class KrakenAuthPreflightReport:
         }
 
 
+@dataclass(frozen=True)
+class KrakenBalanceEntry:
+    asset: str
+    balance: float | None
+    credit: float | None
+    credit_used: float | None
+    hold_trade: float | None
+    available: float | None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "asset": self.asset,
+            "balance": self.balance,
+            "credit": self.credit,
+            "credit_used": self.credit_used,
+            "hold_trade": self.hold_trade,
+            "available": self.available,
+        }
+
+
+@dataclass(frozen=True)
+class KrakenIntentReadiness:
+    allowed: bool
+    reasons: tuple[str, ...]
+    funding_asset: str | None
+    funding_basis: str | None
+    required_amount: float | None
+    available_amount: float | None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "allowed": self.allowed,
+            "reasons": list(self.reasons),
+            "funding_asset": self.funding_asset,
+            "funding_basis": self.funding_basis,
+            "required_amount": self.required_amount,
+            "available_amount": self.available_amount,
+        }
+
+
+@dataclass(frozen=True)
+class KrakenAccountSnapshotReport:
+    adapter_name: str
+    generated_at: str
+    symbol_input: str
+    normalized_symbol: str
+    public_api_reachable: bool
+    pair_supported: bool
+    matched_pair_key: str | None
+    matched_pair_wsname: str | None
+    matched_pair_altname: str | None
+    base_asset: str | None
+    quote_asset: str | None
+    pair_status: str | None
+    ordermin: float | None
+    costmin: float | None
+    tick_size: float | None
+    account_snapshot_available: bool
+    balances: tuple[KrakenBalanceEntry, ...]
+    authenticated_preflight: KrakenAuthPreflightReport
+    intent: ExecutionIntent
+    policy: ExecutionPolicy
+    local_preflight: ExecutionPreflight
+    intent_readiness: KrakenIntentReadiness
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact_type": "quantlab.kraken.account_snapshot",
+            "adapter_name": self.adapter_name,
+            "generated_at": self.generated_at,
+            "symbol_input": self.symbol_input,
+            "normalized_symbol": self.normalized_symbol,
+            "public_api_reachable": self.public_api_reachable,
+            "pair_supported": self.pair_supported,
+            "matched_pair_key": self.matched_pair_key,
+            "matched_pair_wsname": self.matched_pair_wsname,
+            "matched_pair_altname": self.matched_pair_altname,
+            "base_asset": self.base_asset,
+            "quote_asset": self.quote_asset,
+            "pair_status": self.pair_status,
+            "ordermin": self.ordermin,
+            "costmin": self.costmin,
+            "tick_size": self.tick_size,
+            "account_snapshot_available": self.account_snapshot_available,
+            "balances": [entry.to_dict() for entry in self.balances],
+            "authenticated_preflight": self.authenticated_preflight.to_dict(),
+            "intent": asdict(self.intent),
+            "policy": {
+                "kill_switch_active": self.policy.kill_switch_active,
+                "max_notional_per_order": self.policy.max_notional_per_order,
+                "allowed_symbols": sorted(self.policy.allowed_symbols),
+                "require_account_id": self.policy.require_account_id,
+            },
+            "local_preflight": {
+                "allowed": self.local_preflight.allowed,
+                "reasons": list(self.local_preflight.reasons),
+            },
+            "intent_readiness": self.intent_readiness.to_dict(),
+            "errors": list(self.errors),
+        }
+
+
 class KrakenBrokerAdapter(BrokerAdapter):
     """
     First dry-run broker adapter target for QuantLab.
@@ -326,6 +429,104 @@ class KrakenBrokerAdapter(BrokerAdapter):
                 errors=(f"auth_probe_failed:{exc.__class__.__name__}",),
             )
 
+    def build_account_snapshot_report(
+        self,
+        intent: ExecutionIntent,
+        policy: ExecutionPolicy,
+        *,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        api_key_env: str = "KRAKEN_API_KEY",
+        api_secret_env: str = "KRAKEN_API_SECRET",
+        timeout_seconds: float = 10.0,
+        fetch_json=None,
+        fetch_private_json=None,
+    ) -> KrakenAccountSnapshotReport:
+        public_report = self.build_public_preflight_report(
+            intent.symbol,
+            timeout_seconds=timeout_seconds,
+            fetch_json=fetch_json,
+        )
+        auth_report = self.build_authenticated_preflight_report(
+            api_key=api_key,
+            api_secret=api_secret,
+            api_key_env=api_key_env,
+            api_secret_env=api_secret_env,
+            timeout_seconds=timeout_seconds,
+            fetch_private_json=fetch_private_json,
+        )
+        local_preflight = self.preflight(intent, policy)
+        errors: list[str] = list(public_report.errors) + list(auth_report.errors)
+
+        pair_details = None
+        if public_report.pair_supported:
+            try:
+                asset_pairs_payload = fetch_kraken_asset_pairs(
+                    timeout_seconds=timeout_seconds,
+                    fetch_json=fetch_json,
+                )
+                pair_details = _find_matching_asset_pair(
+                    public_report.normalized_symbol,
+                    asset_pairs_payload.get("result", {}),
+                )
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"pair_details_probe_failed:{exc.__class__.__name__}")
+
+        balances: tuple[KrakenBalanceEntry, ...] = ()
+        account_snapshot_available = False
+        if auth_report.authenticated:
+            try:
+                balance_payload = fetch_kraken_extended_balance(
+                    api_key=api_key or os.getenv(api_key_env, ""),
+                    api_secret=api_secret or os.getenv(api_secret_env, ""),
+                    timeout_seconds=timeout_seconds,
+                    fetch_private_json=fetch_private_json,
+                )
+                balance_errors = balance_payload.get("error", []) if isinstance(balance_payload, dict) else []
+                if balance_errors:
+                    errors.extend(str(err) for err in balance_errors)
+                else:
+                    balances = tuple(_build_balance_entries(balance_payload.get("result", {})))
+                    account_snapshot_available = True
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"balance_probe_failed:{exc.__class__.__name__}")
+
+        readiness = _build_intent_readiness(
+            intent=intent,
+            pair_supported=public_report.pair_supported,
+            pair_details=pair_details,
+            authenticated=auth_report.authenticated,
+            account_snapshot_available=account_snapshot_available,
+            balances=balances,
+            local_preflight=local_preflight,
+        )
+
+        return KrakenAccountSnapshotReport(
+            adapter_name=self.adapter_name,
+            generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+            symbol_input=intent.symbol,
+            normalized_symbol=public_report.normalized_symbol,
+            public_api_reachable=public_report.public_api_reachable,
+            pair_supported=public_report.pair_supported,
+            matched_pair_key=public_report.matched_pair_key,
+            matched_pair_wsname=public_report.matched_pair_wsname,
+            matched_pair_altname=public_report.matched_pair_altname,
+            base_asset=_pair_value(pair_details, "base"),
+            quote_asset=_pair_value(pair_details, "quote"),
+            pair_status=_pair_value(pair_details, "status"),
+            ordermin=_pair_float(pair_details, "ordermin"),
+            costmin=_pair_float(pair_details, "costmin"),
+            tick_size=_pair_float(pair_details, "tick_size"),
+            account_snapshot_available=account_snapshot_available,
+            balances=balances,
+            authenticated_preflight=auth_report,
+            intent=intent,
+            policy=policy,
+            local_preflight=local_preflight,
+            intent_readiness=readiness,
+            errors=tuple(errors),
+        )
+
 
 def _normalize_kraken_pair(symbol: str) -> str:
     raw = symbol.strip().upper().replace("-", "/")
@@ -358,6 +559,22 @@ def fetch_kraken_api_key_info(
     fetcher = fetch_private_json or _fetch_private_json
     return fetcher(
         "/0/private/GetAPIKeyInfo",
+        api_key=api_key,
+        api_secret=api_secret,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def fetch_kraken_extended_balance(
+    *,
+    api_key: str,
+    api_secret: str,
+    timeout_seconds: float = 10.0,
+    fetch_private_json=None,
+) -> dict[str, object]:
+    fetcher = fetch_private_json or _fetch_private_json
+    return fetcher(
+        "/0/private/BalanceEx",
         api_key=api_key,
         api_secret=api_secret,
         timeout_seconds=timeout_seconds,
@@ -434,9 +651,175 @@ def _find_matching_asset_pair(
                 "pair_key": str(pair_key),
                 "wsname": str(wsname) if wsname is not None else "",
                 "altname": str(altname) if altname is not None else "",
+                "base": str(payload.get("base")) if payload.get("base") is not None else "",
+                "quote": str(payload.get("quote")) if payload.get("quote") is not None else "",
+                "ordermin": str(payload.get("ordermin")) if payload.get("ordermin") is not None else "",
+                "costmin": str(payload.get("costmin")) if payload.get("costmin") is not None else "",
+                "tick_size": str(payload.get("tick_size")) if payload.get("tick_size") is not None else "",
+                "status": str(payload.get("status")) if payload.get("status") is not None else "",
             }
     return None
 
 
 def _compact_symbol(symbol: str) -> str:
     return "".join(ch for ch in _normalize_kraken_pair(symbol) if ch.isalnum())
+
+
+def _pair_value(pair_details: dict[str, str] | None, key: str) -> str | None:
+    if not pair_details:
+        return None
+    value = pair_details.get(key)
+    return value or None
+
+
+def _pair_float(pair_details: dict[str, str] | None, key: str) -> float | None:
+    if not pair_details:
+        return None
+    return _coerce_float(pair_details.get(key))
+
+
+def _coerce_float(value: object) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_balance_entries(result_payload: dict[str, object]) -> list[KrakenBalanceEntry]:
+    entries: list[KrakenBalanceEntry] = []
+    for asset, payload in sorted(result_payload.items()):
+        if isinstance(payload, dict):
+            balance = _coerce_float(payload.get("balance"))
+            credit = _coerce_float(payload.get("credit"))
+            credit_used = _coerce_float(payload.get("credit_used"))
+            hold_trade = _coerce_float(payload.get("hold_trade"))
+            available = _coerce_float(payload.get("available"))
+            if available is None:
+                available = (balance or 0.0) + (credit or 0.0) - (credit_used or 0.0) - (hold_trade or 0.0)
+        else:
+            balance = _coerce_float(payload)
+            credit = 0.0
+            credit_used = 0.0
+            hold_trade = 0.0
+            available = balance
+
+        entries.append(
+            KrakenBalanceEntry(
+                asset=str(asset),
+                balance=balance,
+                credit=credit,
+                credit_used=credit_used,
+                hold_trade=hold_trade,
+                available=available,
+            )
+        )
+    return entries
+
+
+def _build_intent_readiness(
+    *,
+    intent: ExecutionIntent,
+    pair_supported: bool,
+    pair_details: dict[str, str] | None,
+    authenticated: bool,
+    account_snapshot_available: bool,
+    balances: tuple[KrakenBalanceEntry, ...],
+    local_preflight: ExecutionPreflight,
+) -> KrakenIntentReadiness:
+    reasons: list[str] = list(local_preflight.reasons)
+    funding_asset = None
+    funding_basis = None
+    required_amount = None
+    available_amount = None
+
+    if not authenticated:
+        reasons.append("private_auth_not_ready")
+
+    if not pair_supported or not pair_details:
+        reasons.append("pair_not_supported")
+        return KrakenIntentReadiness(
+            allowed=False,
+            reasons=tuple(_unique_reasons(reasons)),
+            funding_asset=None,
+            funding_basis=None,
+            required_amount=None,
+            available_amount=None,
+        )
+
+    if _pair_value(pair_details, "status") not in (None, "online"):
+        reasons.append("pair_not_online")
+
+    base_asset = _pair_value(pair_details, "base")
+    quote_asset = _pair_value(pair_details, "quote")
+    ordermin = _pair_float(pair_details, "ordermin")
+    costmin = _pair_float(pair_details, "costmin")
+
+    if intent.side == "buy":
+        funding_asset = quote_asset
+        funding_basis = "notional"
+        required_amount = intent.notional
+        if costmin is not None and intent.notional < costmin:
+            reasons.append("below_pair_costmin")
+    elif intent.side == "sell":
+        funding_asset = base_asset
+        funding_basis = "quantity"
+        required_amount = intent.quantity
+        if ordermin is not None and intent.quantity < ordermin:
+            reasons.append("below_pair_ordermin")
+
+    if not account_snapshot_available:
+        reasons.append("account_snapshot_unavailable")
+    elif funding_asset:
+        available_amount = _available_for_asset(balances, funding_asset)
+        if available_amount is None:
+            reasons.append("funding_asset_missing")
+        elif required_amount is not None and available_amount < required_amount:
+            reasons.append("insufficient_available_balance")
+
+    return KrakenIntentReadiness(
+        allowed=not reasons,
+        reasons=tuple(_unique_reasons(reasons)),
+        funding_asset=funding_asset,
+        funding_basis=funding_basis,
+        required_amount=required_amount,
+        available_amount=available_amount,
+    )
+
+
+def _available_for_asset(
+    balances: tuple[KrakenBalanceEntry, ...],
+    target_asset: str,
+) -> float | None:
+    matching = [
+        entry.available
+        for entry in balances
+        if entry.available is not None and _asset_code_candidates(entry.asset) & _asset_code_candidates(target_asset)
+    ]
+    if not matching:
+        return None
+    return float(sum(matching))
+
+
+def _asset_code_candidates(asset: str) -> set[str]:
+    base_asset = asset.strip().upper().split(".", 1)[0]
+    candidates = {base_asset}
+
+    if base_asset.startswith(("X", "Z")) and len(base_asset) > 3:
+        candidates.add(base_asset[1:])
+
+    if base_asset in {"BTC", "XBT", "XXBT"}:
+        candidates.update({"BTC", "XBT", "XXBT"})
+
+    return {candidate for candidate in candidates if candidate}
+
+
+def _unique_reasons(reasons: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for reason in reasons:
+        if reason and reason not in seen:
+            ordered.append(reason)
+            seen.add(reason)
+    return ordered

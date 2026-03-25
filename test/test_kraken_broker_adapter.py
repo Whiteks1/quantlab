@@ -221,3 +221,198 @@ def test_authenticated_preflight_reports_api_errors():
     assert report["credentials_present"] is True
     assert report["authenticated"] is False
     assert "EGeneral:Permission denied" in report["errors"]
+
+
+def test_account_snapshot_reports_missing_credentials_cleanly(monkeypatch):
+    monkeypatch.delenv("KRAKEN_API_KEY", raising=False)
+    monkeypatch.delenv("KRAKEN_API_SECRET", raising=False)
+    adapter = KrakenBrokerAdapter()
+    policy = ExecutionPolicy(max_notional_per_order=1000.0)
+
+    report = adapter.build_account_snapshot_report(_make_intent(), policy).to_dict()
+
+    assert report["artifact_type"] == "quantlab.kraken.account_snapshot"
+    assert report["authenticated_preflight"]["authenticated"] is False
+    assert report["account_snapshot_available"] is False
+    assert report["intent_readiness"]["allowed"] is False
+    assert "private_auth_not_ready" in report["intent_readiness"]["reasons"]
+
+
+def test_account_snapshot_marks_buy_intent_fundable_with_sufficient_quote_balance():
+    adapter = KrakenBrokerAdapter()
+    policy = ExecutionPolicy(
+        max_notional_per_order=1000.0,
+        allowed_symbols=frozenset({"ETH/USD"}),
+        require_account_id=True,
+    )
+
+    def fake_fetch_json(path, **kwargs):
+        if path == "/Time":
+            return {"error": [], "result": {"unixtime": 1700000000, "rfc1123": "Tue, 14 Nov 2023 22:13:20 GMT"}}
+        if path == "/AssetPairs":
+            return {
+                "error": [],
+                "result": {
+                    "XETHZUSD": {
+                        "altname": "ETHUSD",
+                        "wsname": "ETH/USD",
+                        "base": "XETH",
+                        "quote": "ZUSD",
+                        "ordermin": "0.001",
+                        "costmin": "0.5",
+                        "tick_size": "0.01",
+                        "status": "online",
+                    }
+                },
+            }
+        raise AssertionError(path)
+
+    def fake_private_json(path, **kwargs):
+        if path == "/0/private/GetAPIKeyInfo":
+            return {"error": [], "result": {"name": "quantlab-demo", "permissions": {"funds": "query"}}}
+        if path == "/0/private/BalanceEx":
+            return {
+                "error": [],
+                "result": {
+                    "ZUSD": {
+                        "balance": "1200.0",
+                        "credit": "0.0",
+                        "credit_used": "0.0",
+                        "hold_trade": "0.0",
+                    }
+                },
+            }
+        raise AssertionError(path)
+
+    report = adapter.build_account_snapshot_report(
+        _make_intent(symbol="ETH/USD", side="buy", notional=500.0, quantity=0.25),
+        policy,
+        api_key="demo-key",
+        api_secret="ZGVtby1zZWNyZXQ=",
+        fetch_json=fake_fetch_json,
+        fetch_private_json=fake_private_json,
+    ).to_dict()
+
+    assert report["account_snapshot_available"] is True
+    assert report["intent_readiness"]["allowed"] is True
+    assert report["intent_readiness"]["funding_asset"] == "ZUSD"
+    assert report["intent_readiness"]["available_amount"] == 1200.0
+
+
+def test_account_snapshot_marks_sell_intent_insufficient_when_base_balance_is_too_low():
+    adapter = KrakenBrokerAdapter()
+    policy = ExecutionPolicy(
+        max_notional_per_order=1000.0,
+        allowed_symbols=frozenset({"ETH/USD"}),
+        require_account_id=True,
+    )
+
+    def fake_fetch_json(path, **kwargs):
+        if path == "/Time":
+            return {"error": [], "result": {"unixtime": 1700000000, "rfc1123": "Tue, 14 Nov 2023 22:13:20 GMT"}}
+        if path == "/AssetPairs":
+            return {
+                "error": [],
+                "result": {
+                    "XETHZUSD": {
+                        "altname": "ETHUSD",
+                        "wsname": "ETH/USD",
+                        "base": "XETH",
+                        "quote": "ZUSD",
+                        "ordermin": "0.001",
+                        "costmin": "0.5",
+                        "tick_size": "0.01",
+                        "status": "online",
+                    }
+                },
+            }
+        raise AssertionError(path)
+
+    def fake_private_json(path, **kwargs):
+        if path == "/0/private/GetAPIKeyInfo":
+            return {"error": [], "result": {"name": "quantlab-demo", "permissions": {"funds": "query"}}}
+        if path == "/0/private/BalanceEx":
+            return {
+                "error": [],
+                "result": {
+                    "XETH": {
+                        "balance": "0.10",
+                        "credit": "0.0",
+                        "credit_used": "0.0",
+                        "hold_trade": "0.0",
+                    }
+                },
+            }
+        raise AssertionError(path)
+
+    report = adapter.build_account_snapshot_report(
+        _make_intent(symbol="ETH/USD", side="sell", quantity=0.25, notional=500.0),
+        policy,
+        api_key="demo-key",
+        api_secret="ZGVtby1zZWNyZXQ=",
+        fetch_json=fake_fetch_json,
+        fetch_private_json=fake_private_json,
+    ).to_dict()
+
+    assert report["intent_readiness"]["allowed"] is False
+    assert report["intent_readiness"]["funding_asset"] == "XETH"
+    assert "insufficient_available_balance" in report["intent_readiness"]["reasons"]
+
+
+def test_account_snapshot_respects_pair_minimums():
+    adapter = KrakenBrokerAdapter()
+    policy = ExecutionPolicy(
+        max_notional_per_order=1000.0,
+        allowed_symbols=frozenset({"ETH/USD"}),
+        require_account_id=True,
+    )
+
+    def fake_fetch_json(path, **kwargs):
+        if path == "/Time":
+            return {"error": [], "result": {"unixtime": 1700000000, "rfc1123": "Tue, 14 Nov 2023 22:13:20 GMT"}}
+        if path == "/AssetPairs":
+            return {
+                "error": [],
+                "result": {
+                    "XETHZUSD": {
+                        "altname": "ETHUSD",
+                        "wsname": "ETH/USD",
+                        "base": "XETH",
+                        "quote": "ZUSD",
+                        "ordermin": "0.5",
+                        "costmin": "100.0",
+                        "tick_size": "0.01",
+                        "status": "online",
+                    }
+                },
+            }
+        raise AssertionError(path)
+
+    def fake_private_json(path, **kwargs):
+        if path == "/0/private/GetAPIKeyInfo":
+            return {"error": [], "result": {"name": "quantlab-demo", "permissions": {"funds": "query"}}}
+        if path == "/0/private/BalanceEx":
+            return {
+                "error": [],
+                "result": {
+                    "ZUSD": {
+                        "balance": "1200.0",
+                        "credit": "0.0",
+                        "credit_used": "0.0",
+                        "hold_trade": "0.0",
+                    }
+                },
+            }
+        raise AssertionError(path)
+
+    report = adapter.build_account_snapshot_report(
+        _make_intent(symbol="ETH/USD", side="buy", quantity=0.25, notional=50.0),
+        policy,
+        api_key="demo-key",
+        api_secret="ZGVtby1zZWNyZXQ=",
+        fetch_json=fake_fetch_json,
+        fetch_private_json=fake_private_json,
+    ).to_dict()
+
+    assert report["intent_readiness"]["allowed"] is False
+    assert "below_pair_costmin" in report["intent_readiness"]["reasons"]
