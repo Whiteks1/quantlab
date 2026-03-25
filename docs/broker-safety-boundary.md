@@ -69,6 +69,7 @@ Current Stage D.1 scope covered:
 - shared preflight validation through the Stage D.0 boundary
 - deterministic Kraken-style payload translation
 - read-only Kraken public preflight probes for pair support and basic readiness
+- read-only Kraken authenticated preflight probes for private boundary readiness
 - stable dry-run audit snapshot for local review
 - local `broker_dry_run.json` artifact generation through the CLI
 - canonical broker dry-run sessions and shared registry under `outputs/broker_dry_runs/`

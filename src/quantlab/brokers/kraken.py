@@ -7,12 +7,17 @@ backend without sending real broker requests.
 
 from __future__ import annotations
 
+import base64
 from dataclasses import asdict, dataclass
 import datetime as dt
+import hashlib
+import hmac
 import json
+import os
+import time
 from urllib.error import URLError
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from .boundary import (
     BrokerAdapter,
@@ -84,6 +89,39 @@ class KrakenPreflightReport:
             "matched_pair_key": self.matched_pair_key,
             "matched_pair_wsname": self.matched_pair_wsname,
             "matched_pair_altname": self.matched_pair_altname,
+            "errors": list(self.errors),
+        }
+
+
+@dataclass(frozen=True)
+class KrakenAuthPreflightReport:
+    adapter_name: str
+    generated_at: str
+    credentials_present: bool
+    authenticated: bool
+    api_key_env: str
+    api_secret_env: str
+    key_name: str | None
+    permissions: dict[str, object] | None
+    restrictions: dict[str, object] | None
+    created_at: str | None
+    updated_at: str | None
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact_type": "quantlab.kraken.auth_preflight",
+            "adapter_name": self.adapter_name,
+            "generated_at": self.generated_at,
+            "credentials_present": self.credentials_present,
+            "authenticated": self.authenticated,
+            "api_key_env": self.api_key_env,
+            "api_secret_env": self.api_secret_env,
+            "key_name": self.key_name,
+            "permissions": self.permissions,
+            "restrictions": self.restrictions,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
             "errors": list(self.errors),
         }
 
@@ -199,6 +237,95 @@ class KrakenBrokerAdapter(BrokerAdapter):
             errors=tuple(errors),
         )
 
+    def build_authenticated_preflight_report(
+        self,
+        *,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        api_key_env: str = "KRAKEN_API_KEY",
+        api_secret_env: str = "KRAKEN_API_SECRET",
+        timeout_seconds: float = 10.0,
+        fetch_private_json=None,
+    ) -> KrakenAuthPreflightReport:
+        resolved_key = api_key or os.getenv(api_key_env)
+        resolved_secret = api_secret or os.getenv(api_secret_env)
+        errors: list[str] = []
+
+        if not resolved_key:
+            errors.append("missing_api_key")
+        if not resolved_secret:
+            errors.append("missing_api_secret")
+
+        if errors:
+            return KrakenAuthPreflightReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                credentials_present=False,
+                authenticated=False,
+                api_key_env=api_key_env,
+                api_secret_env=api_secret_env,
+                key_name=None,
+                permissions=None,
+                restrictions=None,
+                created_at=None,
+                updated_at=None,
+                errors=tuple(errors),
+            )
+
+        try:
+            response = fetch_kraken_api_key_info(
+                api_key=resolved_key,
+                api_secret=resolved_secret,
+                timeout_seconds=timeout_seconds,
+                fetch_private_json=fetch_private_json,
+            )
+            response_errors = response.get("error", []) if isinstance(response, dict) else []
+            if response_errors:
+                return KrakenAuthPreflightReport(
+                    adapter_name=self.adapter_name,
+                    generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                    credentials_present=True,
+                    authenticated=False,
+                    api_key_env=api_key_env,
+                    api_secret_env=api_secret_env,
+                    key_name=None,
+                    permissions=None,
+                    restrictions=None,
+                    created_at=None,
+                    updated_at=None,
+                    errors=tuple(str(err) for err in response_errors),
+                )
+            result = response.get("result", {}) if isinstance(response, dict) else {}
+            return KrakenAuthPreflightReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                credentials_present=True,
+                authenticated=True,
+                api_key_env=api_key_env,
+                api_secret_env=api_secret_env,
+                key_name=result.get("name"),
+                permissions=result.get("permissions"),
+                restrictions=result.get("restrictions"),
+                created_at=result.get("created"),
+                updated_at=result.get("updated"),
+                errors=(),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return KrakenAuthPreflightReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                credentials_present=True,
+                authenticated=False,
+                api_key_env=api_key_env,
+                api_secret_env=api_secret_env,
+                key_name=None,
+                permissions=None,
+                restrictions=None,
+                created_at=None,
+                updated_at=None,
+                errors=(f"auth_probe_failed:{exc.__class__.__name__}",),
+            )
+
 
 def _normalize_kraken_pair(symbol: str) -> str:
     raw = symbol.strip().upper().replace("-", "/")
@@ -221,6 +348,22 @@ def fetch_kraken_asset_pairs(*, timeout_seconds: float = 10.0, fetch_json=None) 
     return fetcher("/AssetPairs", timeout_seconds=timeout_seconds)
 
 
+def fetch_kraken_api_key_info(
+    *,
+    api_key: str,
+    api_secret: str,
+    timeout_seconds: float = 10.0,
+    fetch_private_json=None,
+) -> dict[str, object]:
+    fetcher = fetch_private_json or _fetch_private_json
+    return fetcher(
+        "/0/private/GetAPIKeyInfo",
+        api_key=api_key,
+        api_secret=api_secret,
+        timeout_seconds=timeout_seconds,
+    )
+
+
 def _fetch_public_json(
     path: str,
     *,
@@ -234,6 +377,40 @@ def _fetch_public_json(
             return json.loads(response.read().decode("utf-8"))
     except URLError:
         raise
+
+
+def _fetch_private_json(
+    url_path: str,
+    *,
+    api_key: str,
+    api_secret: str,
+    payload: dict[str, object] | None = None,
+    timeout_seconds: float = 10.0,
+) -> dict[str, object]:
+    request_payload = dict(payload or {})
+    request_payload.setdefault("nonce", str(time.time_ns()))
+    encoded_payload = urlencode(request_payload)
+    signature = _build_kraken_api_sign(url_path, request_payload, api_secret)
+    request = Request(
+        f"https://api.kraken.com{url_path}",
+        data=encoded_payload.encode("utf-8"),
+        headers={
+            "API-Key": api_key,
+            "API-Sign": signature,
+            "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+        },
+        method="POST",
+    )
+    with urlopen(request, timeout=timeout_seconds) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _build_kraken_api_sign(url_path: str, data: dict[str, object], api_secret: str) -> str:
+    encoded = urlencode(data)
+    nonce = str(data["nonce"])
+    message = url_path.encode("utf-8") + hashlib.sha256((nonce + encoded).encode("utf-8")).digest()
+    mac = hmac.new(base64.b64decode(api_secret), message, hashlib.sha512)
+    return base64.b64encode(mac.digest()).decode("utf-8")
 
 
 def _find_matching_asset_pair(
