@@ -134,6 +134,7 @@ python main.py --help
 See also:
 
 - [docs/cli.md](./docs/cli.md)
+- [docs/broker-safety-boundary.md](./docs/broker-safety-boundary.md)
 - [docs/paper-session-runbook.md](./docs/paper-session-runbook.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/workflow-operativo-codex.md](./docs/workflow-operativo-codex.md)
@@ -356,6 +357,12 @@ The repository already exposes a professional baseline for continued integration
 - reproducibility over ad hoc experimentation
 - explicit contracts over implicit behavior
 - extensibility without collapsing QuantLab/Stepbit separation
+
+## Current Execution Boundary
+
+Real broker work is still gated behind Stage D.0.
+
+The current local safety boundary is documented in [docs/broker-safety-boundary.md](./docs/broker-safety-boundary.md) and defines the broker-agnostic execution contract that future adapters must follow.
 
 ## License
 
