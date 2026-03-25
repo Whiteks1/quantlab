@@ -420,7 +420,7 @@ def main() -> None:
 
         # Determine mode for signalling after validation and just before execution
         if _json_command:
-            session_metadata["mode"] = "paper" if _json_command == "run" and args.paper else _json_command
+            session_metadata["mode"] = _json_command
         elif args.sweep:
             session_metadata["mode"] = "sweep"
         elif args.forward_eval or args.resume_forward:
