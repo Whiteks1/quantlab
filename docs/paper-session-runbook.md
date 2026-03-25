@@ -132,7 +132,25 @@ Recommended default:
 
 - `60` minutes for general local operation
 
-## 7. Operator Response Guide
+## 7. Refresh The Shared Paper Index
+
+Refresh the shared paper-session index:
+
+```bash
+python main.py --paper-sessions-index outputs/paper_sessions
+```
+
+This writes:
+
+```text
+outputs/paper_sessions/
+  paper_sessions_index.csv
+  paper_sessions_index.json
+```
+
+Use this when you want a compact export surface for repeated review, local handoff, or downstream local tooling.
+
+## 8. Operator Response Guide
 
 ### `success`
 
@@ -195,7 +213,7 @@ What to do:
 - confirm whether the process is genuinely still progressing
 - if not, treat it as an operational issue and rerun only after checking logs, data, and the local environment
 
-## 8. Recommended Operating Loop
+## 9. Recommended Operating Loop
 
 For routine paper operation:
 
@@ -203,17 +221,18 @@ For routine paper operation:
 2. inspect recent session creation with `--paper-sessions-list`
 3. check pulse with `--paper-sessions-health`
 4. check alert state with `--paper-sessions-alerts`
-5. inspect any non-success or stale session with `--paper-sessions-show`
-6. review `report.json` and `trades.csv` for the sessions worth keeping
+5. refresh `--paper-sessions-index` if you want a shared export of the current paper root
+6. inspect any non-success or stale session with `--paper-sessions-show`
+7. review `report.json` and `trades.csv` for the sessions worth keeping
 
-## 9. Boundary Notes
+## 10. Boundary Notes
 
 - paper sessions are operationally distinct from research runs
 - paper sessions do not refresh `outputs/runs/runs_index.*`
 - paper sessions are not yet broker-connected execution
 - Stepbit or other external systems may consume QuantLab outputs, but they do not define this runbook or the operating authority
 
-## 10. Related Documents
+## 11. Related Documents
 
 - [README.md](../README.md)
 - [cli.md](./cli.md)

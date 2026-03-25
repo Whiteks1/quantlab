@@ -14,6 +14,7 @@ from quantlab.cli.paper_sessions import (
     handle_paper_session_commands,
 )
 from quantlab.errors import ConfigError
+from quantlab.reporting.paper_session_index import build_paper_sessions_index
 
 
 @pytest.fixture()
@@ -90,6 +91,7 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "paper_sessions_show": None,
         "paper_sessions_health": None,
         "paper_sessions_alerts": None,
+        "paper_sessions_index": None,
         "paper_stale_minutes": DEFAULT_PAPER_STALE_MINUTES,
     }
     defaults.update(kwargs)
@@ -213,6 +215,72 @@ class TestPaperSessionsAlerts:
     def test_invalid_stale_threshold_raises_config_error(self, paper_sessions_root: Path):
         with pytest.raises(ConfigError):
             build_paper_sessions_alerts(paper_sessions_root, stale_after_minutes=0)
+
+
+class TestPaperSessionsIndex:
+    def test_builds_shared_index_payload(self, paper_sessions_root: Path):
+        payload = build_paper_sessions_index(paper_sessions_root)
+
+        assert payload["n_sessions"] == 4
+        assert payload["root_dir"] == str(paper_sessions_root)
+        assert payload["sessions"][0]["session_id"] == "paper_001"
+        assert payload["sessions"][1]["status"] == "failed"
+        assert payload["sessions"][1]["error_type"] == "DataError"
+        assert payload["sessions"][0]["report_contract_type"] == "quantlab.paper.result"
+
+    def test_writes_index_artifacts_and_prints_paths(self, paper_sessions_root: Path, capsys):
+        args = _make_args(paper_sessions_index=str(paper_sessions_root))
+        result = handle_paper_session_commands(args)
+        assert result is True
+
+        out = capsys.readouterr().out
+        assert "paper_sessions_index.csv" in out
+        assert "paper_sessions_index.json" in out
+        assert (paper_sessions_root / "paper_sessions_index.csv").exists()
+        assert (paper_sessions_root / "paper_sessions_index.json").exists()
+
+    def test_handles_empty_root(self, tmp_path: Path):
+        root = tmp_path / "paper_sessions"
+        root.mkdir()
+
+        payload = build_paper_sessions_index(root)
+        assert payload["n_sessions"] == 0
+        assert payload["sessions"] == []
+
+    def test_tolerates_missing_optional_report(self, paper_sessions_root: Path):
+        missing_report_dir = paper_sessions_root / "paper_005"
+        missing_report_dir.mkdir()
+        (missing_report_dir / "session_metadata.json").write_text(
+            json.dumps(
+                {
+                    "session_id": "paper_005",
+                    "mode": "paper",
+                    "command": "paper",
+                    "status": "success",
+                    "created_at": "2026-03-25T12:40:00",
+                    "request_id": "req_005",
+                }
+            ),
+            encoding="utf-8",
+        )
+        (missing_report_dir / "session_status.json").write_text(
+            json.dumps(
+                {
+                    "session_id": "paper_005",
+                    "mode": "paper",
+                    "command": "paper",
+                    "status": "success",
+                    "request_id": "req_005",
+                    "updated_at": "2026-03-25T12:45:00",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        payload = build_paper_sessions_index(paper_sessions_root)
+        indexed = {row["session_id"]: row for row in payload["sessions"]}
+        assert indexed["paper_005"]["report_contract_type"] is None
+        assert indexed["paper_005"]["status"] == "success"
 
 
 class TestNoMatch:
