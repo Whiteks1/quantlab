@@ -89,6 +89,8 @@ now also includes:
 - `machine_contract.summary`
 - `machine_contract.artifacts`
 
+For plain `run`, the top-level `summary` block also mirrors the same core KPI values for compatibility, but `report.json.machine_contract` remains the canonical machine-facing result surface.
+
 For `command: "sweep"`, the canonical machine-readable artifact is `report.json`, and it includes:
 
 - `machine_contract.schema_version = "1.0"`

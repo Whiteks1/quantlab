@@ -130,6 +130,8 @@ For plain `run`, `contract_type` is:
 quantlab.run.result
 ```
 
+For plain `run`, the top-level `report.json.summary` should mirror the same core KPI block exposed through `report.json.machine_contract.summary`. The machine-facing canonical source remains `machine_contract`.
+
 For `sweep`, `contract_type` is:
 
 ```text
@@ -214,5 +216,6 @@ python main.py --json-request '<payload>' --signal-file path/to/signals.jsonl
 
 - `report.json` is the canonical public artifact
 - `report.json.machine_contract` is the canonical machine-facing result block
+- for plain `run`, top-level `summary` mirrors `machine_contract.summary` for compatibility
 - `runs_index.csv/json/md` is the canonical shared run registry
 - legacy artifacts remain readable but are not the preferred write target for new flows

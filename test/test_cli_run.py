@@ -119,6 +119,9 @@ def test_run_creates_canonical_run_directory_and_artifacts(monkeypatch, tmp_path
     assert report["machine_contract"]["command"] == "run"
     assert report["machine_contract"]["run_id"] == run_id
     assert report["machine_contract"]["summary"]["sharpe_simple"] == 1.25
+    assert report["summary"]["sharpe_simple"] == 1.25
+    assert report["summary"]["total_return"] == 0.03
+    assert report["summary"] == report["machine_contract"]["summary"]
     assert report["machine_contract"]["artifacts"]["report"] == "report.json"
 
 
