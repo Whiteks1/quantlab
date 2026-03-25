@@ -23,6 +23,12 @@ The shared run history index lives under:
 outputs/runs/
 ```
 
+Paper-session artifacts live under:
+
+```text
+outputs/paper_sessions/<session_id>/
+```
+
 ## Canonical Run Directory
 
 The canonical artifact set for a run directory is:
@@ -45,6 +51,24 @@ outputs/runs/<run_id>/
   leaderboard.csv
   walkforward.csv
 ```
+
+## Canonical Paper Session Directory
+
+Paper-backed executions currently produce a dedicated session directory:
+
+```text
+outputs/paper_sessions/<session_id>/
+  session_metadata.json
+  session_status.json
+  config.json
+  metrics.json
+  report.json
+  trades.csv
+  run_report.md
+  artifacts/
+```
+
+Paper sessions are operationally distinct from research runs and are not part of the shared run registry under `outputs/runs/`.
 
 ## Canonical Files
 
@@ -138,6 +162,18 @@ For `sweep`, `contract_type` is:
 quantlab.sweep.result
 ```
 
+For paper-backed execution entered through `command: "run"`, `contract_type` is:
+
+```text
+quantlab.paper.result
+```
+
+In that case:
+
+- the external invocation surface still remains `command: "run"`
+- the produced artifact root is `outputs/paper_sessions/<session_id>/`
+- the returned `run_id` is the paper session identifier
+
 ## Shared Run Index
 
 QuantLab maintains a shared run-history index under:
@@ -154,6 +190,8 @@ These files are refreshed automatically after successful:
 - `run`
 - `sweep`
 - `forward`
+
+Paper sessions are excluded from this shared run index.
 
 They are intended as the read-only shared registry for browsing and integration.
 
@@ -212,10 +250,16 @@ Optional lifecycle signalling:
 python main.py --json-request '<payload>' --signal-file path/to/signals.jsonl
 ```
 
+Signal compatibility note:
+
+- when `command: "run"` is combined with paper execution, signals still use `mode = "run"` to preserve the external contract
+- paper-specific identity should be inferred from the paper-session artifact root and from `report.json.machine_contract.contract_type`
+
 ## Stability Notes
 
 - `report.json` is the canonical public artifact
 - `report.json.machine_contract` is the canonical machine-facing result block
 - for plain `run`, top-level `summary` mirrors `machine_contract.summary` for compatibility
 - `runs_index.csv/json/md` is the canonical shared run registry
+- paper sessions use a separate artifact root and do not currently participate in the shared run registry
 - legacy artifacts remain readable but are not the preferred write target for new flows

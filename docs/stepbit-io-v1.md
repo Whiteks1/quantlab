@@ -91,6 +91,29 @@ now also includes:
 
 For plain `run`, the top-level `summary` block also mirrors the same core KPI values for compatibility, but `report.json.machine_contract` remains the canonical machine-facing result surface.
 
+If `command: "run"` is invoked with `params.paper = true`, QuantLab now executes through a dedicated paper-session lifecycle and writes artifacts under:
+
+```text
+outputs/paper_sessions/<session_id>/
+```
+
+In that case:
+
+- the external request contract still remains `command = "run"`
+- lifecycle signalling still uses `mode = "run"` for compatibility
+- the produced `report.json.machine_contract` identifies the result as `quantlab.paper.result`
+- the returned `run_id` is the paper session identifier
+
+Canonical paper-session artifacts currently include:
+
+- `session_metadata.json`
+- `session_status.json`
+- `config.json`
+- `metrics.json`
+- `report.json`
+- `trades.csv`
+- `run_report.md`
+
 For `command: "sweep"`, the canonical machine-readable artifact is `report.json`, and it includes:
 
 - `machine_contract.schema_version = "1.0"`
@@ -165,9 +188,14 @@ python main.py --json-request '...' --signal-file path/to/signals.jsonl
 | `schema_version` | `string` | Always `"1.0"`. |
 | `event` | `string` | `SESSION_STARTED`, `SESSION_COMPLETED`, or `SESSION_FAILED`. |
 | `status` | `string` | `running`, `success`, or `error`. |
-| `mode` | `string` | The command type (e.g., `run`, `sweep`). |
+| `mode` | `string` | The public command type (e.g., `run`, `sweep`). |
 | `request_id` | `string` | Propagated from request if available. |
 | `timestamp` | `string` | ISO 8601 local time. |
+
+Compatibility note:
+
+- `command: "run"` with `paper = true` still emits `mode = "run"` in signals so external consumers do not experience a breaking contract change
+- paper-specific lifecycle can be inferred from the returned artifact path under `outputs/paper_sessions/` and from `report.json.machine_contract.contract_type = "quantlab.paper.result"`
 
 #### SESSION_COMPLETED
 Includes result location metadata (when available):
@@ -175,6 +203,12 @@ Includes result location metadata (when available):
 - `artifacts_path`: Directory containing the run artifacts.
 - `report_path`: Path to the canonical `report.json`.
 - `runs_index_json`: Refreshed registry artifact for `outputs/runs/` after successful `run`, `sweep`, and `forward`.
+
+For paper-backed `run` executions:
+
+- `run_id` is the paper session identifier
+- `artifacts_path` points to `outputs/paper_sessions/<session_id>/`
+- `runs_index_json` is not expected because paper sessions do not currently refresh the shared run registry
 
 #### SESSION_FAILED
 Includes failure metadata:
@@ -218,6 +252,21 @@ Successful `run`, `sweep`, and `forward` executions refresh the shared registry:
 - `outputs/runs/runs_index.md`
 
 Legacy `meta.json` and `run_report.json` remain read-compatible only.
+
+Paper-backed `run` executions currently use a distinct session root:
+
+```text
+outputs/paper_sessions/<session_id>/
+  session_metadata.json
+  session_status.json
+  config.json
+  metrics.json
+  report.json
+  trades.csv
+  run_report.md
+```
+
+These paper-session artifacts are operationally distinct from the research run registry under `outputs/runs/`.
 
 ---
 

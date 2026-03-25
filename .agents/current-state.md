@@ -44,6 +44,9 @@
   - `main.py --check` returns a deterministic JSON health summary for runtime preflight
   - the CLI keeps the existing `--json-request` `sweep` path as the smoke-validation surface
   - the shared `runs_index.csv/json/md` registry is refreshed automatically after successful run-producing commands
+  - paper-backed `run` executions now write dedicated artifacts under `outputs/paper_sessions/<session_id>/`
+  - paper sessions persist `session_metadata.json` and `session_status.json`
+  - external signal mode for paper-backed `run` remains `run` to preserve contract stability
 
 
 ## Known Issues / Technical Debt
