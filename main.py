@@ -28,6 +28,7 @@ handle_report_commands = None
 handle_run_command = None
 handle_runs_commands = None
 handle_paper_session_commands = None
+handle_broker_dry_run_commands = None
 run_sweep = None
 write_run_report = None
 write_advanced_report = None
@@ -131,6 +132,7 @@ def _load_runtime_dependencies() -> None:
     global handle_run_command
     global handle_runs_commands
     global handle_paper_session_commands
+    global handle_broker_dry_run_commands
     global run_sweep
     global write_run_report
     global write_advanced_report
@@ -176,6 +178,12 @@ def _load_runtime_dependencies() -> None:
         )
 
         handle_paper_session_commands = _handle_paper_session_commands
+    if handle_broker_dry_run_commands is None:
+        from quantlab.cli.broker_dry_run import (
+            handle_broker_dry_run_commands as _handle_broker_dry_run_commands,
+        )
+
+        handle_broker_dry_run_commands = _handle_broker_dry_run_commands
     if run_sweep is None:
         from quantlab.experiments import run_sweep as _run_sweep
 
@@ -354,6 +362,22 @@ def main() -> None:
         help="Refresh the shared paper-session index artifacts in a directory.",
     )
     parser.add_argument(
+        "--kraken-dry-run-outdir",
+        metavar="DIR",
+        default=None,
+        help="Persist a local Kraken dry-run audit artifact in a directory.",
+    )
+    parser.add_argument("--broker-symbol", default=None)
+    parser.add_argument("--broker-side", default=None)
+    parser.add_argument("--broker-quantity", type=float, default=None)
+    parser.add_argument("--broker-notional", type=float, default=None)
+    parser.add_argument("--broker-account-id", default=None)
+    parser.add_argument("--broker-strategy-id", default=None)
+    parser.add_argument("--broker-max-notional", type=float, default=None)
+    parser.add_argument("--broker-allowed-symbols", default=None)
+    parser.add_argument("--broker-kill-switch", action="store_true")
+    parser.add_argument("--broker-allow-missing-account-id", action="store_true")
+    parser.add_argument(
         "--metric",
         default="sharpe_simple",
         help="Metric to rank by (used with --runs-best, --best-from).",
@@ -483,6 +507,8 @@ def main() -> None:
             or args.paper_sessions_index
         ):
             session_metadata["mode"] = "paper_sessions"
+        elif args.kraken_dry_run_outdir:
+            session_metadata["mode"] = "broker_dry_run"
         elif args.runs_list or args.runs_show or args.runs_best:
             session_metadata["mode"] = "runs"
         else:
@@ -514,6 +540,9 @@ def main() -> None:
                 )
 
         # --- Standard flag-driven routing (human CLI use) ---
+        if result_ctx in (None, False):
+            result_ctx = handle_broker_dry_run_commands(args)
+
         if result_ctx in (None, False):
             result_ctx = handle_paper_session_commands(args)
 
