@@ -57,7 +57,7 @@ python main.py --json-request "{\"schema_version\":\"1.0\",\"request_id\":\"req_
 Plain run:
 
 ```bash
-python main.py --ticker ETH-USD --start 2022-01-01 --end 2023-12-31 --paper --report
+python main.py --ticker ETH-USD --start 2022-01-01 --end 2023-12-31 --report
 ```
 
 Successful plain runs write canonical artifacts under:
@@ -72,6 +72,33 @@ Canonical files:
 - `config.json`
 - `metrics.json`
 - `report.json`
+
+### `--paper`
+
+Paper-backed run:
+
+```bash
+python main.py --ticker ETH-USD --start 2022-01-01 --end 2023-12-31 --paper --report
+```
+
+Paper execution is currently still entered through the `run` command surface, but it writes a dedicated paper-session artifact set under:
+
+```text
+outputs/paper_sessions/<session_id>/
+  session_metadata.json
+  session_status.json
+  config.json
+  metrics.json
+  report.json
+  trades.csv
+  run_report.md
+```
+
+Important contract note:
+
+- externally, a JSON request still uses `command: "run"`
+- lifecycle signals still emit `mode = "run"` for compatibility
+- internally, the result is a paper session and `report.json.machine_contract.contract_type` is `quantlab.paper.result`
 
 For the formal artifact contract, see [run-artifact-contract.md](./run-artifact-contract.md).
 
@@ -106,6 +133,8 @@ Shared index artifacts are refreshed automatically after successful:
 - `run`
 - `sweep`
 - `forward`
+
+Paper sessions do not currently refresh `outputs/runs/runs_index.*`.
 
 Index files:
 
