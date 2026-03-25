@@ -4,6 +4,7 @@
 - **Stage**: Stage O — Stepbit Automation Readiness
 - **Last Updated**: 2026-03-25
 - **Focus**: Stage O is centered on execution-surface stability for local automation and machine-to-machine integration.
+- **Authority Note**: Stage O is a secondary integration track. QuantLab remains autonomous, and this stage does not override QuantLab-owned product priorities such as paper-trading operationalization.
 
 ## Completed/Planned Stages
 
@@ -27,7 +28,7 @@
 
 ## Active Work
 - **Stage Open**: Stage O is the current focus.
-- **Current Priority**: Keep the public execution contract stable for the next integration step.
+- **Current Priority**: Keep the public execution contract stable for the next integration step without letting external integration redefine QuantLab's core authority.
 - **Active Focus Areas**:
   - stabilize plain `run` output behavior around the canonical run artifact model
   - preserve `sweep` contract stability as the existing machine-facing automation path
@@ -42,6 +43,7 @@
   - `main.py --check` returns a deterministic JSON health summary for runtime preflight
   - the CLI keeps the existing `--json-request` `sweep` path as the smoke-validation surface
   - the shared `runs_index.csv/json/md` registry is refreshed automatically after successful run-producing commands
+  - Stepbit-facing integration is treated as optional and boundary-based rather than as a control plane for QuantLab
 
 ## Known Issues / Technical Debt
 - Duplicate workflow files in `.agents/workflows/`: `strategy-research.md` vs `strategy_research.md` — the underscore version is stale.

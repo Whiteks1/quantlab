@@ -4,8 +4,14 @@ QuantLab is a CLI-first quantitative research system for running reproducible st
 
 It is intentionally split from Stepbit:
 
-- QuantLab is the execution engine for research, artifacts, and reporting.
-- Stepbit is the orchestration/control layer for automation, scheduling, and higher-level workflows.
+- QuantLab is the primary system for research, paper-trading discipline, execution safety, and future broker-connected operation.
+- Stepbit is an optional external system that can provide AI, reasoning, workflow, and automation capabilities.
+
+The architectural rule is simple:
+
+- QuantLab remains autonomous
+- Stepbit does not govern QuantLab
+- QuantLab may consume Stepbit capabilities through a narrow, reversible boundary
 
 ## Current Status
 
@@ -17,6 +23,9 @@ The active goal is to keep the execution surface stable for local automation and
 - stable `report.json.machine_contract`
 - automatic refresh of `outputs/runs/runs_index.*`
 - reliable health/version surfaces via `--check` and `--version`
+
+This integration stage does not override QuantLab's product authority.
+The next primary QuantLab-owned stage remains paper-trading operationalization rather than deeper external orchestration.
 
 Known technical debt still tracked internally:
 
@@ -114,6 +123,7 @@ See also:
 - [docs/cli.md](./docs/cli.md)
 - [docs/run-artifact-contract.md](./docs/run-artifact-contract.md)
 - [docs/stepbit-io-v1.md](./docs/stepbit-io-v1.md)
+- [docs/quantlab-stepbit-boundaries.md](./docs/quantlab-stepbit-boundaries.md)
 
 ## Real CLI Usage
 
