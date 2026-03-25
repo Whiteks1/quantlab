@@ -1,6 +1,6 @@
 # QuantLab Roadmap
 
-This roadmap updates the original QuantLab plan to reflect the current repository state and the remaining stages needed to reach a broker-connected, automated, live-operating system.
+This roadmap updates the original QuantLab plan to reflect the current repository state and the remaining stages needed to reach a broker-connected, automated, live-operating system without compromising QuantLab autonomy.
 
 QuantLab should continue to evolve in this order:
 
@@ -167,6 +167,7 @@ Goal:
 
 Scope:
 
+- `BrokerAdapter` as the broker-agnostic execution boundary
 - execution-policy model
 - max position size rules
 - daily / session loss limits
@@ -178,7 +179,26 @@ Scope:
 
 Exit condition:
 
-- the system has a credible safety envelope that can reject unsafe execution decisions before a broker is connected
+- the system has a credible safety envelope and a broker abstraction that can reject unsafe execution decisions before a broker is connected
+
+## Broker Integration Strategy
+
+The first real broker integration should follow this decision framework:
+
+- start with Kraken as the first real broker target
+- define and stabilize `BrokerAdapter` before integrating any exchange-specific backend
+- add Binance as the second backend to compare slippage, fill rate, rejects, and operating costs
+- treat CCXT as optional acceleration for prototypes, smoke tests, or broad exchange experimentation, not as the authority of the execution design
+
+Rationale:
+
+- Kraken is the preferred first integration because it is a credible first real boundary for disciplined execution work
+- Binance remains valuable as the second integration because it gives a meaningful comparison point after the first adapter is proven
+- CCXT is useful when speed matters, but native integrations remain preferable when QuantLab needs tighter control over errors, rate limits, retries, and private execution flows
+
+Architectural rule:
+
+- strategies, risk policy, and execution safety must depend on `BrokerAdapter`, never on exchange-specific code
 
 ## Stage D.1 - Broker Dry-Run Integration
 
@@ -191,7 +211,7 @@ Goal:
 Scope:
 
 - broker adapter abstraction
-- first broker target, e.g. Coinbase Advanced Trade
+- implement `KrakenBrokerAdapter` as the first concrete backend
 - dry-run order translation from QuantLab signals
 - request/response logging for broker interactions
 - idempotency and retry discipline
@@ -199,7 +219,25 @@ Scope:
 
 Exit condition:
 
-- QuantLab can build, validate, and log broker-intent orders safely without yet operating with live capital
+- QuantLab can build, validate, and log broker-intent orders safely against Kraken without yet operating with live capital
+
+## Stage D.1.b - Second Broker Comparison
+
+Status: not started
+
+Goal:
+
+- validate that the broker abstraction is real by integrating a second backend and comparing operational behavior
+
+Scope:
+
+- implement `BinanceBrokerAdapter`
+- compare slippage, fill quality, rejects, and operating assumptions against Kraken
+- identify any abstraction leaks that should be fixed in `BrokerAdapter`
+
+Exit condition:
+
+- QuantLab can support a second exchange without moving strategy or risk authority into exchange-specific code
 
 ## Stage D.2 - Broker Sandbox / Simulated Execution
 
@@ -247,7 +285,7 @@ Status: not started
 
 Goal:
 
-- move from supervised live execution to controlled automation
+- move from supervised live execution to controlled automation only after paper, safety, broker, and supervised-live layers have proved stable
 
 Scope:
 
@@ -290,15 +328,17 @@ From the current repository state, the most rational order is:
 2. continue Stage O producer-side stabilization only where real integration friction requires it
 3. harden Stage O.1 integration fixtures only if consumer feedback justifies them
 4. design and implement Stage D.0 safety boundary
-5. add Stage D.1 broker dry-run integration
-6. validate broker behavior in Stage D.2
-7. enter Stage E supervised live execution
-8. only then move into Stage F controlled automation
+5. add Stage D.1 broker dry-run integration, starting with Kraken
+6. add the second broker comparison layer with Binance only after the abstraction proves stable
+7. validate broker behavior in Stage D.2
+8. enter Stage E supervised live execution
+9. only then move into Stage F controlled automation
 
 ## What Should Not Happen Early
 
 - no direct jump from research success to live automated broker execution
 - no live broker work before safety limits and kill-switch behavior exist
+- no exchange-specific strategy or risk logic outside `BrokerAdapter`
 - no expansion of external orchestration before the paper and safety layers are operationally trustworthy
 - no collapsing of QuantLab and Stepbit responsibilities into one codebase
 

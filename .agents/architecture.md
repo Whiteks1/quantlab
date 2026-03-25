@@ -88,6 +88,7 @@ Responsibilities:
 - simulate real-time decision making
 - maintain forward session logs
 - record trades
+- provide the future execution boundary that real broker adapters will implement
 
 Outputs:
 - forward run artifacts
@@ -208,9 +209,16 @@ QuantLab architecture follows these principles:
 
 Possible future extensions may include:
 
-- broker integrations
+- broker integrations through a common `BrokerAdapter` boundary
 - research automation
 - portfolio risk policies
 - experiment orchestration
 
 These should remain future extensions and should not compromise the current CLI-first research architecture.
+
+If real broker support is introduced, the preferred order is:
+
+- define `BrokerAdapter` first
+- implement Kraken as the first concrete backend
+- add Binance as the second backend to validate that the abstraction is real
+- keep CCXT optional for prototyping rather than making it the authority of execution design

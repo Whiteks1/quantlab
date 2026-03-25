@@ -128,6 +128,7 @@ python main.py --help
 See also:
 
 - [docs/cli.md](./docs/cli.md)
+- [docs/roadmap.md](./docs/roadmap.md)
 - [docs/workflow-operativo-codex.md](./docs/workflow-operativo-codex.md)
 - [docs/run-artifact-contract.md](./docs/run-artifact-contract.md)
 - [docs/stepbit-io-v1.md](./docs/stepbit-io-v1.md)
