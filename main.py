@@ -348,6 +348,12 @@ def main() -> None:
         help="Minutes before a running paper session is treated as stale.",
     )
     parser.add_argument(
+        "--paper-sessions-index",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Refresh the shared paper-session index artifacts in a directory.",
+    )
+    parser.add_argument(
         "--metric",
         default="sharpe_simple",
         help="Metric to rank by (used with --runs-best, --best-from).",
@@ -474,6 +480,7 @@ def main() -> None:
             or args.paper_sessions_show
             or args.paper_sessions_health
             or args.paper_sessions_alerts
+            or args.paper_sessions_index
         ):
             session_metadata["mode"] = "paper_sessions"
         elif args.runs_list or args.runs_show or args.runs_best:

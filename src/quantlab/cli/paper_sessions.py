@@ -6,6 +6,7 @@ Responsibilities:
 - show details for a single paper session
 - summarize health across paper sessions
 - surface operator-facing alert signals for paper sessions
+- refresh a shared paper-session index surface
 
 This module intentionally keeps paper-session inspection separate from the
 research-oriented runs navigation surface.
@@ -38,6 +39,7 @@ def handle_paper_session_commands(args) -> bool:
     - ``--paper-sessions-show <dir>`` : show details for a single paper session
     - ``--paper-sessions-health <dir>`` : summarize paper-session health
     - ``--paper-sessions-alerts <dir>`` : emit a machine-readable alert snapshot
+    - ``--paper-sessions-index <dir>`` : refresh shared index artifacts for paper sessions
 
     Returns True if a paper-session command was handled; False otherwise.
     """
@@ -92,6 +94,16 @@ def handle_paper_session_commands(args) -> bool:
             stale_after_minutes=getattr(args, "paper_stale_minutes", DEFAULT_PAPER_STALE_MINUTES),
         )
         print(json.dumps(alerts, indent=2, sort_keys=True))
+        return True
+
+    if getattr(args, "paper_sessions_index", None):
+        from quantlab.reporting.paper_session_index import write_paper_sessions_index
+
+        root_dir = _require_directory(args.paper_sessions_index, "Paper sessions root")
+        csv_path, json_path = write_paper_sessions_index(root_dir)
+        print("\nPaper session index refreshed:\n")
+        print(f"  csv_path : {csv_path}")
+        print(f"  json_path: {json_path}")
         return True
 
     return False
