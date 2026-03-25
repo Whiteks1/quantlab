@@ -14,7 +14,7 @@ from .boundary import (
     ExecutionPreflight,
     validate_execution_intent,
 )
-from .kraken import KrakenBrokerAdapter, KrakenDryRunAudit
+from .kraken import KrakenBrokerAdapter, KrakenDryRunAudit, KrakenPreflightReport
 
 __all__ = [
     "BrokerAdapter",
@@ -23,5 +23,6 @@ __all__ = [
     "ExecutionPreflight",
     "KrakenBrokerAdapter",
     "KrakenDryRunAudit",
+    "KrakenPreflightReport",
     "validate_execution_intent",
 ]
