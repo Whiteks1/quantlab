@@ -330,6 +330,12 @@ def main() -> None:
         help="Show details for a single paper session.",
     )
     parser.add_argument(
+        "--paper-sessions-health",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Summarize paper session health in a directory.",
+    )
+    parser.add_argument(
         "--metric",
         default="sharpe_simple",
         help="Metric to rank by (used with --runs-best, --best-from).",
@@ -451,7 +457,7 @@ def main() -> None:
             session_metadata["mode"] = "paper"
         elif args.report:
             session_metadata["mode"] = "report"
-        elif args.paper_sessions_list or args.paper_sessions_show:
+        elif args.paper_sessions_list or args.paper_sessions_show or args.paper_sessions_health:
             session_metadata["mode"] = "paper_sessions"
         elif args.runs_list or args.runs_show or args.runs_best:
             session_metadata["mode"] = "runs"
