@@ -126,6 +126,7 @@ python main.py --help
 - `--paper-sessions-show`: inspect a single paper session directory
 - `--paper-sessions-health`: summarize health across paper sessions
 - `--paper-sessions-alerts`: emit a deterministic alert snapshot for paper sessions
+- `--paper-sessions-index`: refresh a shared paper-session index under the paper root
 - `--forward-eval`: launch a forward evaluation from a prior run directory
 - `--portfolio-report`: aggregate forward sessions into a portfolio report
 - `--portfolio-compare`: compare allocation modes across forward sessions
@@ -214,6 +215,12 @@ Emit a paper-session alert snapshot:
 python main.py --paper-sessions-alerts outputs/paper_sessions --paper-stale-minutes 60
 ```
 
+Refresh the shared paper-session index:
+
+```bash
+python main.py --paper-sessions-index outputs/paper_sessions
+```
+
 Operational guidance:
 
 - see [docs/paper-session-runbook.md](./docs/paper-session-runbook.md) for the recommended paper-session operating loop and response guidance
@@ -279,6 +286,14 @@ outputs/paper_sessions/<session_id>/
   run_report.md
   trades.csv
   artifacts/
+```
+
+Shared paper-session index artifacts:
+
+```text
+outputs/paper_sessions/
+  paper_sessions_index.csv
+  paper_sessions_index.json
 ```
 
 Shared run history index:

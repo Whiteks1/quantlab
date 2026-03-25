@@ -48,6 +48,7 @@
   - paper sessions persist `session_metadata.json` and `session_status.json`
   - external signal mode for paper-backed `run` remains `run` to preserve contract stability
   - public operator guidance for paper sessions now lives in `docs/paper-session-runbook.md`
+  - paper sessions now support a shared index surface under `outputs/paper_sessions/paper_sessions_index.*`
 
 
 ## Known Issues / Technical Debt

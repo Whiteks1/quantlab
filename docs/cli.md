@@ -192,6 +192,21 @@ The alert snapshot is machine-readable JSON and currently makes these situations
 
 For the recommended operating loop and response guidance, see [paper-session-runbook.md](./paper-session-runbook.md).
 
+### `--paper-sessions-index`
+
+Refresh the shared paper-session index:
+
+```bash
+python main.py --paper-sessions-index outputs/paper_sessions
+```
+
+This writes:
+
+- `outputs/paper_sessions/paper_sessions_index.csv`
+- `outputs/paper_sessions/paper_sessions_index.json`
+
+The index is intentionally separate from `outputs/runs/runs_index.*` and is meant for repeated paper-session operations.
+
 ## 5. Forward Evaluation
 
 ### `--forward-eval`
