@@ -142,7 +142,40 @@ Index files:
 - `outputs/runs/runs_index.json`
 - `outputs/runs/runs_index.md`
 
-## 4. Forward Evaluation
+## 4. Paper Session Inspection
+
+### `--paper-sessions-list`
+
+List paper sessions under a root:
+
+```bash
+python main.py --paper-sessions-list outputs/paper_sessions
+```
+
+### `--paper-sessions-show`
+
+Show one paper session:
+
+```bash
+python main.py --paper-sessions-show outputs/paper_sessions/<session_id>
+```
+
+### `--paper-sessions-health`
+
+Summarize paper-session health:
+
+```bash
+python main.py --paper-sessions-health outputs/paper_sessions
+```
+
+The health summary is operator-facing and currently includes:
+
+- total sessions
+- count by status
+- latest session id / activity time
+- latest non-success session if present
+
+## 5. Forward Evaluation
 
 ### `--forward-eval`
 
@@ -173,7 +206,7 @@ outputs/forward_runs/<session_id>/
   forward_report.md
 ```
 
-## 5. Portfolio Workflows
+## 6. Portfolio Workflows
 
 ### `--portfolio-report`
 
@@ -208,7 +241,7 @@ outputs/forward_runs/
   portfolio_compare.md
 ```
 
-## 6. Sweep Workflows
+## 7. Sweep Workflows
 
 Flag-driven sweep:
 
@@ -224,7 +257,7 @@ python main.py --json-request "{\"schema_version\":\"1.0\",\"request_id\":\"req_
 
 `report.json.machine_contract` is the canonical machine-facing result surface for automated sweep consumption.
 
-## 7. Legacy Flags
+## 8. Legacy Flags
 
 These remain accepted for backward compatibility, but should not be expanded further in docs or integrations:
 
@@ -240,7 +273,7 @@ Legacy read-compatible artifacts also remain in the codebase:
 
 The preferred public surface is the canonical contract documented in [run-artifact-contract.md](./run-artifact-contract.md).
 
-## 8. Design Rules
+## 9. Design Rules
 
 - `main.py` and `src/quantlab/cli/` should remain orchestration-only
 - domain and quantitative logic belong outside the entrypoint
