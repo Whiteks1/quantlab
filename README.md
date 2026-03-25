@@ -364,6 +364,8 @@ Real broker work is still gated behind Stage D.0.
 
 The current local safety boundary is documented in [docs/broker-safety-boundary.md](./docs/broker-safety-boundary.md) and defines the broker-agnostic execution contract that future adapters must follow.
 
+The first dry-run backend slice now exists behind that boundary as a `KrakenBrokerAdapter`, still without real broker connectivity.
+
 ## License
 
 Licensed under the Apache License, Version 2.0.

@@ -58,11 +58,31 @@ In practical terms:
 - not credential wiring
 - not a control-plane UI
 
+## Dry-Run Adapter Status
+
+The first concrete dry-run backend now exists as:
+
+- `KrakenBrokerAdapter`
+
+Current Stage D.1 scope covered:
+
+- shared preflight validation through the Stage D.0 boundary
+- deterministic Kraken-style payload translation
+- stable dry-run audit snapshot for local review
+
+Still intentionally out of scope:
+
+- real Kraken HTTP calls
+- websocket/private stream handling
+- live credential wiring
+- live order routing
+
 ## Next Step
 
-After this boundary is stable, the next logical implementation step is:
+After this dry-run adapter slice is stable, the next logical implementation step is:
 
-- `Stage D.1`: `KrakenBrokerAdapter` dry-run integration against this contract
+- richer dry-run audit persistence and broker-preflight artifacts
+- then real broker connectivity work only behind the same boundary
 
 ## Related Documents
 

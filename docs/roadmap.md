@@ -210,7 +210,7 @@ Architectural rule:
 
 ## Stage D.1 - Broker Dry-Run Integration
 
-Status: not started
+Status: first dry-run adapter slice implemented
 
 Goal:
 
@@ -224,6 +224,12 @@ Scope:
 - request/response logging for broker interactions
 - idempotency and retry discipline
 - broker-side clock/status/preflight validation
+
+Initial slice already present:
+
+- `KrakenBrokerAdapter` behind `BrokerAdapter`
+- deterministic Kraken payload translation for validated intent
+- dry-run audit snapshot without real broker connectivity
 
 Exit condition:
 
