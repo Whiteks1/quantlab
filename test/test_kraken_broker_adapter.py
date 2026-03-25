@@ -73,3 +73,74 @@ def test_dry_run_audit_omits_payload_when_preflight_fails():
     assert audit["preflight"]["allowed"] is False
     assert "kill_switch_active" in audit["preflight"]["reasons"]
     assert audit["payload"] is None
+
+
+def test_preflight_report_marks_supported_pair_with_public_data():
+    adapter = KrakenBrokerAdapter()
+
+    def fake_fetch_json(path, **kwargs):
+        if path == "/Time":
+            return {"error": [], "result": {"unixtime": 1700000000, "rfc1123": "Tue, 14 Nov 2023 22:13:20 GMT"}}
+        if path == "/AssetPairs":
+            return {
+                "error": [],
+                "result": {
+                    "XETHZUSD": {"altname": "ETHUSD", "wsname": "ETH/USD"},
+                    "XXBTZUSD": {"altname": "XBTUSD", "wsname": "XBT/USD"},
+                },
+            }
+        raise AssertionError(path)
+
+    report = adapter.build_public_preflight_report("ETH-USD", fetch_json=fake_fetch_json).to_dict()
+
+    assert report["artifact_type"] == "quantlab.kraken.preflight"
+    assert report["public_api_reachable"] is True
+    assert report["pair_supported"] is True
+    assert report["normalized_symbol"] == "ETH/USD"
+    assert report["matched_pair_key"] == "XETHZUSD"
+    assert report["matched_pair_wsname"] == "ETH/USD"
+    assert report["errors"] == []
+
+
+def test_preflight_report_supports_btc_alias_mapping():
+    adapter = KrakenBrokerAdapter()
+
+    def fake_fetch_json(path, **kwargs):
+        if path == "/Time":
+            return {"error": [], "result": {"unixtime": 1700000000, "rfc1123": "Tue, 14 Nov 2023 22:13:20 GMT"}}
+        if path == "/AssetPairs":
+            return {
+                "error": [],
+                "result": {
+                    "XXBTZUSD": {"altname": "XBTUSD", "wsname": "XBT/USD"},
+                },
+            }
+        raise AssertionError(path)
+
+    report = adapter.build_public_preflight_report("BTC-USD", fetch_json=fake_fetch_json).to_dict()
+
+    assert report["normalized_symbol"] == "XBT/USD"
+    assert report["pair_supported"] is True
+    assert report["matched_pair_wsname"] == "XBT/USD"
+
+
+def test_preflight_report_marks_unsupported_pair_cleanly():
+    adapter = KrakenBrokerAdapter()
+
+    def fake_fetch_json(path, **kwargs):
+        if path == "/Time":
+            return {"error": [], "result": {"unixtime": 1700000000, "rfc1123": "Tue, 14 Nov 2023 22:13:20 GMT"}}
+        if path == "/AssetPairs":
+            return {
+                "error": [],
+                "result": {
+                    "XETHZUSD": {"altname": "ETHUSD", "wsname": "ETH/USD"},
+                },
+            }
+        raise AssertionError(path)
+
+    report = adapter.build_public_preflight_report("SOL-USD", fetch_json=fake_fetch_json).to_dict()
+
+    assert report["public_api_reachable"] is True
+    assert report["pair_supported"] is False
+    assert "pair_not_supported" in report["errors"]
