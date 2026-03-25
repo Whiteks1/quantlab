@@ -190,6 +190,8 @@ The alert snapshot is machine-readable JSON and currently makes these situations
 - aborted sessions
 - running sessions that have become stale relative to the chosen threshold
 
+For the recommended operating loop and response guidance, see [paper-session-runbook.md](./paper-session-runbook.md).
+
 ## 5. Forward Evaluation
 
 ### `--forward-eval`

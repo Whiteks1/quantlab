@@ -47,6 +47,7 @@
   - paper-backed `run` executions now write dedicated artifacts under `outputs/paper_sessions/<session_id>/`
   - paper sessions persist `session_metadata.json` and `session_status.json`
   - external signal mode for paper-backed `run` remains `run` to preserve contract stability
+  - public operator guidance for paper sessions now lives in `docs/paper-session-runbook.md`
 
 
 ## Known Issues / Technical Debt
