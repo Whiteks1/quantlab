@@ -13,13 +13,24 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
     defaults = {
         "kraken_preflight_outdir": None,
         "kraken_auth_preflight_outdir": None,
+        "kraken_account_readiness_outdir": None,
         "kraken_preflight_timeout": 10.0,
         "broker_symbol": None,
         "ticker": None,
+        "broker_side": None,
+        "broker_quantity": None,
+        "broker_notional": None,
+        "broker_account_id": None,
+        "broker_strategy_id": None,
+        "broker_max_notional": None,
+        "broker_allowed_symbols": None,
+        "broker_kill_switch": False,
+        "broker_allow_missing_account_id": False,
         "kraken_api_key": None,
         "kraken_api_secret": None,
         "kraken_api_key_env": "KRAKEN_API_KEY",
         "kraken_api_secret_env": "KRAKEN_API_SECRET",
+        "_request_id": None,
     }
     defaults.update(kwargs)
     return types.SimpleNamespace(**defaults)
@@ -166,3 +177,113 @@ def test_writes_auth_preflight_artifact_when_credentials_missing(monkeypatch, tm
     payload = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert payload["credentials_present"] is False
     assert "missing_api_key" in payload["errors"]
+
+
+def test_writes_account_readiness_artifact(monkeypatch, tmp_path):
+    from quantlab.cli import broker_preflight as module
+
+    def fake_report(self, intent, policy, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.kraken.account_snapshot",
+                    "adapter_name": "kraken",
+                    "generated_at": "2026-03-25T12:00:00",
+                    "symbol_input": intent.symbol,
+                    "normalized_symbol": "ETH/USD",
+                    "public_api_reachable": True,
+                    "pair_supported": True,
+                    "matched_pair_key": "XETHZUSD",
+                    "matched_pair_wsname": "ETH/USD",
+                    "matched_pair_altname": "ETHUSD",
+                    "base_asset": "XETH",
+                    "quote_asset": "ZUSD",
+                    "pair_status": "online",
+                    "ordermin": 0.001,
+                    "costmin": 0.5,
+                    "tick_size": 0.01,
+                    "account_snapshot_available": True,
+                    "balances": [
+                        {
+                            "asset": "ZUSD",
+                            "balance": 1000.0,
+                            "credit": 0.0,
+                            "credit_used": 0.0,
+                            "hold_trade": 0.0,
+                            "available": 1000.0,
+                        }
+                    ],
+                    "authenticated_preflight": {
+                        "artifact_type": "quantlab.kraken.auth_preflight",
+                        "adapter_name": "kraken",
+                        "generated_at": "2026-03-25T12:00:00",
+                        "credentials_present": True,
+                        "authenticated": True,
+                        "api_key_env": "KRAKEN_API_KEY",
+                        "api_secret_env": "KRAKEN_API_SECRET",
+                        "key_name": "quantlab-demo",
+                        "permissions": {"funds": "query"},
+                        "restrictions": {},
+                        "created_at": None,
+                        "updated_at": None,
+                        "errors": [],
+                    },
+                    "intent": {
+                        "broker_target": "kraken",
+                        "symbol": intent.symbol,
+                        "side": intent.side,
+                        "quantity": intent.quantity,
+                        "notional": intent.notional,
+                        "account_id": intent.account_id,
+                        "strategy_id": intent.strategy_id,
+                        "request_id": intent.request_id,
+                        "dry_run": True,
+                    },
+                    "policy": {
+                        "kill_switch_active": False,
+                        "max_notional_per_order": None,
+                        "allowed_symbols": [],
+                        "require_account_id": True,
+                    },
+                    "local_preflight": {"allowed": True, "reasons": []},
+                    "intent_readiness": {
+                        "allowed": True,
+                        "reasons": [],
+                        "funding_asset": "ZUSD",
+                        "funding_basis": "notional",
+                        "required_amount": 500.0,
+                        "available_amount": 1000.0,
+                    },
+                    "errors": [],
+                }
+
+        return _Fake()
+
+    monkeypatch.setattr(module.KrakenBrokerAdapter, "build_account_snapshot_report", fake_report)
+
+    outdir = tmp_path / "account_readiness"
+    args = _make_args(
+        kraken_account_readiness_outdir=str(outdir),
+        broker_symbol="ETH-USD",
+        broker_side="buy",
+        broker_quantity=0.25,
+        broker_notional=500.0,
+        broker_account_id="acct_demo",
+    )
+    result = handle_broker_preflight_commands(args)
+
+    assert isinstance(result, dict)
+    assert result["readiness_allowed"] is True
+    artifact_path = outdir / "broker_account_snapshot.json"
+    assert artifact_path.exists()
+
+    payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert payload["artifact_type"] == "quantlab.kraken.account_snapshot"
+    assert payload["intent_readiness"]["allowed"] is True
+    assert payload["authenticated_preflight"]["authenticated"] is True
+
+
+def test_account_readiness_requires_intent_inputs(tmp_path):
+    args = _make_args(kraken_account_readiness_outdir=str(tmp_path / "account_readiness"))
+    with pytest.raises(ConfigError):
+        handle_broker_preflight_commands(args)
