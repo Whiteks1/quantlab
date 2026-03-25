@@ -21,6 +21,7 @@ from .kraken import (
     KrakenBrokerAdapter,
     KrakenDryRunAudit,
     KrakenIntentReadiness,
+    KrakenOrderValidateReport,
     KrakenPreflightReport,
 )
 
@@ -35,6 +36,7 @@ __all__ = [
     "KrakenBalanceEntry",
     "KrakenDryRunAudit",
     "KrakenIntentReadiness",
+    "KrakenOrderValidateReport",
     "KrakenPreflightReport",
     "validate_execution_intent",
 ]
