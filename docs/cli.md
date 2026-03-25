@@ -318,6 +318,50 @@ The artifact currently includes:
 
 This surface is read-only and does not place or cancel orders.
 
+### `--kraken-order-validate-outdir`
+
+Persist a validate-only Kraken order probe artifact:
+
+```bash
+python main.py --kraken-order-validate-outdir outputs/broker_preflight/validate_demo --broker-symbol ETH-USD --broker-side buy --broker-quantity 0.25 --broker-notional 500 --broker-account-id acct_demo
+```
+
+By default this reads credentials from:
+
+- `KRAKEN_API_KEY`
+- `KRAKEN_API_SECRET`
+
+It reuses the existing broker intent flags:
+
+- `--broker-symbol`
+- `--broker-side`
+- `--broker-quantity`
+- `--broker-notional`
+- `--broker-account-id`
+- `--broker-max-notional`
+- `--broker-allowed-symbols`
+- `--broker-kill-switch`
+- `--broker-allow-missing-account-id`
+
+This writes:
+
+- `outputs/broker_preflight/validate_demo/broker_order_validate.json`
+
+The artifact currently includes:
+
+- authenticated preflight summary
+- local policy preflight result
+- Kraken validate-only payload
+- whether the remote validate call was attempted
+- whether Kraken accepted the validate-only order probe
+- explicit validation reasons from local or exchange-side rejection
+- raw exchange response where available
+
+Important note:
+
+- this does not place an order
+- but it still uses Kraken's order-validation path and therefore may require order-related API permissions
+
 ### `--kraken-dry-run-outdir`
 
 Persist a local Kraken dry-run audit artifact:

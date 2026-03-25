@@ -130,6 +130,7 @@ python main.py --help
 - `--kraken-preflight-outdir`: persist a read-only Kraken public preflight artifact
 - `--kraken-auth-preflight-outdir`: persist a read-only Kraken authenticated preflight artifact
 - `--kraken-account-readiness-outdir`: persist a read-only Kraken account snapshot and intent readiness artifact
+- `--kraken-order-validate-outdir`: persist a Kraken validate-only order probe artifact
 - `--kraken-dry-run-outdir`: persist a local Kraken dry-run audit artifact
 - `--kraken-dry-run-session`: persist a canonical broker dry-run session
 - `--broker-dry-runs-list`: inspect broker dry-run sessions under a root
@@ -395,6 +396,12 @@ And it can run a read-only account readiness probe for a specific broker intent:
 
 ```bash
 python main.py --kraken-account-readiness-outdir outputs/broker_preflight/account_demo --broker-symbol ETH-USD --broker-side buy --broker-quantity 0.25 --broker-notional 500 --broker-account-id acct_demo
+```
+
+And it can run a validate-only Kraken order probe for a specific broker intent:
+
+```bash
+python main.py --kraken-order-validate-outdir outputs/broker_preflight/validate_demo --broker-symbol ETH-USD --broker-side buy --broker-quantity 0.25 --broker-notional 500 --broker-account-id acct_demo
 ```
 
 And it can now persist canonical broker dry-run sessions under:
