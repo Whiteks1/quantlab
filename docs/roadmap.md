@@ -231,6 +231,7 @@ Initial slice already present:
 - deterministic Kraken payload translation for validated intent
 - dry-run audit snapshot without real broker connectivity
 - local dry-run artifact persistence via `broker_dry_run.json`
+- canonical broker dry-run sessions and shared registry for repeated review
 
 Exit condition:
 

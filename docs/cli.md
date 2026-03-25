@@ -232,6 +232,52 @@ The artifact currently includes:
 
 If preflight rejects the intent, the artifact is still written with explicit rejection reasons and `payload = null`.
 
+### `--kraken-dry-run-session`
+
+Persist a canonical Kraken dry-run session:
+
+```bash
+python main.py --kraken-dry-run-session --broker-symbol ETH-USD --broker-side buy --broker-quantity 0.25 --broker-notional 500 --broker-account-id acct_demo --broker-max-notional 1000 --broker-allowed-symbols ETH/USD,BTC/USD
+```
+
+This writes a canonical session under:
+
+```text
+outputs/broker_dry_runs/<session_id>/
+  broker_dry_run.json
+  session_metadata.json
+  session_status.json
+```
+
+And refreshes the shared registry:
+
+- `outputs/broker_dry_runs/broker_dry_runs_index.csv`
+- `outputs/broker_dry_runs/broker_dry_runs_index.json`
+
+### `--broker-dry-runs-list`
+
+List broker dry-run sessions:
+
+```bash
+python main.py --broker-dry-runs-list outputs/broker_dry_runs
+```
+
+### `--broker-dry-runs-show`
+
+Show one broker dry-run session:
+
+```bash
+python main.py --broker-dry-runs-show outputs/broker_dry_runs/<session_id>
+```
+
+### `--broker-dry-runs-index`
+
+Refresh the shared broker dry-run registry explicitly:
+
+```bash
+python main.py --broker-dry-runs-index outputs/broker_dry_runs
+```
+
 ## 6. Forward Evaluation
 
 ### `--forward-eval`
