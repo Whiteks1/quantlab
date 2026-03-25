@@ -163,6 +163,9 @@ def test_run_report_plain_run_exposes_machine_contract(tmp_path):
     assert contract["artifacts"]["metadata"] == "metadata.json"
     assert contract["artifacts"]["report"] == "report.json"
     assert "summary" in payload
+    assert payload["summary"] == contract["summary"]
+    assert payload["summary"]["total_return"] == 0.18
+    assert payload["summary"]["trades"] == 6
 
 def test_run_report_markdown_headings(tmp_path):
     """Verify that report.md contains expected headings and key fields."""

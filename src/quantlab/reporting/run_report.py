@@ -166,8 +166,11 @@ def build_report(run_dir: str) -> Dict[str, Any]:
             })
     report["artifacts"] = sorted(artifacts, key=lambda x: x["file_name"])
             
-    # Standardized summary for Stepbit
-    standard_summary = build_standard_summary(report)
+    # Standardized summary for Stepbit.
+    # For plain `run`, prefer the already-persisted metrics payload so the
+    # top-level `summary` mirrors the canonical machine-facing KPI block.
+    summary_source = metrics if command == "run" else report
+    standard_summary = build_standard_summary(summary_source)
     best_result = (report.get("results") or report.get("oos_leaderboard") or [None])[0]
     machine_summary = metrics.get("summary") or standard_summary
     if command == "sweep":
