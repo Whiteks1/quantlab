@@ -270,6 +270,54 @@ The artifact currently includes:
 
 This surface is read-only and does not place or cancel orders.
 
+### `--kraken-account-readiness-outdir`
+
+Persist a read-only Kraken account snapshot and intent readiness artifact:
+
+```bash
+python main.py --kraken-account-readiness-outdir outputs/broker_preflight/account_demo --broker-symbol ETH-USD --broker-side buy --broker-quantity 0.25 --broker-notional 500 --broker-account-id acct_demo
+```
+
+By default this reads credentials from:
+
+- `KRAKEN_API_KEY`
+- `KRAKEN_API_SECRET`
+
+It reuses the existing broker intent flags:
+
+- `--broker-symbol`
+- `--broker-side`
+- `--broker-quantity`
+- `--broker-notional`
+- `--broker-account-id`
+- `--broker-max-notional`
+- `--broker-allowed-symbols`
+- `--broker-kill-switch`
+- `--broker-allow-missing-account-id`
+
+This writes:
+
+- `outputs/broker_preflight/account_demo/broker_account_snapshot.json`
+
+The artifact currently includes:
+
+- public pair support and matched Kraken pair identifiers
+- base / quote asset mapping for the chosen pair
+- pair minimums such as `ordermin` and `costmin` where available
+- authenticated preflight summary
+- extended balance snapshot where authentication and permissions allow it
+- local preflight result for the provided `ExecutionIntent`
+- balance-aware readiness result for that intent
+- explicit reasons such as:
+  - `private_auth_not_ready`
+  - `account_snapshot_unavailable`
+  - `funding_asset_missing`
+  - `insufficient_available_balance`
+  - `below_pair_ordermin`
+  - `below_pair_costmin`
+
+This surface is read-only and does not place or cancel orders.
+
 ### `--kraken-dry-run-outdir`
 
 Persist a local Kraken dry-run audit artifact:
