@@ -25,10 +25,12 @@ class KrakenDryRunAudit:
     generated_at: str
     preflight: ExecutionPreflight
     intent: ExecutionIntent
+    policy: ExecutionPolicy
     payload: dict[str, object] | None
 
     def to_dict(self) -> dict[str, object]:
         return {
+            "artifact_type": "quantlab.kraken.dry_run_audit",
             "adapter_name": self.adapter_name,
             "generated_at": self.generated_at,
             "preflight": {
@@ -36,6 +38,12 @@ class KrakenDryRunAudit:
                 "reasons": list(self.preflight.reasons),
             },
             "intent": asdict(self.intent),
+            "policy": {
+                "kill_switch_active": self.policy.kill_switch_active,
+                "max_notional_per_order": self.policy.max_notional_per_order,
+                "allowed_symbols": sorted(self.policy.allowed_symbols),
+                "require_account_id": self.policy.require_account_id,
+            },
             "payload": self.payload,
         }
 
@@ -83,6 +91,7 @@ class KrakenBrokerAdapter(BrokerAdapter):
             generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
             preflight=preflight,
             intent=intent,
+            policy=policy,
             payload=payload,
         )
 

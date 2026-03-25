@@ -207,7 +207,32 @@ This writes:
 
 The index is intentionally separate from `outputs/runs/runs_index.*` and is meant for repeated paper-session operations.
 
-## 5. Forward Evaluation
+## 5. Broker Dry-Run
+
+### `--kraken-dry-run-outdir`
+
+Persist a local Kraken dry-run audit artifact:
+
+```bash
+python main.py --kraken-dry-run-outdir outputs/broker_dry_runs/demo --broker-symbol ETH-USD --broker-side buy --broker-quantity 0.25 --broker-notional 500 --broker-account-id acct_demo --broker-max-notional 1000 --broker-allowed-symbols ETH/USD,BTC/USD
+```
+
+This writes:
+
+- `outputs/broker_dry_runs/demo/broker_dry_run.json`
+
+The artifact currently includes:
+
+- adapter name
+- generated timestamp
+- normalized execution intent
+- execution policy
+- preflight allow/reject result
+- translated Kraken-style payload if preflight passes
+
+If preflight rejects the intent, the artifact is still written with explicit rejection reasons and `payload = null`.
+
+## 6. Forward Evaluation
 
 ### `--forward-eval`
 
@@ -238,7 +263,7 @@ outputs/forward_runs/<session_id>/
   forward_report.md
 ```
 
-## 6. Portfolio Workflows
+## 7. Portfolio Workflows
 
 ### `--portfolio-report`
 
@@ -273,7 +298,7 @@ outputs/forward_runs/
   portfolio_compare.md
 ```
 
-## 7. Sweep Workflows
+## 8. Sweep Workflows
 
 Flag-driven sweep:
 
@@ -289,7 +314,7 @@ python main.py --json-request "{\"schema_version\":\"1.0\",\"request_id\":\"req_
 
 `report.json.machine_contract` is the canonical machine-facing result surface for automated sweep consumption.
 
-## 8. Legacy Flags
+## 9. Legacy Flags
 
 These remain accepted for backward compatibility, but should not be expanded further in docs or integrations:
 

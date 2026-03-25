@@ -127,6 +127,7 @@ python main.py --help
 - `--paper-sessions-health`: summarize health across paper sessions
 - `--paper-sessions-alerts`: emit a deterministic alert snapshot for paper sessions
 - `--paper-sessions-index`: refresh a shared paper-session index under the paper root
+- `--kraken-dry-run-outdir`: persist a local Kraken dry-run audit artifact
 - `--forward-eval`: launch a forward evaluation from a prior run directory
 - `--portfolio-report`: aggregate forward sessions into a portfolio report
 - `--portfolio-compare`: compare allocation modes across forward sessions
@@ -365,6 +366,12 @@ Real broker work is still gated behind Stage D.0.
 The current local safety boundary is documented in [docs/broker-safety-boundary.md](./docs/broker-safety-boundary.md) and defines the broker-agnostic execution contract that future adapters must follow.
 
 The first dry-run backend slice now exists behind that boundary as a `KrakenBrokerAdapter`, still without real broker connectivity.
+
+QuantLab can now also materialize a local Kraken dry-run review artifact with:
+
+```bash
+python main.py --kraken-dry-run-outdir outputs/broker_dry_runs/demo --broker-symbol ETH-USD --broker-side buy --broker-quantity 0.25 --broker-notional 500 --broker-account-id acct_demo --broker-max-notional 1000 --broker-allowed-symbols ETH/USD,BTC/USD
+```
 
 ## License
 
