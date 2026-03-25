@@ -121,6 +121,8 @@ python main.py --help
 - `--runs-list`: list indexed runs under a root directory
 - `--runs-show`: inspect a single run directory
 - `--runs-best`: rank runs by a metric such as `sharpe_simple`
+- `--paper-sessions-list`: list paper sessions under a root directory
+- `--paper-sessions-show`: inspect a single paper session directory
 - `--forward-eval`: launch a forward evaluation from a prior run directory
 - `--portfolio-report`: aggregate forward sessions into a portfolio report
 - `--portfolio-compare`: compare allocation modes across forward sessions
@@ -141,13 +143,25 @@ See also:
 Single research run:
 
 ```bash
-python main.py --ticker ETH-USD --start 2022-01-01 --end 2023-12-31 --paper --report
+python main.py --ticker ETH-USD --start 2022-01-01 --end 2023-12-31 --report
 ```
 
-This produces a canonical run directory under:
+This produces a canonical research run directory under:
 
 ```text
 outputs/runs/<run_id>/
+```
+
+Paper-backed run:
+
+```bash
+python main.py --ticker ETH-USD --start 2022-01-01 --end 2023-12-31 --paper --report
+```
+
+This produces a canonical paper session directory under:
+
+```text
+outputs/paper_sessions/<session_id>/
 ```
 
 ### Runs
@@ -168,6 +182,20 @@ Best run by metric:
 
 ```bash
 python main.py --runs-best outputs/runs --metric sharpe_simple
+```
+
+### Paper Sessions
+
+List paper sessions:
+
+```bash
+python main.py --paper-sessions-list outputs/paper_sessions
+```
+
+Show one paper session:
+
+```bash
+python main.py --paper-sessions-show outputs/paper_sessions/<session_id>
 ```
 
 ### Forward
@@ -206,7 +234,7 @@ python main.py --portfolio-report outputs/forward_runs --portfolio-mode custom_w
 
 ## Canonical Artifact Structure
 
-Canonical run-producing artifacts are centered on:
+Canonical research run artifacts are centered on:
 
 ```text
 outputs/runs/<run_id>/
@@ -217,6 +245,20 @@ outputs/runs/<run_id>/
   run_report.md
   trades.csv                 # optional
   artifacts/                 # optional
+```
+
+Canonical paper session artifacts are centered on:
+
+```text
+outputs/paper_sessions/<session_id>/
+  session_metadata.json
+  session_status.json
+  config.json
+  metrics.json
+  report.json
+  run_report.md
+  trades.csv
+  artifacts/
 ```
 
 Shared run history index:
