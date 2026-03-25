@@ -59,6 +59,33 @@
                 <div class="panel-text">Read-only surface for registry triage plus paper-session visibility during `Stage C.1`.</div>
             </section>
 
+            <section class="sidebar-panel sidebar-stage-map">
+                <div class="panel-label">Execution Map</div>
+                <div class="stage-list">
+                    <div class="stage-item is-current">
+                        <span class="stage-dot"></span>
+                        <div>
+                            <strong>Stage C.1</strong>
+                            <span>Operationalize paper sessions</span>
+                        </div>
+                    </div>
+                    <div class="stage-item">
+                        <span class="stage-dot"></span>
+                        <div>
+                            <strong>Stage O.1</strong>
+                            <span>Consumer hardening only when friction is real</span>
+                        </div>
+                    </div>
+                    <div class="stage-item">
+                        <span class="stage-dot"></span>
+                        <div>
+                            <strong>Stage D.0</strong>
+                            <span>Execution safety before broker connectivity</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <div class="sidebar-footer">
                 <div class="status-indicator">
                     <span class="dot" id="registry-dot"></span>
@@ -93,6 +120,7 @@
                             Sync Registry
                         </button>
                         <span class="action-hint">Reloads runs registry and paper-session health</span>
+                        <span class="sync-meta" id="sync-meta">Last sync: -</span>
                     </div>
                 </div>
             </header>
@@ -115,6 +143,11 @@
                                 <div class="insight-label">Top Sharpe</div>
                                 <div class="insight-value" id="hero-best-run">-</div>
                                 <div class="insight-meta" id="hero-best-meta">Waiting for registry</div>
+                            </article>
+                            <article class="insight-card">
+                                <div class="insight-label">Mode Mix</div>
+                                <div class="mode-strip" id="mode-strip"></div>
+                                <div class="insight-meta" id="hero-mode-meta">No runs loaded</div>
                             </article>
                             <article class="insight-card">
                                 <div class="insight-label">Paper Ops</div>
@@ -185,9 +218,11 @@
 
                             <div class="toolbar">
                                 <div class="toolbar-group" id="mode-pills"></div>
+                                <div class="toolbar-meta" id="filter-summary">No filters applied</div>
                                 <select id="filter-mode" class="select-sm">
                                     <option value="all">All Modes</option>
                                 </select>
+                                <button class="btn btn-secondary btn-sm" id="clear-filters" type="button">Reset Filters</button>
                             </div>
                         </div>
 
