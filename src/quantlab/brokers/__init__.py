@@ -14,11 +14,14 @@ from .boundary import (
     ExecutionPreflight,
     validate_execution_intent,
 )
+from .kraken import KrakenBrokerAdapter, KrakenDryRunAudit
 
 __all__ = [
     "BrokerAdapter",
     "ExecutionIntent",
     "ExecutionPolicy",
     "ExecutionPreflight",
+    "KrakenBrokerAdapter",
+    "KrakenDryRunAudit",
     "validate_execution_intent",
 ]
