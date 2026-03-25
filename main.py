@@ -28,6 +28,7 @@ handle_report_commands = None
 handle_run_command = None
 handle_runs_commands = None
 handle_paper_session_commands = None
+handle_broker_preflight_commands = None
 handle_broker_dry_run_commands = None
 handle_broker_dry_runs_commands = None
 run_sweep = None
@@ -133,6 +134,7 @@ def _load_runtime_dependencies() -> None:
     global handle_run_command
     global handle_runs_commands
     global handle_paper_session_commands
+    global handle_broker_preflight_commands
     global handle_broker_dry_run_commands
     global handle_broker_dry_runs_commands
     global run_sweep
@@ -186,6 +188,12 @@ def _load_runtime_dependencies() -> None:
         )
 
         handle_broker_dry_run_commands = _handle_broker_dry_run_commands
+    if handle_broker_preflight_commands is None:
+        from quantlab.cli.broker_preflight import (
+            handle_broker_preflight_commands as _handle_broker_preflight_commands,
+        )
+
+        handle_broker_preflight_commands = _handle_broker_preflight_commands
     if handle_broker_dry_runs_commands is None:
         from quantlab.cli.broker_dry_runs import (
             handle_broker_dry_runs_commands as _handle_broker_dry_runs_commands,
@@ -376,6 +384,18 @@ def main() -> None:
         help="Persist a local Kraken dry-run audit artifact in a directory.",
     )
     parser.add_argument(
+        "--kraken-preflight-outdir",
+        metavar="DIR",
+        default=None,
+        help="Persist a local Kraken read-only preflight artifact in a directory.",
+    )
+    parser.add_argument(
+        "--kraken-preflight-timeout",
+        type=float,
+        default=10.0,
+        help="Timeout in seconds for Kraken public preflight probes.",
+    )
+    parser.add_argument(
         "--kraken-dry-run-session",
         action="store_true",
         help="Persist a canonical Kraken dry-run session under outputs/broker_dry_runs.",
@@ -545,6 +565,10 @@ def main() -> None:
         ):
             session_metadata["mode"] = "paper_sessions"
         elif (
+            args.kraken_preflight_outdir
+        ):
+            session_metadata["mode"] = "broker_preflight"
+        elif (
             args.kraken_dry_run_outdir
             or args.kraken_dry_run_session
             or args.broker_dry_runs_list
@@ -583,6 +607,9 @@ def main() -> None:
                 )
 
         # --- Standard flag-driven routing (human CLI use) ---
+        if result_ctx in (None, False):
+            result_ctx = handle_broker_preflight_commands(args)
+
         if result_ctx in (None, False):
             result_ctx = handle_broker_dry_run_commands(args)
 
