@@ -27,6 +27,7 @@ handle_forward_commands = None
 handle_report_commands = None
 handle_run_command = None
 handle_runs_commands = None
+handle_paper_session_commands = None
 run_sweep = None
 write_run_report = None
 write_advanced_report = None
@@ -129,6 +130,7 @@ def _load_runtime_dependencies() -> None:
     global handle_report_commands
     global handle_run_command
     global handle_runs_commands
+    global handle_paper_session_commands
     global run_sweep
     global write_run_report
     global write_advanced_report
@@ -168,6 +170,12 @@ def _load_runtime_dependencies() -> None:
         from quantlab.cli.runs import handle_runs_commands as _handle_runs_commands
 
         handle_runs_commands = _handle_runs_commands
+    if handle_paper_session_commands is None:
+        from quantlab.cli.paper_sessions import (
+            handle_paper_session_commands as _handle_paper_session_commands,
+        )
+
+        handle_paper_session_commands = _handle_paper_session_commands
     if run_sweep is None:
         from quantlab.experiments import run_sweep as _run_sweep
 
@@ -310,6 +318,18 @@ def main() -> None:
         help="Find the best run by a metric.",
     )
     parser.add_argument(
+        "--paper-sessions-list",
+        metavar="ROOT_DIR",
+        default=None,
+        help="List paper sessions in a directory.",
+    )
+    parser.add_argument(
+        "--paper-sessions-show",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Show details for a single paper session.",
+    )
+    parser.add_argument(
         "--metric",
         default="sharpe_simple",
         help="Metric to rank by (used with --runs-best, --best-from).",
@@ -431,6 +451,8 @@ def main() -> None:
             session_metadata["mode"] = "paper"
         elif args.report:
             session_metadata["mode"] = "report"
+        elif args.paper_sessions_list or args.paper_sessions_show:
+            session_metadata["mode"] = "paper_sessions"
         elif args.runs_list or args.runs_show or args.runs_best:
             session_metadata["mode"] = "runs"
         else:
@@ -462,6 +484,9 @@ def main() -> None:
                 )
 
         # --- Standard flag-driven routing (human CLI use) ---
+        if result_ctx in (None, False):
+            result_ctx = handle_paper_session_commands(args)
+
         if result_ctx in (None, False):
             result_ctx = handle_runs_commands(args)
 
