@@ -11,6 +11,7 @@ from typing import Any, Iterator
 from quantlab.brokers.session_store import (
     BROKER_ORDER_APPROVAL_FILENAME,
     BROKER_PRE_SUBMIT_BUNDLE_FILENAME,
+    BROKER_SUBMIT_GATE_FILENAME,
     BROKER_ORDER_VALIDATE_FILENAME,
     BROKER_ORDER_VALIDATE_METADATA_FILENAME,
     BROKER_ORDER_VALIDATE_STATUS_FILENAME,
@@ -21,6 +22,41 @@ from quantlab.runs.artifacts import load_json_with_fallback
 
 
 def handle_broker_order_validations_commands(args) -> bool:
+    if getattr(args, "broker_order_validations_submit_gate", None):
+        session_dir = _require_directory(
+            args.broker_order_validations_submit_gate,
+            "Broker order validation session directory",
+        )
+        summary = load_broker_order_validation_summary(session_dir)
+        if not summary.get("pre_submit_bundle_present"):
+            raise ConfigError("Broker order validation session must have a pre-submit bundle before generating a supervised submit gate.")
+        reviewer = getattr(args, "broker_submit_reviewer", None)
+        if not isinstance(reviewer, str) or not reviewer.strip():
+            raise ConfigError("broker_submit_reviewer is required to generate a supervised submit gate.")
+        if not bool(getattr(args, "broker_submit_confirm", False)):
+            raise ConfigError("broker_submit_confirm is required to generate a supervised submit gate.")
+
+        bundle, _ = load_json_with_fallback(session_dir, BROKER_PRE_SUBMIT_BUNDLE_FILENAME)
+        gate_note = getattr(args, "broker_submit_note", None)
+        gate = {
+            "artifact_type": "quantlab.broker.submit_gate",
+            "generated_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+            "source_session_id": summary["session_id"],
+            "submit_state": "ready_for_supervised_submit_gate",
+            "confirmed_by": reviewer.strip(),
+            "confirmed_note": gate_note.strip() if isinstance(gate_note, str) and gate_note.strip() else None,
+            "source_pre_submit_bundle": bundle,
+        }
+        store = BrokerOrderValidationStore(summary["session_id"], base_dir=str(session_dir.parent))
+        store.write_submit_gate(gate)
+
+        gate_path = session_dir / BROKER_SUBMIT_GATE_FILENAME
+        print("\nBroker supervised submit gate generated:\n")
+        print(f"  session_path : {session_dir}")
+        print(f"  gate_path    : {gate_path}")
+        print(f"  confirmed_by : {gate['confirmed_by']}")
+        return True
+
     if getattr(args, "broker_order_validations_bundle", None):
         session_dir = _require_directory(
             args.broker_order_validations_bundle,
@@ -146,6 +182,7 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
     report, report_path = load_json_with_fallback(path, BROKER_ORDER_VALIDATE_FILENAME)
     approval, approval_path = load_json_with_fallback(path, BROKER_ORDER_APPROVAL_FILENAME)
     bundle, bundle_path = load_json_with_fallback(path, BROKER_PRE_SUBMIT_BUNDLE_FILENAME)
+    submit_gate, submit_gate_path = load_json_with_fallback(path, BROKER_SUBMIT_GATE_FILENAME)
 
     return {
         "session_id": metadata.get("session_id") or status.get("session_id") or path.name,
@@ -166,12 +203,16 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
         "approval_present": bool(approval_path),
         "pre_submit_bundle_present": bool(bundle_path),
         "pre_submit_bundle_state": bundle.get("bundle_state"),
+        "submit_gate_present": bool(submit_gate_path),
+        "submit_gate_state": submit_gate.get("submit_state"),
+        "submit_gate_confirmed_by": submit_gate.get("confirmed_by"),
         "path": str(path),
         "metadata_path": str(path / BROKER_ORDER_VALIDATE_METADATA_FILENAME),
         "status_path": str(path / BROKER_ORDER_VALIDATE_STATUS_FILENAME),
         "report_path": str(path / BROKER_ORDER_VALIDATE_FILENAME),
         "approval_path": str(path / BROKER_ORDER_APPROVAL_FILENAME),
         "pre_submit_bundle_path": str(path / BROKER_PRE_SUBMIT_BUNDLE_FILENAME),
+        "submit_gate_path": str(path / BROKER_SUBMIT_GATE_FILENAME),
     }
 
 

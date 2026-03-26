@@ -496,6 +496,12 @@ def main() -> None:
         help="Generate a pre-submit bundle from an approved broker order-validation session.",
     )
     parser.add_argument(
+        "--broker-order-validations-submit-gate",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Generate a supervised submit gate artifact from a pre-submit bundle.",
+    )
+    parser.add_argument(
         "--broker-approval-reviewer",
         default=None,
         help="Reviewer name/id for local broker approval actions.",
@@ -504,6 +510,21 @@ def main() -> None:
         "--broker-approval-note",
         default=None,
         help="Optional note for local broker approval actions.",
+    )
+    parser.add_argument(
+        "--broker-submit-reviewer",
+        default=None,
+        help="Reviewer name/id for supervised submit gate actions.",
+    )
+    parser.add_argument(
+        "--broker-submit-note",
+        default=None,
+        help="Optional note for supervised submit gate actions.",
+    )
+    parser.add_argument(
+        "--broker-submit-confirm",
+        action="store_true",
+        help="Explicit confirmation flag required to generate a supervised submit gate.",
     )
     parser.add_argument("--broker-symbol", default=None)
     parser.add_argument("--broker-side", default=None)
@@ -659,6 +680,7 @@ def main() -> None:
             or args.broker_order_validations_index
             or args.broker_order_validations_approve
             or args.broker_order_validations_bundle
+            or args.broker_order_validations_submit_gate
         ):
             session_metadata["mode"] = "broker_validate"
         elif (

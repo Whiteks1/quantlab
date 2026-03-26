@@ -14,6 +14,7 @@ BROKER_ORDER_VALIDATE_METADATA_FILENAME = "session_metadata.json"
 BROKER_ORDER_VALIDATE_STATUS_FILENAME = "session_status.json"
 BROKER_ORDER_APPROVAL_FILENAME = "approval.json"
 BROKER_PRE_SUBMIT_BUNDLE_FILENAME = "broker_pre_submit_bundle.json"
+BROKER_SUBMIT_GATE_FILENAME = "broker_submit_gate.json"
 
 
 class BrokerDryRunStore:
@@ -93,6 +94,10 @@ class BrokerOrderValidationStore:
     def write_pre_submit_bundle(self, bundle: dict[str, Any]) -> None:
         self._ensure_initialized()
         save_json(bundle, self.session_path / BROKER_PRE_SUBMIT_BUNDLE_FILENAME)
+
+    def write_submit_gate(self, gate: dict[str, Any]) -> None:
+        self._ensure_initialized()
+        save_json(gate, self.session_path / BROKER_SUBMIT_GATE_FILENAME)
 
     def get_session_path(self) -> Path:
         return self.session_path.resolve()
