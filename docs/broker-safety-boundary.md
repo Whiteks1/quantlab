@@ -76,6 +76,7 @@ Current Stage D.1 scope covered:
 - local human approval artifacts for reviewed broker order-validation sessions
 - local pre-submit bundles generated only from approved validation sessions
 - local supervised submit gate artifacts generated only from pre-submit bundles
+- local supervised submit stub artifacts generated only from submit gates
 - stable dry-run audit snapshot for local review
 - local `broker_dry_run.json` artifact generation through the CLI
 - canonical broker dry-run sessions and shared registry under `outputs/broker_dry_runs/`
@@ -92,6 +93,7 @@ Boundary note:
 - approval artifacts are a local QuantLab gate only; they do not submit anything to Kraken by themselves
 - pre-submit bundles are the final local handoff artifact before any future supervised submit path, but they still do not submit anything by themselves
 - supervised submit gate artifacts are the final local confirmation step before any future submit implementation, but they still do not submit anything by themselves
+- supervised submit stub artifacts are the first operational shape of a future submit path, but they still remain local and do not hit the broker
 
 ## Next Step
 

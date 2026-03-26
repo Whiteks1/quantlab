@@ -141,6 +141,7 @@ python main.py --help
 - `--broker-order-validations-approve`: persist a local approval decision for one broker order-validation session
 - `--broker-order-validations-bundle`: materialize a pre-submit bundle from an approved broker order-validation session
 - `--broker-order-validations-submit-gate`: materialize a supervised submit gate artifact from a pre-submit bundle
+- `--broker-order-validations-submit-stub`: materialize a supervised submit stub artifact from a submit gate
 - `--forward-eval`: launch a forward evaluation from a prior run directory
 - `--portfolio-report`: aggregate forward sessions into a portfolio report
 - `--portfolio-compare`: compare allocation modes across forward sessions
@@ -432,6 +433,12 @@ And it can materialize a supervised submit gate only from a session that already
 
 ```bash
 python main.py --broker-order-validations-submit-gate outputs/broker_order_validations/<session_id> --broker-submit-reviewer marce --broker-submit-confirm --broker-submit-note "Ready for supervised submit review"
+```
+
+And it can materialize a supervised submit stub that shows the final payload it would submit:
+
+```bash
+python main.py --broker-order-validations-submit-stub outputs/broker_order_validations/<session_id>
 ```
 
 And it can now persist canonical broker dry-run sessions under:
