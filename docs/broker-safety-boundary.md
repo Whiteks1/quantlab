@@ -72,6 +72,7 @@ Current Stage D.1 scope covered:
 - read-only Kraken authenticated preflight probes for private boundary readiness
 - read-only Kraken account snapshot and balance-aware intent readiness
 - Kraken validate-only order probes for exchange-side order acceptance checks
+- canonical broker order-validation sessions and shared registry under `outputs/broker_order_validations/`
 - stable dry-run audit snapshot for local review
 - local `broker_dry_run.json` artifact generation through the CLI
 - canonical broker dry-run sessions and shared registry under `outputs/broker_dry_runs/`
