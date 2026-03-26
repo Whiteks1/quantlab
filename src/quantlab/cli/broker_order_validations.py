@@ -12,6 +12,7 @@ from quantlab.brokers.session_store import (
     BROKER_ORDER_APPROVAL_FILENAME,
     BROKER_PRE_SUBMIT_BUNDLE_FILENAME,
     BROKER_SUBMIT_GATE_FILENAME,
+    BROKER_SUBMIT_ATTEMPT_FILENAME,
     BROKER_ORDER_VALIDATE_FILENAME,
     BROKER_ORDER_VALIDATE_METADATA_FILENAME,
     BROKER_ORDER_VALIDATE_STATUS_FILENAME,
@@ -22,6 +23,37 @@ from quantlab.runs.artifacts import load_json_with_fallback
 
 
 def handle_broker_order_validations_commands(args) -> bool:
+    if getattr(args, "broker_order_validations_submit_stub", None):
+        session_dir = _require_directory(
+            args.broker_order_validations_submit_stub,
+            "Broker order validation session directory",
+        )
+        summary = load_broker_order_validation_summary(session_dir)
+        if not summary.get("submit_gate_present"):
+            raise ConfigError("Broker order validation session must have a supervised submit gate before generating a submit stub.")
+
+        report, _ = load_json_with_fallback(session_dir, BROKER_ORDER_VALIDATE_FILENAME)
+        submit_gate, _ = load_json_with_fallback(session_dir, BROKER_SUBMIT_GATE_FILENAME)
+        submit_payload = report.get("validate_payload")
+        attempt = {
+            "artifact_type": "quantlab.broker.submit_attempt",
+            "generated_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+            "source_session_id": summary["session_id"],
+            "submit_mode": "stub",
+            "would_submit": True,
+            "submit_payload": submit_payload,
+            "source_submit_gate": submit_gate,
+        }
+        store = BrokerOrderValidationStore(summary["session_id"], base_dir=str(session_dir.parent))
+        store.write_submit_attempt(attempt)
+
+        attempt_path = session_dir / BROKER_SUBMIT_ATTEMPT_FILENAME
+        print("\nBroker supervised submit stub generated:\n")
+        print(f"  session_path : {session_dir}")
+        print(f"  attempt_path : {attempt_path}")
+        print("  submit_mode  : stub")
+        return True
+
     if getattr(args, "broker_order_validations_submit_gate", None):
         session_dir = _require_directory(
             args.broker_order_validations_submit_gate,
@@ -183,6 +215,7 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
     approval, approval_path = load_json_with_fallback(path, BROKER_ORDER_APPROVAL_FILENAME)
     bundle, bundle_path = load_json_with_fallback(path, BROKER_PRE_SUBMIT_BUNDLE_FILENAME)
     submit_gate, submit_gate_path = load_json_with_fallback(path, BROKER_SUBMIT_GATE_FILENAME)
+    submit_attempt, submit_attempt_path = load_json_with_fallback(path, BROKER_SUBMIT_ATTEMPT_FILENAME)
 
     return {
         "session_id": metadata.get("session_id") or status.get("session_id") or path.name,
@@ -206,6 +239,9 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
         "submit_gate_present": bool(submit_gate_path),
         "submit_gate_state": submit_gate.get("submit_state"),
         "submit_gate_confirmed_by": submit_gate.get("confirmed_by"),
+        "submit_attempt_present": bool(submit_attempt_path),
+        "submit_attempt_mode": submit_attempt.get("submit_mode"),
+        "submit_attempt_would_submit": submit_attempt.get("would_submit"),
         "path": str(path),
         "metadata_path": str(path / BROKER_ORDER_VALIDATE_METADATA_FILENAME),
         "status_path": str(path / BROKER_ORDER_VALIDATE_STATUS_FILENAME),
@@ -213,6 +249,7 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
         "approval_path": str(path / BROKER_ORDER_APPROVAL_FILENAME),
         "pre_submit_bundle_path": str(path / BROKER_PRE_SUBMIT_BUNDLE_FILENAME),
         "submit_gate_path": str(path / BROKER_SUBMIT_GATE_FILENAME),
+        "submit_attempt_path": str(path / BROKER_SUBMIT_ATTEMPT_FILENAME),
     }
 
 

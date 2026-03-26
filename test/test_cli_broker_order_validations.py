@@ -80,6 +80,7 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "broker_order_validations_approve": None,
         "broker_order_validations_bundle": None,
         "broker_order_validations_submit_gate": None,
+        "broker_order_validations_submit_stub": None,
         "broker_approval_reviewer": None,
         "broker_approval_note": None,
         "broker_submit_reviewer": None,
@@ -282,3 +283,51 @@ def test_submit_gate_requires_explicit_confirmation(broker_order_validations_roo
     )
     with pytest.raises(ConfigError):
         handle_broker_order_validations_commands(gate_args)
+
+
+def test_generates_supervised_submit_stub_from_submit_gate(broker_order_validations_root: Path, capsys):
+    approve_args = _make_args(
+        broker_order_validations_approve=str(broker_order_validations_root / "validate_001"),
+        broker_approval_reviewer="marce",
+    )
+    assert handle_broker_order_validations_commands(approve_args) is True
+    _ = capsys.readouterr()
+
+    bundle_args = _make_args(
+        broker_order_validations_bundle=str(broker_order_validations_root / "validate_001"),
+    )
+    assert handle_broker_order_validations_commands(bundle_args) is True
+    _ = capsys.readouterr()
+
+    gate_args = _make_args(
+        broker_order_validations_submit_gate=str(broker_order_validations_root / "validate_001"),
+        broker_submit_reviewer="marce",
+        broker_submit_confirm=True,
+    )
+    assert handle_broker_order_validations_commands(gate_args) is True
+    _ = capsys.readouterr()
+
+    stub_args = _make_args(
+        broker_order_validations_submit_stub=str(broker_order_validations_root / "validate_001"),
+    )
+    result = handle_broker_order_validations_commands(stub_args)
+    assert result is True
+
+    out = capsys.readouterr().out
+    assert "Broker supervised submit stub generated" in out
+
+    attempt_path = broker_order_validations_root / "validate_001" / "broker_submit_attempt.json"
+    assert attempt_path.exists()
+    payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+    assert payload["artifact_type"] == "quantlab.broker.submit_attempt"
+    assert payload["submit_mode"] == "stub"
+    assert payload["would_submit"] is True
+    assert payload["source_session_id"] == "validate_001"
+
+
+def test_submit_stub_requires_submit_gate(broker_order_validations_root: Path):
+    args = _make_args(
+        broker_order_validations_submit_stub=str(broker_order_validations_root / "validate_001"),
+    )
+    with pytest.raises(ConfigError):
+        handle_broker_order_validations_commands(args)

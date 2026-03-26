@@ -236,6 +236,7 @@ Initial slice already present:
 - local approval gate artifacts before any future submit path
 - local pre-submit bundles generated only from approved validation sessions
 - local supervised submit gate artifacts generated only from pre-submit bundles
+- local supervised submit stub artifacts generated only from submit gates
 - deterministic Kraken payload translation for validated intent
 - dry-run audit snapshot without real broker connectivity
 - local dry-run artifact persistence via `broker_dry_run.json`

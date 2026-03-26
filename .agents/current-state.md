@@ -61,6 +61,7 @@
   - broker order validation sessions now support local approval artifacts as an explicit human gate
   - approved broker order validation sessions can now materialize `broker_pre_submit_bundle.json` as the final local handoff artifact before any future supervised submit path
   - pre-submit bundles can now materialize `broker_submit_gate.json` as the final local supervised confirmation step before any future submit implementation
+  - submit gates can now materialize `broker_submit_attempt.json` in `stub` mode as the first operational shape of a future supervised submit path
 
 
 ## Known Issues / Technical Debt

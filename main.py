@@ -502,6 +502,12 @@ def main() -> None:
         help="Generate a supervised submit gate artifact from a pre-submit bundle.",
     )
     parser.add_argument(
+        "--broker-order-validations-submit-stub",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Generate a supervised submit stub artifact from a submit gate.",
+    )
+    parser.add_argument(
         "--broker-approval-reviewer",
         default=None,
         help="Reviewer name/id for local broker approval actions.",
@@ -681,6 +687,7 @@ def main() -> None:
             or args.broker_order_validations_approve
             or args.broker_order_validations_bundle
             or args.broker_order_validations_submit_gate
+            or args.broker_order_validations_submit_stub
         ):
             session_metadata["mode"] = "broker_validate"
         elif (

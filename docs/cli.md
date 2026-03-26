@@ -490,6 +490,33 @@ Important note:
 - it still does not place an order
 - it is the final local supervised gate before any future submit implementation
 
+### `--broker-order-validations-submit-stub`
+
+Generate a supervised submit stub artifact from a session that already has a submit gate:
+
+```bash
+python main.py --broker-order-validations-submit-stub outputs/broker_order_validations/<session_id>
+```
+
+This writes:
+
+- `outputs/broker_order_validations/<session_id>/broker_submit_attempt.json`
+
+The submit stub currently includes:
+
+- source session id
+- generation timestamp
+- `submit_mode = stub`
+- `would_submit = true`
+- final submit payload derived from the validated session
+- embedded source `broker_submit_gate.json`
+
+Important note:
+
+- this command fails if the source session does not already have a submit gate
+- it still does not place an order
+- it is the first operational shape of a future supervised submit path, but still entirely local
+
 ### `--kraken-dry-run-outdir`
 
 Persist a local Kraken dry-run audit artifact:
