@@ -14,6 +14,8 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "hyperliquid_preflight_outdir": None,
         "hyperliquid_account_readiness_outdir": None,
         "hyperliquid_signed_action_outdir": None,
+        "hyperliquid_private_key": None,
+        "hyperliquid_private_key_env": "HYPERLIQUID_PRIVATE_KEY",
         "kraken_preflight_outdir": None,
         "kraken_auth_preflight_outdir": None,
         "kraken_account_readiness_outdir": None,
@@ -318,11 +320,12 @@ def test_writes_hyperliquid_signed_action_artifact(monkeypatch, tmp_path):
                         "signer_id": "0x2222222222222222222222222222222222222222",
                         "nonce_scope": "0x2222222222222222222222222222222222222222",
                         "signing_scheme": "hyperliquid_l1_action",
-                        "signature_state": "pending_signer_backend",
-                        "signature_present": False,
-                        "signature_reason": "signature_backend_not_implemented",
+                        "signature_state": "signed",
+                        "signature_present": True,
+                        "signature_reason": None,
                         "signing_payload": {},
                         "signing_payload_sha256": "abc123",
+                        "signature": {"r": "0x1", "s": "0x2", "v": 27},
                     },
                     "action_payload": {
                         "type": "order",
@@ -331,6 +334,7 @@ def test_writes_hyperliquid_signed_action_artifact(monkeypatch, tmp_path):
                     },
                     "readiness_allowed": True,
                     "readiness_reasons": [],
+                    "signer_backend": "hyperliquid_local_private_key",
                     "errors": [],
                 }
 
@@ -358,7 +362,7 @@ def test_writes_hyperliquid_signed_action_artifact(monkeypatch, tmp_path):
     assert isinstance(result, dict)
     assert result["status"] == "success"
     assert result["readiness_allowed"] is True
-    assert result["signature_state"] == "pending_signer_backend"
+    assert result["signature_state"] == "signed"
 
     artifact_path = outdir / "hyperliquid_signed_action.json"
     assert artifact_path.exists()
@@ -366,7 +370,8 @@ def test_writes_hyperliquid_signed_action_artifact(monkeypatch, tmp_path):
     payload = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert payload["artifact_type"] == "quantlab.hyperliquid.signed_action"
     assert payload["nonce"] == 1700000000000
-    assert payload["signature_envelope"]["signature_present"] is False
+    assert payload["signature_envelope"]["signature_present"] is True
+    assert payload["signer_backend"] == "hyperliquid_local_private_key"
 
 
 def test_missing_symbol_raises_config_error(tmp_path):

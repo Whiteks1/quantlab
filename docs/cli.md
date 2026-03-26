@@ -287,12 +287,26 @@ The artifact currently includes:
 - resolved `expiresAfter` and how it was interpreted
 - a local order action payload using resolved Hyperliquid asset identifiers
 - a signature envelope with signing payload hash and signer metadata
+- optional real local signature data when a signing key is available
+
+Signer backend options:
+
+- `--hyperliquid-private-key <HEX_KEY>`
+- `--hyperliquid-private-key-env <ENV_NAME>`
 
 Current limitation:
 
-- the cryptographic signature itself is not produced yet
-- the artifact marks `signature_state = pending_signer_backend`
 - nothing is submitted to Hyperliquid
+- if no signing key is present, the artifact keeps `signature_state = pending_signer_backend`
+
+Example with signer backend enabled through environment:
+
+```bash
+python main.py --hyperliquid-signed-action-outdir outputs/broker_preflight/hyperliquid_signed_action_demo --broker-symbol ETH --broker-side buy --broker-quantity 0.25 --broker-notional 500 --execution-account-id 0x0000000000000000000000000000000000000000 --execution-signer-id 0xSIGNER_ADDRESS --hyperliquid-private-key-env HYPERLIQUID_PRIVATE_KEY
+```
+
+- on success, the artifact moves to `signature_state = signed`
+- if the derived signer address does not match `execution-signer-id`, the artifact reports `signature_state = signer_identity_mismatch`
 
 ### `--kraken-preflight-outdir`
 

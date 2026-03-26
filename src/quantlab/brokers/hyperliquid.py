@@ -12,8 +12,21 @@ from dataclasses import dataclass
 import datetime as dt
 import hashlib
 import json
+import os
 import time
 from urllib.request import Request, urlopen
+
+try:
+    import msgpack
+    from eth_account import Account
+    from eth_account.messages import encode_typed_data
+    from eth_utils import keccak, to_hex
+except ImportError:  # pragma: no cover - exercised via fallback behavior.
+    msgpack = None
+    Account = None
+    encode_typed_data = None
+    keccak = None
+    to_hex = None
 
 from .boundary import (
     BrokerAdapter,
@@ -160,6 +173,7 @@ class HyperliquidSignedActionReport:
     action_payload: dict[str, object] | None
     readiness_allowed: bool
     readiness_reasons: tuple[str, ...]
+    signer_backend: str | None = None
     errors: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
@@ -198,6 +212,7 @@ class HyperliquidSignedActionReport:
             "action_payload": self.action_payload,
             "readiness_allowed": self.readiness_allowed,
             "readiness_reasons": list(self.readiness_reasons),
+            "signer_backend": self.signer_backend,
             "errors": list(self.errors),
         }
 
@@ -410,6 +425,8 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
         timeout_seconds: float = 10.0,
         fetch_json=None,
         now_ms: int | None = None,
+        signing_private_key: str | None = None,
+        signing_private_key_env: str = "HYPERLIQUID_PRIVATE_KEY",
     ) -> HyperliquidSignedActionReport:
         local_preflight = self.preflight(intent, policy, context=context)
         public_preflight = self.build_public_preflight_report(
@@ -446,6 +463,7 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
                 public_preflight=public_preflight,
             )
 
+        signer_backend = None
         signature_envelope = self.build_signature_envelope(
             action_payload=action_payload,
             resolved_context=resolved_context,
@@ -455,6 +473,19 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
         errors = list(account_readiness.errors)
         if action_payload is None:
             errors.append("action_payload_not_ready")
+        else:
+            signer_backend = "local_private_key"
+            signer_result = self.apply_signing_backend(
+                signature_envelope=signature_envelope,
+                resolved_context=resolved_context,
+                signing_private_key=signing_private_key,
+                signing_private_key_env=signing_private_key_env,
+            )
+            signature_envelope = signer_result["signature_envelope"]
+            if signer_result["signer_backend"]:
+                signer_backend = signer_result["signer_backend"]
+            errors.extend(signer_result["errors"])
+            readiness_reasons.extend(signer_result["readiness_reasons"])
 
         return HyperliquidSignedActionReport(
             adapter_name=self.adapter_name,
@@ -472,6 +503,7 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             action_payload=action_payload,
             readiness_allowed=not readiness_reasons,
             readiness_reasons=tuple(_unique_reasons(readiness_reasons)),
+            signer_backend=signer_backend,
             errors=tuple(_unique_reasons(errors)),
         )
 
@@ -531,6 +563,106 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             "signature_reason": "signature_backend_not_implemented",
             "signing_payload": signing_payload,
             "signing_payload_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+            "action_hash": None,
+            "phantom_agent": None,
+            "signature": None,
+            "derived_signer_address": None,
+        }
+
+    def apply_signing_backend(
+        self,
+        *,
+        signature_envelope: dict[str, object],
+        resolved_context: HyperliquidResolvedExecutionContext,
+        signing_private_key: str | None = None,
+        signing_private_key_env: str = "HYPERLIQUID_PRIVATE_KEY",
+        is_mainnet: bool = True,
+    ) -> dict[str, object]:
+        envelope = dict(signature_envelope)
+        readiness_reasons: list[str] = []
+        errors: list[str] = []
+        signer_backend = None
+
+        private_key, private_key_source = _load_hyperliquid_private_key(
+            explicit_value=signing_private_key,
+            env_name=signing_private_key_env,
+        )
+        if not private_key:
+            envelope["signature_state"] = "pending_signer_backend"
+            envelope["signature_reason"] = "missing_signing_key"
+            return {
+                "signature_envelope": envelope,
+                "readiness_reasons": readiness_reasons,
+                "errors": errors,
+                "signer_backend": signer_backend,
+            }
+
+        signer_backend = "hyperliquid_local_private_key"
+        envelope["private_key_source"] = private_key_source
+
+        if not _hyperliquid_signing_dependencies_available():
+            envelope["signature_state"] = "signer_backend_unavailable"
+            envelope["signature_reason"] = "signing_dependencies_missing"
+            readiness_reasons.append("signing_dependencies_missing")
+            errors.append("signing_dependencies_missing")
+            return {
+                "signature_envelope": envelope,
+                "readiness_reasons": readiness_reasons,
+                "errors": errors,
+                "signer_backend": signer_backend,
+            }
+
+        try:
+            signed = sign_hyperliquid_l1_action(
+                private_key=private_key,
+                action_payload=envelope.get("signing_payload", {}).get("action"),
+                vault_address=envelope.get("signing_payload", {}).get("vaultAddress"),
+                nonce=int(envelope.get("signing_payload", {}).get("nonce")),
+                expires_after=envelope.get("signing_payload", {}).get("expiresAfter"),
+                is_mainnet=is_mainnet,
+            )
+        except Exception as exc:  # noqa: BLE001
+            envelope["signature_state"] = "signer_backend_error"
+            envelope["signature_reason"] = f"{exc.__class__.__name__}"
+            errors.append(f"signing_backend_failed:{exc.__class__.__name__}")
+            readiness_reasons.append("signing_backend_failed")
+            return {
+                "signature_envelope": envelope,
+                "readiness_reasons": readiness_reasons,
+                "errors": errors,
+                "signer_backend": signer_backend,
+            }
+
+        expected_signer = resolved_context.signer_id.lower() if resolved_context.signer_id else None
+        derived_signer = signed["signer_address"].lower()
+        if expected_signer and expected_signer != derived_signer:
+            envelope["signature_state"] = "signer_identity_mismatch"
+            envelope["signature_reason"] = "derived_signer_address_mismatch"
+            envelope["derived_signer_address"] = signed["signer_address"]
+            envelope["action_hash"] = signed["action_hash"]
+            envelope["phantom_agent"] = signed["phantom_agent"]
+            readiness_reasons.append("signer_identity_mismatch")
+            errors.append("signer_identity_mismatch")
+            return {
+                "signature_envelope": envelope,
+                "readiness_reasons": readiness_reasons,
+                "errors": errors,
+                "signer_backend": signer_backend,
+            }
+
+        envelope["signature_state"] = "signed"
+        envelope["signature_present"] = True
+        envelope["signature_reason"] = None
+        envelope["derived_signer_address"] = signed["signer_address"]
+        envelope["action_hash"] = signed["action_hash"]
+        envelope["phantom_agent"] = signed["phantom_agent"]
+        envelope["signature"] = signed["signature"]
+        envelope["eip712_payload"] = signed["eip712_payload"]
+        return {
+            "signature_envelope": envelope,
+            "readiness_reasons": readiness_reasons,
+            "errors": errors,
+            "signer_backend": signer_backend,
         }
 
     def build_account_readiness_report(
@@ -801,3 +933,151 @@ def _format_hyperliquid_size(quantity: float) -> str:
 def _build_hyperliquid_cloid(request_id: str) -> str:
     digest = hashlib.sha256(request_id.encode("utf-8")).hexdigest()
     return digest[:32]
+
+
+def _hyperliquid_signing_dependencies_available() -> bool:
+    return all(module is not None for module in (msgpack, Account, encode_typed_data, keccak, to_hex))
+
+
+def _load_hyperliquid_private_key(
+    *,
+    explicit_value: str | None,
+    env_name: str,
+) -> tuple[str | None, str | None]:
+    if isinstance(explicit_value, str) and explicit_value.strip():
+        return explicit_value.strip(), "explicit_arg"
+    if env_name:
+        env_value = os.getenv(env_name)
+        if isinstance(env_value, str) and env_value.strip():
+            return env_value.strip(), f"env:{env_name}"
+    return None, None
+
+
+def sign_hyperliquid_l1_action(
+    *,
+    private_key: str,
+    action_payload: dict[str, object] | None,
+    vault_address: str | None,
+    nonce: int,
+    expires_after: int | None,
+    is_mainnet: bool = True,
+) -> dict[str, object]:
+    if not action_payload:
+        raise ValueError("missing_action_payload")
+    if not _hyperliquid_signing_dependencies_available():
+        raise RuntimeError("missing_signing_dependencies")
+
+    wallet = Account.from_key(private_key)
+    action_hash = _hyperliquid_action_hash(action_payload, vault_address, nonce, expires_after)
+    phantom_agent = {
+        "source": "a" if is_mainnet else "b",
+        "connectionId": action_hash,
+    }
+    eip712_payload = {
+        "domain": {
+            "chainId": 1337,
+            "name": "Exchange",
+            "verifyingContract": "0x0000000000000000000000000000000000000000",
+            "version": "1",
+        },
+        "types": {
+            "Agent": [
+                {"name": "source", "type": "string"},
+                {"name": "connectionId", "type": "bytes32"},
+            ],
+            "EIP712Domain": [
+                {"name": "name", "type": "string"},
+                {"name": "version", "type": "string"},
+                {"name": "chainId", "type": "uint256"},
+                {"name": "verifyingContract", "type": "address"},
+            ],
+        },
+        "primaryType": "Agent",
+        "message": phantom_agent,
+    }
+    structured_data = encode_typed_data(full_message=eip712_payload)
+    signed = wallet.sign_message(structured_data)
+    signature = {
+        "r": to_hex(signed.r),
+        "s": to_hex(signed.s),
+        "v": signed.v,
+    }
+    return {
+        "signer_address": wallet.address,
+        "action_hash": action_hash.hex(),
+        "phantom_agent": {
+            "source": phantom_agent["source"],
+            "connectionId": action_hash.hex(),
+        },
+        "eip712_payload": eip712_payload,
+        "signature": signature,
+    }
+
+
+def recover_hyperliquid_l1_action_signer(
+    *,
+    action_payload: dict[str, object] | None,
+    signature: dict[str, object],
+    vault_address: str | None,
+    nonce: int,
+    expires_after: int | None,
+    is_mainnet: bool = True,
+) -> str:
+    if not _hyperliquid_signing_dependencies_available():
+        raise RuntimeError("missing_signing_dependencies")
+    action_hash = _hyperliquid_action_hash(action_payload, vault_address, nonce, expires_after)
+    phantom_agent = {
+        "source": "a" if is_mainnet else "b",
+        "connectionId": action_hash,
+    }
+    eip712_payload = {
+        "domain": {
+            "chainId": 1337,
+            "name": "Exchange",
+            "verifyingContract": "0x0000000000000000000000000000000000000000",
+            "version": "1",
+        },
+        "types": {
+            "Agent": [
+                {"name": "source", "type": "string"},
+                {"name": "connectionId", "type": "bytes32"},
+            ],
+            "EIP712Domain": [
+                {"name": "name", "type": "string"},
+                {"name": "version", "type": "string"},
+                {"name": "chainId", "type": "uint256"},
+                {"name": "verifyingContract", "type": "address"},
+            ],
+        },
+        "primaryType": "Agent",
+        "message": phantom_agent,
+    }
+    structured_data = encode_typed_data(full_message=eip712_payload)
+    recovered = Account.recover_message(
+        structured_data,
+        vrs=[signature["v"], signature["r"], signature["s"]],
+    )
+    return str(recovered)
+
+
+def _hyperliquid_action_hash(
+    action_payload: dict[str, object] | None,
+    vault_address: str | None,
+    nonce: int,
+    expires_after: int | None,
+) -> bytes:
+    if not action_payload:
+        raise ValueError("missing_action_payload")
+    if msgpack is None or keccak is None:
+        raise RuntimeError("missing_signing_dependencies")
+    data = msgpack.packb(action_payload)
+    data += int(nonce).to_bytes(8, "big")
+    if vault_address is None:
+        data += b"\x00"
+    else:
+        data += b"\x01"
+        data += bytes.fromhex(vault_address[2:] if str(vault_address).startswith("0x") else str(vault_address))
+    if expires_after is not None:
+        data += b"\x00"
+        data += int(expires_after).to_bytes(8, "big")
+    return keccak(data)

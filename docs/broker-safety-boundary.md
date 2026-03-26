@@ -77,7 +77,8 @@ Current Stage D.1 scope covered:
 - minimal `ExecutionContext` support in the shared boundary so future venue work can model signer and routing concerns without overloading `ExecutionIntent`
 - read-only Hyperliquid venue preflight with execution-context resolution over signer identity, routing target, transport preference, and nonce scope
 - read-only Hyperliquid account/signer readiness with role resolution and account-visibility checks before any future signed action work
-- local Hyperliquid action and signature-envelope artifacts with resolved nonce and `expiresAfter`, still without cryptographic signing or submit
+- local Hyperliquid action and signature-envelope artifacts with resolved nonce and `expiresAfter`
+- local Hyperliquid signer backend integration for real L1 action signing, still without submit
 - deterministic Kraken-style payload translation
 - read-only Kraken public preflight probes for pair support and basic readiness
 - read-only Kraken authenticated preflight probes for private boundary readiness
