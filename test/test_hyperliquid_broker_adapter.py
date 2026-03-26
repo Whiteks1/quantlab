@@ -152,3 +152,111 @@ def test_hyperliquid_preflight_can_pressure_shared_boundary_with_context():
     assert result.allowed is True
     assert payload["asset"] == "ETH"
     assert payload["execution_context"]["resolved_transport"] == "websocket"
+
+
+def test_hyperliquid_account_readiness_marks_agent_subaccount_setup_ready():
+    adapter = HyperliquidBrokerAdapter()
+    context = ExecutionContext(
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        signer_id="0x2222222222222222222222222222222222222222",
+        signer_type="agent_wallet",
+        routing_target="subaccount",
+        transport_preference="websocket",
+        expires_after=60000,
+    )
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "userRole" and payload["user"] == "0x1111111111111111111111111111111111111111":
+            return {"role": "subAccount"}
+        if payload["type"] == "userRole" and payload["user"] == "0x2222222222222222222222222222222222222222":
+            return {"role": "agent"}
+        if payload["type"] == "openOrders":
+            return []
+        if payload["type"] == "frontendOpenOrders":
+            return []
+        raise AssertionError(payload)
+
+    report = adapter.build_account_readiness_report(
+        context=context,
+        fetch_json=fake_fetch_json,
+    ).to_dict()
+
+    assert report["artifact_type"] == "quantlab.hyperliquid.account_readiness"
+    assert report["readiness_allowed"] is True
+    assert report["account_visibility_available"] is True
+    assert report["open_orders_count"] == 0
+    assert report["execution_context"]["signer_role"] == "agent"
+
+
+def test_hyperliquid_account_readiness_rejects_agent_wallet_without_execution_account():
+    adapter = HyperliquidBrokerAdapter()
+    context = ExecutionContext(
+        signer_id="0x2222222222222222222222222222222222222222",
+        signer_type="agent_wallet",
+        routing_target="account",
+        transport_preference="websocket",
+    )
+
+    report = adapter.build_account_readiness_report(
+        context=context,
+        fetch_json=lambda payload, **kwargs: {"role": "agent"},
+    ).to_dict()
+
+    assert report["readiness_allowed"] is False
+    assert "missing_execution_account_id" in report["readiness_reasons"]
+
+
+def test_hyperliquid_account_readiness_rejects_signer_role_mismatch():
+    adapter = HyperliquidBrokerAdapter()
+    context = ExecutionContext(
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        signer_id="0x2222222222222222222222222222222222222222",
+        signer_type="agent_wallet",
+        routing_target="subaccount",
+        transport_preference="websocket",
+    )
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "userRole" and payload["user"] == "0x1111111111111111111111111111111111111111":
+            return {"role": "subAccount"}
+        if payload["type"] == "userRole" and payload["user"] == "0x2222222222222222222222222222222222222222":
+            return {"role": "user"}
+        if payload["type"] == "openOrders":
+            return []
+        if payload["type"] == "frontendOpenOrders":
+            return []
+        raise AssertionError(payload)
+
+    report = adapter.build_account_readiness_report(
+        context=context,
+        fetch_json=fake_fetch_json,
+    ).to_dict()
+
+    assert report["readiness_allowed"] is False
+    assert "signer_role_mismatch" in report["readiness_reasons"]
+
+
+def test_hyperliquid_account_readiness_reports_visibility_probe_failure():
+    adapter = HyperliquidBrokerAdapter()
+    context = ExecutionContext(
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        signer_type="direct",
+        routing_target="account",
+    )
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "userRole":
+            return {"role": "user"}
+        if payload["type"] == "openOrders":
+            raise RuntimeError("boom")
+        raise AssertionError(payload)
+
+    report = adapter.build_account_readiness_report(
+        context=context,
+        fetch_json=fake_fetch_json,
+    ).to_dict()
+
+    assert report["readiness_allowed"] is False
+    assert report["account_visibility_available"] is False
+    assert "account_visibility_unavailable" in report["readiness_reasons"]
+    assert "account_visibility_probe_failed:RuntimeError" in report["errors"]

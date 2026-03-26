@@ -106,6 +106,41 @@ class HyperliquidPreflightReport:
         }
 
 
+@dataclass(frozen=True)
+class HyperliquidAccountReadinessReport:
+    adapter_name: str
+    generated_at: str
+    execution_context: HyperliquidResolvedExecutionContext
+    account_visibility_available: bool
+    open_orders_count: int | None
+    frontend_open_orders_count: int | None
+    open_orders_sample: tuple[dict[str, object], ...]
+    frontend_open_orders_sample: tuple[dict[str, object], ...]
+    readiness_allowed: bool
+    readiness_reasons: tuple[str, ...]
+    rest_info_url: str
+    websocket_url: str
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact_type": "quantlab.hyperliquid.account_readiness",
+            "adapter_name": self.adapter_name,
+            "generated_at": self.generated_at,
+            "execution_context": self.execution_context.to_dict(),
+            "account_visibility_available": self.account_visibility_available,
+            "open_orders_count": self.open_orders_count,
+            "frontend_open_orders_count": self.frontend_open_orders_count,
+            "open_orders_sample": list(self.open_orders_sample),
+            "frontend_open_orders_sample": list(self.frontend_open_orders_sample),
+            "readiness_allowed": self.readiness_allowed,
+            "readiness_reasons": list(self.readiness_reasons),
+            "rest_info_url": self.rest_info_url,
+            "websocket_url": self.websocket_url,
+            "errors": list(self.errors),
+        }
+
+
 class HyperliquidBrokerAdapter(BrokerAdapter):
     """
     Read-only Hyperliquid venue adapter for preflight and context resolution.
@@ -168,6 +203,8 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
 
         if context.routing_target in {"subaccount", "vault"} and not execution_account_id:
             reasons.append("missing_execution_account_id")
+        if context.signer_type in {"api_wallet", "agent_wallet"} and not execution_account_id:
+            reasons.append("missing_execution_account_id")
         if context.signer_type in {"api_wallet", "agent_wallet"} and not signer_id:
             reasons.append("missing_signer_id")
         if query_user and not _is_hex_address(query_user):
@@ -177,7 +214,7 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
         if context.expires_after is not None and context.expires_after <= 0:
             reasons.append("non_positive_expires_after")
 
-        if fetch_json is not None and query_user and _is_hex_address(query_user):
+        if query_user and _is_hex_address(query_user):
             try:
                 execution_account_role = fetch_hyperliquid_user_role(
                     query_user,
@@ -187,7 +224,7 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             except Exception as exc:  # noqa: BLE001
                 reasons.append(f"execution_account_role_probe_failed:{exc.__class__.__name__}")
 
-        if fetch_json is not None and signer_id and _is_hex_address(signer_id) and signer_id != query_user:
+        if signer_id and _is_hex_address(signer_id) and signer_id != query_user:
             try:
                 signer_role = fetch_hyperliquid_user_role(
                     signer_id,
@@ -301,6 +338,91 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             errors=tuple(_unique_reasons(errors)),
         )
 
+    def build_account_readiness_report(
+        self,
+        *,
+        intent_account_id: str | None = None,
+        context: ExecutionContext | None = None,
+        timeout_seconds: float = 10.0,
+        fetch_json=None,
+    ) -> HyperliquidAccountReadinessReport:
+        resolved_context = self.resolve_execution_context(
+            intent_account_id=intent_account_id,
+            context=context,
+            timeout_seconds=timeout_seconds,
+            fetch_json=fetch_json,
+        )
+        readiness_reasons: list[str] = list(resolved_context.reasons)
+        errors: list[str] = list(resolved_context.reasons)
+        account_visibility_available = False
+        open_orders_count = None
+        frontend_open_orders_count = None
+        open_orders_sample: tuple[dict[str, object], ...] = ()
+        frontend_open_orders_sample: tuple[dict[str, object], ...] = ()
+
+        if not resolved_context.query_user:
+            readiness_reasons.append("missing_execution_account_id")
+        elif not _is_hex_address(resolved_context.query_user):
+            readiness_reasons.append("invalid_execution_account_id")
+        else:
+            try:
+                open_orders = fetch_hyperliquid_open_orders(
+                    resolved_context.query_user,
+                    timeout_seconds=timeout_seconds,
+                    fetch_json=fetch_json,
+                )
+                frontend_open_orders = fetch_hyperliquid_frontend_open_orders(
+                    resolved_context.query_user,
+                    timeout_seconds=timeout_seconds,
+                    fetch_json=fetch_json,
+                )
+                account_visibility_available = True
+                open_orders_count = len(open_orders)
+                frontend_open_orders_count = len(frontend_open_orders)
+                open_orders_sample = tuple(open_orders[:5])
+                frontend_open_orders_sample = tuple(frontend_open_orders[:5])
+            except Exception as exc:  # noqa: BLE001
+                failure_reason = f"account_visibility_probe_failed:{exc.__class__.__name__}"
+                readiness_reasons.append("account_visibility_unavailable")
+                errors.append(failure_reason)
+
+        if resolved_context.execution_account_role == "missing":
+            readiness_reasons.append("execution_account_missing")
+
+        if resolved_context.signer_type in {"api_wallet", "agent_wallet"}:
+            if resolved_context.signer_role is None:
+                readiness_reasons.append("signer_role_unknown")
+            elif resolved_context.signer_role != "agent":
+                readiness_reasons.append("signer_role_mismatch")
+
+        if resolved_context.routing_target == "subaccount" and resolved_context.execution_account_role not in {
+            None,
+            "subAccount",
+        }:
+            readiness_reasons.append("execution_account_not_subaccount")
+
+        if resolved_context.routing_target == "vault" and resolved_context.execution_account_role not in {
+            None,
+            "vault",
+        }:
+            readiness_reasons.append("execution_account_not_vault")
+
+        return HyperliquidAccountReadinessReport(
+            adapter_name=self.adapter_name,
+            generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+            execution_context=resolved_context,
+            account_visibility_available=account_visibility_available,
+            open_orders_count=open_orders_count,
+            frontend_open_orders_count=frontend_open_orders_count,
+            open_orders_sample=open_orders_sample,
+            frontend_open_orders_sample=frontend_open_orders_sample,
+            readiness_allowed=not readiness_reasons,
+            readiness_reasons=tuple(_unique_reasons(readiness_reasons)),
+            rest_info_url=HYPERLIQUID_INFO_API_URL,
+            websocket_url=HYPERLIQUID_MAINNET_WS_URL,
+            errors=tuple(_unique_reasons(errors)),
+        )
+
 
 def fetch_hyperliquid_all_mids(
     *,
@@ -328,6 +450,38 @@ def fetch_hyperliquid_user_role(
         role = payload.get("role")
         return str(role) if role is not None else None
     return None
+
+
+def fetch_hyperliquid_open_orders(
+    user: str,
+    *,
+    timeout_seconds: float = 10.0,
+    fetch_json=None,
+) -> list[dict[str, object]]:
+    payload = fetch_hyperliquid_info(
+        {"type": "openOrders", "user": user},
+        timeout_seconds=timeout_seconds,
+        fetch_json=fetch_json,
+    )
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    return []
+
+
+def fetch_hyperliquid_frontend_open_orders(
+    user: str,
+    *,
+    timeout_seconds: float = 10.0,
+    fetch_json=None,
+) -> list[dict[str, object]]:
+    payload = fetch_hyperliquid_info(
+        {"type": "frontendOpenOrders", "user": user},
+        timeout_seconds=timeout_seconds,
+        fetch_json=fetch_json,
+    )
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    return []
 
 
 def fetch_hyperliquid_perp_market(
