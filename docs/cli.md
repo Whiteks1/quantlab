@@ -242,6 +242,29 @@ The artifact currently includes:
 
 This surface is read-only and does not place or validate orders.
 
+### `--hyperliquid-account-readiness-outdir`
+
+Persist a read-only Hyperliquid account and signer readiness artifact:
+
+```bash
+python main.py --hyperliquid-account-readiness-outdir outputs/broker_preflight/hyperliquid_account_demo --execution-account-id 0x0000000000000000000000000000000000000000
+```
+
+This writes:
+
+- `outputs/broker_preflight/hyperliquid_account_demo/hyperliquid_account_readiness.json`
+
+The artifact currently includes:
+
+- resolved execution account and signer context
+- execution account role and signer role where available
+- nonce-scope identity
+- open-orders visibility over the execution account
+- `frontendOpenOrders` visibility over the execution account
+- readiness result plus explicit reasons when the signer/account setup is not yet suitable for supervised personal use
+
+This surface is read-only and does not sign or submit actions.
+
 ### `--kraken-preflight-outdir`
 
 Persist a read-only Kraken public preflight artifact:

@@ -133,6 +133,7 @@ python main.py --help
 - `--paper-sessions-alerts`: emit a deterministic alert snapshot for paper sessions
 - `--paper-sessions-index`: refresh a shared paper-session index under the paper root
 - `--hyperliquid-preflight-outdir`: persist a read-only Hyperliquid venue preflight artifact
+- `--hyperliquid-account-readiness-outdir`: persist a read-only Hyperliquid account and signer readiness artifact
 - `--kraken-preflight-outdir`: persist a read-only Kraken public preflight artifact
 - `--kraken-auth-preflight-outdir`: persist a read-only Kraken authenticated preflight artifact
 - `--kraken-account-readiness-outdir`: persist a read-only Kraken account snapshot and intent readiness artifact
@@ -411,6 +412,12 @@ And it can run a read-only Hyperliquid venue preflight probe with execution-cont
 
 ```bash
 python main.py --hyperliquid-preflight-outdir outputs/broker_preflight/hyperliquid_demo --broker-symbol ETH --execution-transport-preference websocket
+```
+
+And it can run a read-only Hyperliquid account/signer readiness probe:
+
+```bash
+python main.py --hyperliquid-account-readiness-outdir outputs/broker_preflight/hyperliquid_account_demo --execution-account-id 0x0000000000000000000000000000000000000000
 ```
 
 And it can run a read-only authenticated preflight probe with Kraken credentials available in `KRAKEN_API_KEY` and `KRAKEN_API_SECRET`:
