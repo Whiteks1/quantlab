@@ -483,6 +483,22 @@ def main() -> None:
         default=None,
         help="Refresh the shared broker order-validation index artifacts in a directory.",
     )
+    parser.add_argument(
+        "--broker-order-validations-approve",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Approve a broker order-validation session locally.",
+    )
+    parser.add_argument(
+        "--broker-approval-reviewer",
+        default=None,
+        help="Reviewer name/id for local broker approval actions.",
+    )
+    parser.add_argument(
+        "--broker-approval-note",
+        default=None,
+        help="Optional note for local broker approval actions.",
+    )
     parser.add_argument("--broker-symbol", default=None)
     parser.add_argument("--broker-side", default=None)
     parser.add_argument("--broker-quantity", type=float, default=None)
@@ -635,6 +651,7 @@ def main() -> None:
             or args.broker_order_validations_list
             or args.broker_order_validations_show
             or args.broker_order_validations_index
+            or args.broker_order_validations_approve
         ):
             session_metadata["mode"] = "broker_validate"
         elif (

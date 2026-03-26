@@ -12,6 +12,7 @@ BROKER_DRY_RUN_STATUS_FILENAME = "session_status.json"
 BROKER_ORDER_VALIDATE_FILENAME = "broker_order_validate.json"
 BROKER_ORDER_VALIDATE_METADATA_FILENAME = "session_metadata.json"
 BROKER_ORDER_VALIDATE_STATUS_FILENAME = "session_status.json"
+BROKER_ORDER_APPROVAL_FILENAME = "approval.json"
 
 
 class BrokerDryRunStore:
@@ -83,6 +84,10 @@ class BrokerOrderValidationStore:
     def write_report(self, report: dict[str, Any]) -> None:
         self._ensure_initialized()
         save_json(report, self.session_path / BROKER_ORDER_VALIDATE_FILENAME)
+
+    def write_approval(self, approval: dict[str, Any]) -> None:
+        self._ensure_initialized()
+        save_json(approval, self.session_path / BROKER_ORDER_APPROVAL_FILENAME)
 
     def get_session_path(self) -> Path:
         return self.session_path.resolve()
