@@ -490,6 +490,12 @@ def main() -> None:
         help="Approve a broker order-validation session locally.",
     )
     parser.add_argument(
+        "--broker-order-validations-bundle",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Generate a pre-submit bundle from an approved broker order-validation session.",
+    )
+    parser.add_argument(
         "--broker-approval-reviewer",
         default=None,
         help="Reviewer name/id for local broker approval actions.",
@@ -652,6 +658,7 @@ def main() -> None:
             or args.broker_order_validations_show
             or args.broker_order_validations_index
             or args.broker_order_validations_approve
+            or args.broker_order_validations_bundle
         ):
             session_metadata["mode"] = "broker_validate"
         elif (
