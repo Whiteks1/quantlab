@@ -73,6 +73,7 @@
   - Stage D.0 now also exposes a minimal `ExecutionContext` layer beside `ExecutionIntent` for signer identity, routing target, transport preference, and expiry metadata
   - Hyperliquid now has a first read-only venue preflight slice that resolves signer/routing context and checks `meta` / `spotMeta` / `allMids` without opening order placement work
   - Hyperliquid now also has a read-only account/signer readiness artifact that checks role resolution and basic execution-account visibility before any future signed action path
+  - Hyperliquid now also has a local action/signature-envelope build surface with resolved nonce and `expiresAfter`, while still leaving cryptographic signing and submit for later slices
   - Hyperliquid boundary review now documents the main contract gaps around signer identity, API wallets, subaccounts/vaults, and websocket-first venue interaction
 
 

@@ -20,6 +20,7 @@ from .hyperliquid import (
     HyperliquidBrokerAdapter,
     HyperliquidPreflightReport,
     HyperliquidResolvedExecutionContext,
+    HyperliquidSignedActionReport,
 )
 from .kraken import (
     KrakenAccountSnapshotReport,
@@ -45,6 +46,7 @@ __all__ = [
     "HyperliquidBrokerAdapter",
     "HyperliquidPreflightReport",
     "HyperliquidResolvedExecutionContext",
+    "HyperliquidSignedActionReport",
     "KrakenAccountSnapshotReport",
     "KrakenBrokerAdapter",
     "KrakenAuthPreflightReport",

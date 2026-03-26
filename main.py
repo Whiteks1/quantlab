@@ -404,6 +404,12 @@ def main() -> None:
         help="Persist a local Hyperliquid read-only account/signer readiness artifact in a directory.",
     )
     parser.add_argument(
+        "--hyperliquid-signed-action-outdir",
+        metavar="DIR",
+        default=None,
+        help="Persist a local Hyperliquid action and signature-envelope artifact in a directory.",
+    )
+    parser.add_argument(
         "--kraken-preflight-outdir",
         metavar="DIR",
         default=None,
@@ -466,6 +472,7 @@ def main() -> None:
         default=None,
     )
     parser.add_argument("--execution-expires-after", type=int, default=None)
+    parser.add_argument("--execution-nonce", type=int, default=None)
     parser.add_argument(
         "--kraken-dry-run-session",
         action="store_true",
@@ -746,6 +753,7 @@ def main() -> None:
         elif (
             args.hyperliquid_preflight_outdir
             or args.hyperliquid_account_readiness_outdir
+            or args.hyperliquid_signed_action_outdir
             or args.kraken_preflight_outdir
             or args.kraken_auth_preflight_outdir
             or args.kraken_account_readiness_outdir

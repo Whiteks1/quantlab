@@ -19,6 +19,7 @@ It currently models:
 - `routing_target`
 - `transport_preference`
 - `expires_after`
+- `nonce_hint`
 
 The current allowed shape is intentionally small:
 
@@ -52,6 +53,7 @@ But a venue like Hyperliquid adds other concerns that are not purely strategy in
 - routing may target a subaccount or vault rather than the signer directly
 - websocket-first transport preferences may matter
 - expiry windows such as `expiresAfter` may be execution metadata rather than strategy metadata
+- signer-scoped nonce hints may need to live beside routing metadata rather than inside strategy intent
 
 Those pressures should not be hidden inside one venue adapter as undocumented local fields.
 

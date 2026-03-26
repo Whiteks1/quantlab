@@ -236,6 +236,7 @@ Initial slice already present:
 - `KrakenBrokerAdapter` behind `BrokerAdapter`
 - read-only Hyperliquid venue preflight backed by the shared `ExecutionContext` layer
 - read-only Hyperliquid account/signer readiness backed by the shared `ExecutionContext` layer
+- local Hyperliquid action/signature-envelope build surface backed by the shared `ExecutionContext` layer
 - read-only Kraken public preflight probes
 - read-only Kraken authenticated preflight probes
 - read-only Kraken account snapshot and balance-aware intent readiness

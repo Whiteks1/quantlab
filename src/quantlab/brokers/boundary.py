@@ -56,6 +56,7 @@ class ExecutionContext:
     routing_target: Literal["account", "subaccount", "vault"] = "account"
     transport_preference: Literal["rest", "websocket", "either"] = "either"
     expires_after: int | None = None
+    nonce_hint: int | None = None
 
 
 @dataclass(frozen=True)

@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import datetime as dt
+import hashlib
 import json
+import time
 from urllib.request import Request, urlopen
 
 from .boundary import (
@@ -141,6 +143,65 @@ class HyperliquidAccountReadinessReport:
         }
 
 
+@dataclass(frozen=True)
+class HyperliquidSignedActionReport:
+    adapter_name: str
+    generated_at: str
+    intent: ExecutionIntent
+    policy: ExecutionPolicy
+    local_preflight: ExecutionPreflight
+    public_preflight: HyperliquidPreflightReport
+    account_readiness: HyperliquidAccountReadinessReport
+    nonce: int
+    nonce_source: str
+    expires_after: int | None
+    expires_after_mode: str | None
+    signature_envelope: dict[str, object]
+    action_payload: dict[str, object] | None
+    readiness_allowed: bool
+    readiness_reasons: tuple[str, ...]
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact_type": "quantlab.hyperliquid.signed_action",
+            "adapter_name": self.adapter_name,
+            "generated_at": self.generated_at,
+            "intent": {
+                "broker_target": self.intent.broker_target,
+                "symbol": self.intent.symbol,
+                "side": self.intent.side,
+                "quantity": self.intent.quantity,
+                "notional": self.intent.notional,
+                "account_id": self.intent.account_id,
+                "strategy_id": self.intent.strategy_id,
+                "request_id": self.intent.request_id,
+                "dry_run": self.intent.dry_run,
+            },
+            "policy": {
+                "kill_switch_active": self.policy.kill_switch_active,
+                "max_notional_per_order": self.policy.max_notional_per_order,
+                "allowed_symbols": sorted(self.policy.allowed_symbols),
+                "require_account_id": self.policy.require_account_id,
+            },
+            "local_preflight": {
+                "allowed": self.local_preflight.allowed,
+                "reasons": list(self.local_preflight.reasons),
+            },
+            "public_preflight": self.public_preflight.to_dict(),
+            "account_readiness": self.account_readiness.to_dict(),
+            "nonce": self.nonce,
+            "nonce_source": self.nonce_source,
+            "expires_after": self.expires_after,
+            "expires_after_mode": self.expires_after_mode,
+            "signature_envelope": self.signature_envelope,
+            "action_payload": self.action_payload,
+            "readiness_allowed": self.readiness_allowed,
+            "readiness_reasons": list(self.readiness_reasons),
+            "errors": list(self.errors),
+        }
+
+
 class HyperliquidBrokerAdapter(BrokerAdapter):
     """
     Read-only Hyperliquid venue adapter for preflight and context resolution.
@@ -213,6 +274,8 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             reasons.append("invalid_signer_id")
         if context.expires_after is not None and context.expires_after <= 0:
             reasons.append("non_positive_expires_after")
+        if context.nonce_hint is not None and context.nonce_hint <= 0:
+            reasons.append("non_positive_nonce_hint")
 
         if query_user and _is_hex_address(query_user):
             try:
@@ -337,6 +400,138 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             execution_context=resolved_context,
             errors=tuple(_unique_reasons(errors)),
         )
+
+    def build_signed_action_report(
+        self,
+        intent: ExecutionIntent,
+        policy: ExecutionPolicy,
+        *,
+        context: ExecutionContext | None = None,
+        timeout_seconds: float = 10.0,
+        fetch_json=None,
+        now_ms: int | None = None,
+    ) -> HyperliquidSignedActionReport:
+        local_preflight = self.preflight(intent, policy, context=context)
+        public_preflight = self.build_public_preflight_report(
+            intent.symbol,
+            intent_account_id=intent.account_id,
+            context=context,
+            timeout_seconds=timeout_seconds,
+            fetch_json=fetch_json,
+        )
+        account_readiness = self.build_account_readiness_report(
+            intent_account_id=intent.account_id,
+            context=context,
+            timeout_seconds=timeout_seconds,
+            fetch_json=fetch_json,
+        )
+
+        resolved_context = account_readiness.execution_context
+        nonce, nonce_source = _resolve_hyperliquid_nonce(context=context, now_ms=now_ms)
+        expires_after, expires_after_mode = _resolve_expires_after(context=context, nonce=nonce)
+
+        readiness_reasons: list[str] = list(local_preflight.reasons)
+        if not public_preflight.market_supported:
+            readiness_reasons.append("market_not_supported")
+        readiness_reasons.extend(account_readiness.readiness_reasons)
+        if not resolved_context.signer_id:
+            readiness_reasons.append("missing_signer_id")
+        if not resolved_context.nonce_scope:
+            readiness_reasons.append("missing_nonce_scope")
+
+        action_payload = None
+        if not readiness_reasons:
+            action_payload = self.build_order_action_payload(
+                intent,
+                public_preflight=public_preflight,
+            )
+
+        signature_envelope = self.build_signature_envelope(
+            action_payload=action_payload,
+            resolved_context=resolved_context,
+            nonce=nonce,
+            expires_after=expires_after,
+        )
+        errors = list(account_readiness.errors)
+        if action_payload is None:
+            errors.append("action_payload_not_ready")
+
+        return HyperliquidSignedActionReport(
+            adapter_name=self.adapter_name,
+            generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+            intent=intent,
+            policy=policy,
+            local_preflight=local_preflight,
+            public_preflight=public_preflight,
+            account_readiness=account_readiness,
+            nonce=nonce,
+            nonce_source=nonce_source,
+            expires_after=expires_after,
+            expires_after_mode=expires_after_mode,
+            signature_envelope=signature_envelope,
+            action_payload=action_payload,
+            readiness_allowed=not readiness_reasons,
+            readiness_reasons=tuple(_unique_reasons(readiness_reasons)),
+            errors=tuple(_unique_reasons(errors)),
+        )
+
+    def build_order_action_payload(
+        self,
+        intent: ExecutionIntent,
+        *,
+        public_preflight: HyperliquidPreflightReport,
+    ) -> dict[str, object]:
+        if public_preflight.resolved_asset is None:
+            raise ValueError("resolved_asset is required for Hyperliquid order action payload")
+
+        order = {
+            "a": public_preflight.resolved_asset,
+            "b": intent.side.lower() == "buy",
+            "p": str(public_preflight.mid_price or "0"),
+            "s": _format_hyperliquid_size(intent.quantity),
+            "r": False,
+            "t": {"limit": {"tif": "Ioc"}},
+        }
+        if intent.request_id:
+            order["c"] = _build_hyperliquid_cloid(intent.request_id)
+
+        return {
+            "type": "order",
+            "orders": [order],
+            "grouping": "na",
+        }
+
+    def build_signature_envelope(
+        self,
+        *,
+        action_payload: dict[str, object] | None,
+        resolved_context: HyperliquidResolvedExecutionContext,
+        nonce: int,
+        expires_after: int | None,
+    ) -> dict[str, object]:
+        signing_payload = {
+            "action": action_payload,
+            "nonce": nonce,
+            "vaultAddress": (
+                resolved_context.execution_account_id
+                if resolved_context.routing_target in {"subaccount", "vault"}
+                and resolved_context.execution_account_id
+                and resolved_context.execution_account_id != resolved_context.signer_id
+                else None
+            ),
+            "expiresAfter": expires_after,
+        }
+        canonical = json.dumps(signing_payload, sort_keys=True, separators=(",", ":"))
+        return {
+            "signer_id": resolved_context.signer_id,
+            "nonce_scope": resolved_context.nonce_scope,
+            "signing_scheme": "hyperliquid_l1_action",
+            "signature_state": "pending_signer_backend",
+            "signature_present": False,
+            "signature_reason": "signature_backend_not_implemented",
+            "signing_payload": signing_payload,
+            "signing_payload_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        }
 
     def build_account_readiness_report(
         self,
@@ -575,3 +770,34 @@ def _unique_reasons(reasons: list[str] | tuple[str, ...]) -> list[str]:
             ordered.append(reason)
             seen.add(reason)
     return ordered
+
+
+def _resolve_hyperliquid_nonce(
+    *,
+    context: ExecutionContext | None,
+    now_ms: int | None = None,
+) -> tuple[int, str]:
+    if context and context.nonce_hint is not None:
+        return int(context.nonce_hint), "context_nonce_hint"
+    return int(now_ms if now_ms is not None else time.time_ns() // 1_000_000), "generated_ms_timestamp"
+
+
+def _resolve_expires_after(
+    *,
+    context: ExecutionContext | None,
+    nonce: int,
+) -> tuple[int | None, str | None]:
+    if not context or context.expires_after is None:
+        return None, None
+    if context.expires_after >= 10_000_000_000:
+        return int(context.expires_after), "absolute_ms"
+    return nonce + int(context.expires_after), "relative_ms"
+
+
+def _format_hyperliquid_size(quantity: float) -> str:
+    return f"{quantity:.8f}".rstrip("0").rstrip(".")
+
+
+def _build_hyperliquid_cloid(request_id: str) -> str:
+    digest = hashlib.sha256(request_id.encode("utf-8")).hexdigest()
+    return digest[:32]

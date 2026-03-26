@@ -260,3 +260,73 @@ def test_hyperliquid_account_readiness_reports_visibility_probe_failure():
     assert report["account_visibility_available"] is False
     assert "account_visibility_unavailable" in report["readiness_reasons"]
     assert "account_visibility_probe_failed:RuntimeError" in report["errors"]
+
+
+def test_hyperliquid_signed_action_report_builds_deterministic_payload_and_envelope():
+    adapter = HyperliquidBrokerAdapter()
+    policy = ExecutionPolicy(max_notional_per_order=1000.0)
+    context = ExecutionContext(
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        signer_id="0x2222222222222222222222222222222222222222",
+        signer_type="agent_wallet",
+        routing_target="subaccount",
+        transport_preference="websocket",
+        expires_after=60000,
+        nonce_hint=1700000000000,
+    )
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "allMids":
+            return {"ETH": "2450.1"}
+        if payload["type"] == "meta":
+            return {"universe": [{"name": "ETH", "szDecimals": 4}]}
+        if payload["type"] == "userRole" and payload["user"] == "0x1111111111111111111111111111111111111111":
+            return {"role": "subAccount"}
+        if payload["type"] == "userRole" and payload["user"] == "0x2222222222222222222222222222222222222222":
+            return {"role": "agent"}
+        if payload["type"] == "openOrders":
+            return []
+        if payload["type"] == "frontendOpenOrders":
+            return []
+        raise AssertionError(payload)
+
+    report = adapter.build_signed_action_report(
+        _make_intent(),
+        policy,
+        context=context,
+        fetch_json=fake_fetch_json,
+    ).to_dict()
+
+    assert report["artifact_type"] == "quantlab.hyperliquid.signed_action"
+    assert report["readiness_allowed"] is True
+    assert report["nonce"] == 1700000000000
+    assert report["expires_after"] == 1700000060000
+    assert report["expires_after_mode"] == "relative_ms"
+    assert report["action_payload"]["type"] == "order"
+    assert report["action_payload"]["orders"][0]["a"] == 0
+    assert report["action_payload"]["orders"][0]["b"] is True
+    assert report["signature_envelope"]["signature_present"] is False
+    assert report["signature_envelope"]["signature_state"] == "pending_signer_backend"
+
+
+def test_hyperliquid_signed_action_report_rejects_when_account_readiness_is_not_ready():
+    adapter = HyperliquidBrokerAdapter()
+    policy = ExecutionPolicy(max_notional_per_order=1000.0)
+    context = ExecutionContext(
+        signer_id="0x2222222222222222222222222222222222222222",
+        signer_type="agent_wallet",
+        routing_target="account",
+        nonce_hint=1700000000000,
+    )
+
+    report = adapter.build_signed_action_report(
+        _make_intent(account_id=None),
+        policy,
+        context=context,
+        fetch_json=lambda payload, **kwargs: {"role": "agent"} if payload["type"] == "userRole" else [],
+    ).to_dict()
+
+    assert report["readiness_allowed"] is False
+    assert report["action_payload"] is None
+    assert "missing_execution_account_id" in report["readiness_reasons"]
+    assert "action_payload_not_ready" in report["errors"]

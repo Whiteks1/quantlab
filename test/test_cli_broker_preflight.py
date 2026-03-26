@@ -13,6 +13,7 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
     defaults = {
         "hyperliquid_preflight_outdir": None,
         "hyperliquid_account_readiness_outdir": None,
+        "hyperliquid_signed_action_outdir": None,
         "kraken_preflight_outdir": None,
         "kraken_auth_preflight_outdir": None,
         "kraken_account_readiness_outdir": None,
@@ -45,6 +46,7 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "execution_routing_target": None,
         "execution_transport_preference": None,
         "execution_expires_after": None,
+        "execution_nonce": None,
         "_request_id": None,
     }
     defaults.update(kwargs)
@@ -228,6 +230,143 @@ def test_writes_hyperliquid_account_readiness_artifact(monkeypatch, tmp_path):
     payload = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert payload["artifact_type"] == "quantlab.hyperliquid.account_readiness"
     assert payload["execution_context"]["execution_account_role"] == "subAccount"
+
+
+def test_writes_hyperliquid_signed_action_artifact(monkeypatch, tmp_path):
+    from quantlab.cli import broker_preflight as module
+
+    def fake_report(self, intent, policy, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.hyperliquid.signed_action",
+                    "adapter_name": "hyperliquid",
+                    "generated_at": "2026-03-26T12:00:00",
+                    "intent": {
+                        "broker_target": "hyperliquid",
+                        "symbol": intent.symbol,
+                        "side": intent.side,
+                        "quantity": intent.quantity,
+                        "notional": intent.notional,
+                        "account_id": intent.account_id,
+                        "strategy_id": intent.strategy_id,
+                        "request_id": intent.request_id,
+                        "dry_run": True,
+                    },
+                    "policy": {
+                        "kill_switch_active": False,
+                        "max_notional_per_order": None,
+                        "allowed_symbols": [],
+                        "require_account_id": True,
+                    },
+                    "local_preflight": {"allowed": True, "reasons": []},
+                    "public_preflight": {
+                        "artifact_type": "quantlab.hyperliquid.preflight",
+                        "adapter_name": "hyperliquid",
+                        "generated_at": "2026-03-26T12:00:00",
+                        "symbol_input": intent.symbol,
+                        "normalized_symbol": "ETH",
+                        "market_type": "perp",
+                        "metadata_type": "meta",
+                        "public_api_reachable": True,
+                        "market_supported": True,
+                        "matched_name": "ETH",
+                        "resolved_coin": "ETH",
+                        "resolved_asset": 1,
+                        "mid_price": "2450.1",
+                        "rest_info_url": "https://api.hyperliquid.xyz/info",
+                        "websocket_url": "wss://api.hyperliquid.xyz/ws",
+                        "execution_context": {},
+                        "errors": [],
+                    },
+                    "account_readiness": {
+                        "artifact_type": "quantlab.hyperliquid.account_readiness",
+                        "adapter_name": "hyperliquid",
+                        "generated_at": "2026-03-26T12:00:00",
+                        "execution_context": {
+                            "execution_account_id": "0x1111111111111111111111111111111111111111",
+                            "query_user": "0x1111111111111111111111111111111111111111",
+                            "signer_id": "0x2222222222222222222222222222222222222222",
+                            "signer_type": "agent_wallet",
+                            "routing_target": "subaccount",
+                            "transport_preference": "websocket",
+                            "resolved_transport": "websocket",
+                            "expires_after": 60000,
+                            "nonce_scope": "0x2222222222222222222222222222222222222222",
+                            "query_address_matches_signer": False,
+                            "execution_account_role": "subAccount",
+                            "signer_role": "agent",
+                            "context_ready": True,
+                            "reasons": [],
+                        },
+                        "account_visibility_available": True,
+                        "open_orders_count": 0,
+                        "frontend_open_orders_count": 0,
+                        "open_orders_sample": [],
+                        "frontend_open_orders_sample": [],
+                        "readiness_allowed": True,
+                        "readiness_reasons": [],
+                        "rest_info_url": "https://api.hyperliquid.xyz/info",
+                        "websocket_url": "wss://api.hyperliquid.xyz/ws",
+                        "errors": [],
+                    },
+                    "nonce": 1700000000000,
+                    "nonce_source": "context_nonce_hint",
+                    "expires_after": 1700000060000,
+                    "expires_after_mode": "relative_ms",
+                    "signature_envelope": {
+                        "signer_id": "0x2222222222222222222222222222222222222222",
+                        "nonce_scope": "0x2222222222222222222222222222222222222222",
+                        "signing_scheme": "hyperliquid_l1_action",
+                        "signature_state": "pending_signer_backend",
+                        "signature_present": False,
+                        "signature_reason": "signature_backend_not_implemented",
+                        "signing_payload": {},
+                        "signing_payload_sha256": "abc123",
+                    },
+                    "action_payload": {
+                        "type": "order",
+                        "orders": [{"a": 1, "b": True, "p": "2450.1", "s": "0.25", "r": False, "t": {"limit": {"tif": "Ioc"}}}],
+                        "grouping": "na",
+                    },
+                    "readiness_allowed": True,
+                    "readiness_reasons": [],
+                    "errors": [],
+                }
+
+        return _Fake()
+
+    monkeypatch.setattr(module.HyperliquidBrokerAdapter, "build_signed_action_report", fake_report)
+
+    outdir = tmp_path / "hyperliquid_signed_action"
+    args = _make_args(
+        hyperliquid_signed_action_outdir=str(outdir),
+        broker_symbol="ETH",
+        broker_side="buy",
+        broker_quantity=0.25,
+        broker_notional=500.0,
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        execution_signer_id="0x2222222222222222222222222222222222222222",
+        execution_signer_type="agent_wallet",
+        execution_routing_target="subaccount",
+        execution_transport_preference="websocket",
+        execution_expires_after=60000,
+        execution_nonce=1700000000000,
+    )
+    result = handle_broker_preflight_commands(args)
+
+    assert isinstance(result, dict)
+    assert result["status"] == "success"
+    assert result["readiness_allowed"] is True
+    assert result["signature_state"] == "pending_signer_backend"
+
+    artifact_path = outdir / "hyperliquid_signed_action.json"
+    assert artifact_path.exists()
+
+    payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert payload["artifact_type"] == "quantlab.hyperliquid.signed_action"
+    assert payload["nonce"] == 1700000000000
+    assert payload["signature_envelope"]["signature_present"] is False
 
 
 def test_missing_symbol_raises_config_error(tmp_path):

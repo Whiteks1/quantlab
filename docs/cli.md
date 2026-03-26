@@ -265,6 +265,35 @@ The artifact currently includes:
 
 This surface is read-only and does not sign or submit actions.
 
+### `--hyperliquid-signed-action-outdir`
+
+Persist a local Hyperliquid action and signature-envelope artifact without submitting it:
+
+```bash
+python main.py --hyperliquid-signed-action-outdir outputs/broker_preflight/hyperliquid_signed_action_demo --broker-symbol ETH --broker-side buy --broker-quantity 0.25 --broker-notional 500 --execution-account-id 0x0000000000000000000000000000000000000000 --execution-nonce 1700000000000
+```
+
+This writes:
+
+- `outputs/broker_preflight/hyperliquid_signed_action_demo/hyperliquid_signed_action.json`
+
+The artifact currently includes:
+
+- normalized broker intent
+- local policy preflight
+- Hyperliquid venue preflight snapshot
+- Hyperliquid account/signer readiness snapshot
+- resolved nonce and nonce source
+- resolved `expiresAfter` and how it was interpreted
+- a local order action payload using resolved Hyperliquid asset identifiers
+- a signature envelope with signing payload hash and signer metadata
+
+Current limitation:
+
+- the cryptographic signature itself is not produced yet
+- the artifact marks `signature_state = pending_signer_backend`
+- nothing is submitted to Hyperliquid
+
 ### `--kraken-preflight-outdir`
 
 Persist a read-only Kraken public preflight artifact:
