@@ -33,12 +33,12 @@ QuantLab has already completed most of the original research foundation and quan
 ### In progress / partially completed
 
 - paper-trading operationalization
+- initial real-execution safety and Kraken boundary work
 - optional Stepbit-facing automation readiness at the external boundary
 
 ### Not started as production capability
 
-- broker execution boundary
-- live order routing
+- broad multi-venue live routing beyond the first implemented boundary
 - automated live trading
 
 ## Stage A - Foundations
@@ -191,22 +191,26 @@ Exit condition:
 
 ## Broker Integration Strategy
 
-The first real broker integration should follow this decision framework:
+The first real execution-venue integration should follow this decision framework:
 
 - start with Kraken as the first real broker target
 - define and stabilize `BrokerAdapter` before integrating any exchange-specific backend
-- add Binance as the second backend to compare slippage, fill rate, rejects, and operating costs
+- keep `Kraken` as the first implemented backend and safety proving ground
+- move `Hyperliquid` ahead of `Binance` as the first next venue intended for personal connection and supervised practical use
+- treat `Binance` as optional later comparison work, not the default next venue
 - treat CCXT as optional acceleration for prototypes, smoke tests, or broad exchange experimentation, not as the authority of the execution design
 
 Rationale:
 
 - Kraken is the preferred first integration because it is a credible first real boundary for disciplined execution work
-- Binance remains valuable as the second integration because it gives a meaningful comparison point after the first adapter is proven
+- Hyperliquid is the preferred next venue because it tests whether the current abstraction can handle a high-performance onchain order-book venue, not only a conventional CEX-style broker
+- Binance remains useful later as an additional comparison backend, but it is no longer the default next strategic target
 - CCXT is useful when speed matters, but native integrations remain preferable when QuantLab needs tighter control over errors, rate limits, retries, and private execution flows
 
 Architectural rule:
 
 - strategies, risk policy, and execution safety must depend on `BrokerAdapter`, never on exchange-specific code
+- `BrokerAdapter` remains the current code name, but it should now be interpreted as an execution-venue boundary rather than only a traditional broker boundary
 
 ## Stage D.1 - Broker Dry-Run Integration
 
@@ -247,23 +251,25 @@ Exit condition:
 
 - QuantLab can build, validate, and log broker-intent orders safely against Kraken without yet operating with live capital
 
-## Stage D.1.b - Second Broker Comparison
+## Stage D.1.b - Second Venue Comparison
 
-Status: in progress
+Status: not started
 
 Goal:
 
-- validate that the broker abstraction is real by integrating a second backend and comparing operational behavior
+- validate that the execution boundary is real by integrating a second venue with materially different execution semantics
 
 Scope:
 
-- implement `BinanceBrokerAdapter`
-- compare slippage, fill quality, rejects, and operating assumptions against Kraken
+- implement a `Hyperliquid` venue adapter behind the existing boundary
+- support the venue-specific needs that matter for Hyperliquid-style execution, such as signer-scoped nonces, API/agent wallets, and websocket-driven venue interaction
+- compare operational assumptions and abstraction pressure against Kraken
 - identify any abstraction leaks that should be fixed in `BrokerAdapter`
+- keep `Binance` as optional later comparison work if a second CEX-style contrast still adds value
 
 Exit condition:
 
-- QuantLab can support a second exchange without moving strategy or risk authority into exchange-specific code
+- QuantLab can support a second materially different venue without moving strategy or risk authority into venue-specific code
 
 ## Stage D.2 - Broker Sandbox / Simulated Execution
 
@@ -355,7 +361,7 @@ From the current repository state, the most rational order is:
 3. harden Stage O.1 integration fixtures only if consumer feedback justifies them
 4. design and implement Stage D.0 safety boundary
 5. add Stage D.1 broker dry-run integration, starting with Kraken
-6. add the second broker comparison layer with Binance only after the abstraction proves stable
+6. add the second venue comparison layer with Hyperliquid once the Kraken boundary is stable enough to generalize
 7. validate broker behavior in Stage D.2
 8. enter Stage E supervised live execution
 9. only then move into Stage F controlled automation
@@ -377,3 +383,4 @@ From the current repository state, the most rational order is:
 - [stepbit-integration.md](./stepbit-integration.md)
 - [quantlab-stepbit-boundaries.md](./quantlab-stepbit-boundaries.md)
 - [advantages-and-future.md](./advantages-and-future.md)
+- [execution-venue-strategy.md](./execution-venue-strategy.md)

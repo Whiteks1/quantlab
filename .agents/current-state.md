@@ -2,7 +2,7 @@
 
 ## Active Stage
 - **Stage**: Stage C.1 — Paper Trading Operationalization
-- **Last Updated**: 2026-03-25
+- **Last Updated**: 2026-03-26
 - **Focus**: Stage C.1 is centered on turning the existing paper-oriented flows into a repeatable operational paper-trading discipline.
 - **Authority Note**: Stepbit-facing integration remains a secondary boundary track. QuantLab stays autonomous and external consumer needs do not override QuantLab-owned priorities.
 
@@ -34,6 +34,7 @@
   - define a clearer paper-session lifecycle and operator expectations
   - strengthen distinction between research artifacts and paper-trading artifacts
   - make paper-mode failures and health signals more explicit
+  - keep Kraken as the first implemented execution boundary while positioning Hyperliquid as the first next venue intended for personal connection
   - keep the external execution contract stable only where real consumer friction appears
 - **Implemented Direction**:
   - canonical run artifacts now center on `metadata.json`, `config.json`, `metrics.json`, and `report.json`
@@ -63,6 +64,7 @@
   - pre-submit bundles can now materialize `broker_submit_gate.json` as the final local supervised confirmation step before any future submit implementation
   - submit gates can now materialize `broker_submit_attempt.json` in `stub` mode as the first operational shape of a future supervised submit path
   - supervised submit gates can now materialize `broker_submit_response.json` as the first tightly gated real Kraken submit artifact, including remote submit status and returned `txid` values where available
+  - execution-venue strategy now keeps `Kraken` as the first implemented backend while moving `Hyperliquid` ahead of `Binance` as the first next venue intended for personal supervised use
 
 
 ## Known Issues / Technical Debt
