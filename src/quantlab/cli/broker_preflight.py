@@ -26,6 +26,7 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
     Commands:
     - ``--hyperliquid-preflight-outdir <DIR>`` : run read-only Hyperliquid venue preflight and persist artifact
     - ``--hyperliquid-account-readiness-outdir <DIR>`` : run read-only Hyperliquid account/signer readiness and persist artifact
+    - ``--hyperliquid-signed-action-outdir <DIR>`` : build a local Hyperliquid action+signature envelope artifact without submitting it
     - ``--kraken-preflight-outdir <DIR>`` : run read-only Kraken readiness probes and persist artifact
     - ``--kraken-auth-preflight-outdir <DIR>`` : run authenticated Kraken read-only preflight and persist artifact
     - ``--kraken-account-readiness-outdir <DIR>`` : run authenticated account snapshot and intent readiness check
@@ -95,6 +96,40 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
             "artifact_path": str(artifact_path),
             "readiness_allowed": report["readiness_allowed"],
             "account_visibility_available": report["account_visibility_available"],
+        }
+
+    if getattr(args, "hyperliquid_signed_action_outdir", None):
+        intent = _build_hyperliquid_execution_intent_from_args(args)
+        policy = _build_execution_policy_from_args(args)
+
+        outdir = Path(args.hyperliquid_signed_action_outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
+
+        adapter = HyperliquidBrokerAdapter()
+        context = _build_execution_context_from_args(args)
+        report = adapter.build_signed_action_report(
+            intent,
+            policy,
+            context=context,
+            timeout_seconds=float(getattr(args, "hyperliquid_preflight_timeout", 10.0)),
+        ).to_dict()
+
+        artifact_path = outdir / "hyperliquid_signed_action.json"
+        with open(artifact_path, "w", encoding="utf-8") as fh:
+            json.dump(report, fh, indent=2, ensure_ascii=False)
+
+        print("\nHyperliquid signed action generated:\n")
+        print(f"  artifact_path      : {artifact_path}")
+        print(f"  readiness_allowed  : {report['readiness_allowed']}")
+        print(f"  signature_state    : {report['signature_envelope']['signature_state']}")
+
+        return {
+            "status": "success",
+            "mode": "broker_signed_action",
+            "adapter_name": report["adapter_name"],
+            "artifact_path": str(artifact_path),
+            "readiness_allowed": report["readiness_allowed"],
+            "signature_state": report["signature_envelope"]["signature_state"],
         }
 
     if getattr(args, "kraken_preflight_outdir", None):
@@ -304,6 +339,7 @@ def _build_execution_context_from_args(args) -> ExecutionContext | None:
     execution_account_id = getattr(args, "execution_account_id", None)
     signer_id = getattr(args, "execution_signer_id", None)
     expires_after = getattr(args, "execution_expires_after", None)
+    nonce_hint = getattr(args, "execution_nonce", None)
 
     if not any(
         value is not None
@@ -314,6 +350,7 @@ def _build_execution_context_from_args(args) -> ExecutionContext | None:
             execution_account_id,
             signer_id,
             expires_after,
+            nonce_hint,
         )
     ):
         return None
@@ -325,6 +362,22 @@ def _build_execution_context_from_args(args) -> ExecutionContext | None:
         routing_target=raw_routing_target or "account",
         transport_preference=raw_transport_preference or "either",
         expires_after=expires_after,
+        nonce_hint=nonce_hint,
+    )
+
+
+def _build_hyperliquid_execution_intent_from_args(args):
+    intent = _build_execution_intent_from_args(args)
+    return intent.__class__(
+        broker_target="hyperliquid",
+        symbol=intent.symbol,
+        side=intent.side,
+        quantity=intent.quantity,
+        notional=intent.notional,
+        account_id=getattr(args, "execution_account_id", None) or intent.account_id,
+        strategy_id=intent.strategy_id,
+        request_id=intent.request_id,
+        dry_run=True,
     )
 
 
