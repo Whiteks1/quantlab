@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from quantlab.brokers import ExecutionIntent, ExecutionPolicy
+from quantlab.brokers import ExecutionContext, ExecutionIntent, ExecutionPolicy
 from quantlab.brokers.kraken import KrakenBrokerAdapter
 
 
@@ -41,6 +41,25 @@ def test_preflight_reuses_shared_boundary_validation():
 
     assert result.allowed is False
     assert "max_notional_exceeded" in result.reasons
+
+
+def test_kraken_payload_and_preflight_remain_compatible_with_optional_execution_context():
+    adapter = KrakenBrokerAdapter()
+    policy = ExecutionPolicy(max_notional_per_order=1000.0)
+    context = ExecutionContext(
+        execution_account_id="0xsubaccount",
+        signer_id="0xagentwallet",
+        signer_type="agent_wallet",
+        routing_target="subaccount",
+        transport_preference="websocket",
+    )
+
+    result = adapter.preflight(_make_intent(), policy, context=context)
+    payload = adapter.build_order_payload(_make_intent(symbol="eth-usd"), context=context)
+
+    assert result.allowed is True
+    assert payload["pair"] == "ETH/USD"
+    assert payload["type"] == "buy"
 
 
 def test_dry_run_audit_includes_payload_when_preflight_passes():
