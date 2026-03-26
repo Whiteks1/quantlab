@@ -8,7 +8,7 @@ import datetime as dt
 import json
 from pathlib import Path
 
-from quantlab.brokers import KrakenBrokerAdapter
+from quantlab.brokers import ExecutionContext, HyperliquidBrokerAdapter, KrakenBrokerAdapter
 from quantlab.brokers.session_store import BrokerOrderValidationStore
 from quantlab.cli.broker_dry_run import (
     _build_execution_intent_from_args,
@@ -24,12 +24,48 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
     Handle broker preflight CLI commands.
 
     Commands:
+    - ``--hyperliquid-preflight-outdir <DIR>`` : run read-only Hyperliquid venue preflight and persist artifact
     - ``--kraken-preflight-outdir <DIR>`` : run read-only Kraken readiness probes and persist artifact
     - ``--kraken-auth-preflight-outdir <DIR>`` : run authenticated Kraken read-only preflight and persist artifact
     - ``--kraken-account-readiness-outdir <DIR>`` : run authenticated account snapshot and intent readiness check
     - ``--kraken-order-validate-outdir <DIR>`` : run validate-only Kraken order probe and persist artifact
     - ``--kraken-order-validate-session`` : persist a canonical broker order-validation session
     """
+    if getattr(args, "hyperliquid_preflight_outdir", None):
+        symbol = getattr(args, "broker_symbol", None) or getattr(args, "ticker", None)
+        if not isinstance(symbol, str) or not symbol.strip():
+            raise ConfigError("broker_symbol or ticker must be provided for Hyperliquid preflight.")
+
+        outdir = Path(args.hyperliquid_preflight_outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
+
+        adapter = HyperliquidBrokerAdapter()
+        context = _build_execution_context_from_args(args)
+        report = adapter.build_public_preflight_report(
+            symbol,
+            intent_account_id=getattr(args, "broker_account_id", None),
+            context=context,
+            timeout_seconds=float(getattr(args, "hyperliquid_preflight_timeout", 10.0)),
+        ).to_dict()
+
+        artifact_path = outdir / "broker_preflight.json"
+        with open(artifact_path, "w", encoding="utf-8") as fh:
+            json.dump(report, fh, indent=2, ensure_ascii=False)
+
+        print("\nHyperliquid preflight generated:\n")
+        print(f"  artifact_path      : {artifact_path}")
+        print(f"  market_supported   : {report['market_supported']}")
+        print(f"  resolved_transport : {report['execution_context']['resolved_transport']}")
+
+        return {
+            "status": "success",
+            "mode": "broker_preflight",
+            "adapter_name": report["adapter_name"],
+            "artifact_path": str(artifact_path),
+            "market_supported": report["market_supported"],
+            "resolved_transport": report["execution_context"]["resolved_transport"],
+        }
+
     if getattr(args, "kraken_preflight_outdir", None):
         symbol = getattr(args, "broker_symbol", None) or getattr(args, "ticker", None)
         if not isinstance(symbol, str) or not symbol.strip():
@@ -228,6 +264,37 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
         }
 
     return False
+
+
+def _build_execution_context_from_args(args) -> ExecutionContext | None:
+    raw_signer_type = getattr(args, "execution_signer_type", None)
+    raw_routing_target = getattr(args, "execution_routing_target", None)
+    raw_transport_preference = getattr(args, "execution_transport_preference", None)
+    execution_account_id = getattr(args, "execution_account_id", None)
+    signer_id = getattr(args, "execution_signer_id", None)
+    expires_after = getattr(args, "execution_expires_after", None)
+
+    if not any(
+        value is not None
+        for value in (
+            raw_signer_type,
+            raw_routing_target,
+            raw_transport_preference,
+            execution_account_id,
+            signer_id,
+            expires_after,
+        )
+    ):
+        return None
+
+    return ExecutionContext(
+        execution_account_id=execution_account_id,
+        signer_id=signer_id,
+        signer_type=raw_signer_type or "direct",
+        routing_target=raw_routing_target or "account",
+        transport_preference=raw_transport_preference or "either",
+        expires_after=expires_after,
+    )
 
 
 def _derive_order_validation_status(report: dict[str, object]) -> str:

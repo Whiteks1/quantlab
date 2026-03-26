@@ -181,6 +181,7 @@ Scope:
 Initial slice already present:
 
 - `ExecutionIntent`
+- `ExecutionContext`
 - `ExecutionPolicy`
 - `ExecutionPreflight`
 - `BrokerAdapter` contract
@@ -233,6 +234,7 @@ Scope:
 Initial slice already present:
 
 - `KrakenBrokerAdapter` behind `BrokerAdapter`
+- read-only Hyperliquid venue preflight backed by the shared `ExecutionContext` layer
 - read-only Kraken public preflight probes
 - read-only Kraken authenticated preflight probes
 - read-only Kraken account snapshot and balance-aware intent readiness
@@ -402,5 +404,6 @@ From the current repository state, the most rational order is:
 - [stepbit-integration.md](./stepbit-integration.md)
 - [quantlab-stepbit-boundaries.md](./quantlab-stepbit-boundaries.md)
 - [advantages-and-future.md](./advantages-and-future.md)
+- [execution-context-layer.md](./execution-context-layer.md)
 - [execution-venue-strategy.md](./execution-venue-strategy.md)
 - [hyperliquid-boundary-review.md](./hyperliquid-boundary-review.md)

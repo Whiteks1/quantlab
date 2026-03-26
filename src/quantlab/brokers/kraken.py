@@ -21,6 +21,7 @@ from urllib.request import Request, urlopen
 
 from .boundary import (
     BrokerAdapter,
+    ExecutionContext,
     ExecutionIntent,
     ExecutionPolicy,
     ExecutionPreflight,
@@ -380,10 +381,17 @@ class KrakenBrokerAdapter(BrokerAdapter):
         self,
         intent: ExecutionIntent,
         policy: ExecutionPolicy,
+        context: ExecutionContext | None = None,
     ) -> ExecutionPreflight:
+        _ = context
         return validate_execution_intent(intent, policy)
 
-    def build_order_payload(self, intent: ExecutionIntent) -> dict[str, object]:
+    def build_order_payload(
+        self,
+        intent: ExecutionIntent,
+        context: ExecutionContext | None = None,
+    ) -> dict[str, object]:
+        _ = context
         side = intent.side.lower()
         ordertype = "market"
 

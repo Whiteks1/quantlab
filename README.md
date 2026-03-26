@@ -23,13 +23,12 @@ The paper layer is now materially operational, and the current broker-facing foc
 - close idempotency and ambiguous-submit gaps before adding more broker power
 - keep paper-session discipline as a prerequisite, not as the current bottleneck
 
-A secondary contract boundary track remains active:
-
 Execution venue strategy note:
 
 - `Kraken` remains the first implemented real-execution backend
 - `Hyperliquid` is the first next venue intended for personal connection and supervised practical use
 - `BrokerAdapter` remains the current code name, but the architecture should now be read as an execution-venue boundary, not only a CEX-style broker boundary
+- a minimal `ExecutionContext` layer now exists in code so future venue work can model signer and routing semantics without overloading `ExecutionIntent`
 
 A secondary boundary track remains active:
 
@@ -133,6 +132,7 @@ python main.py --help
 - `--paper-sessions-health`: summarize health across paper sessions
 - `--paper-sessions-alerts`: emit a deterministic alert snapshot for paper sessions
 - `--paper-sessions-index`: refresh a shared paper-session index under the paper root
+- `--hyperliquid-preflight-outdir`: persist a read-only Hyperliquid venue preflight artifact
 - `--kraken-preflight-outdir`: persist a read-only Kraken public preflight artifact
 - `--kraken-auth-preflight-outdir`: persist a read-only Kraken authenticated preflight artifact
 - `--kraken-account-readiness-outdir`: persist a read-only Kraken account snapshot and intent readiness artifact
@@ -161,6 +161,7 @@ See also:
 
 - [docs/cli.md](./docs/cli.md)
 - [docs/broker-safety-boundary.md](./docs/broker-safety-boundary.md)
+- [docs/execution-context-layer.md](./docs/execution-context-layer.md)
 - [docs/execution-venue-strategy.md](./docs/execution-venue-strategy.md)
 - [docs/hyperliquid-boundary-review.md](./docs/hyperliquid-boundary-review.md)
 - [docs/paper-session-runbook.md](./docs/paper-session-runbook.md)
@@ -404,6 +405,12 @@ And it can run a read-only public preflight probe with:
 
 ```bash
 python main.py --kraken-preflight-outdir outputs/broker_preflight/demo --broker-symbol ETH-USD
+```
+
+And it can run a read-only Hyperliquid venue preflight probe with execution-context resolution:
+
+```bash
+python main.py --hyperliquid-preflight-outdir outputs/broker_preflight/hyperliquid_demo --broker-symbol ETH --execution-transport-preference websocket
 ```
 
 And it can run a read-only authenticated preflight probe with Kraken credentials available in `KRAKEN_API_KEY` and `KRAKEN_API_SECRET`:

@@ -9,10 +9,16 @@ This package intentionally starts small in Stage D.0:
 
 from .boundary import (
     BrokerAdapter,
+    ExecutionContext,
     ExecutionIntent,
     ExecutionPolicy,
     ExecutionPreflight,
     validate_execution_intent,
+)
+from .hyperliquid import (
+    HyperliquidBrokerAdapter,
+    HyperliquidPreflightReport,
+    HyperliquidResolvedExecutionContext,
 )
 from .kraken import (
     KrakenAccountSnapshotReport,
@@ -30,9 +36,13 @@ from .kraken import (
 
 __all__ = [
     "BrokerAdapter",
+    "ExecutionContext",
     "ExecutionIntent",
     "ExecutionPolicy",
     "ExecutionPreflight",
+    "HyperliquidBrokerAdapter",
+    "HyperliquidPreflightReport",
+    "HyperliquidResolvedExecutionContext",
     "KrakenAccountSnapshotReport",
     "KrakenBrokerAdapter",
     "KrakenAuthPreflightReport",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from quantlab.brokers.boundary import (
+    ExecutionContext,
     ExecutionIntent,
     ExecutionPolicy,
     validate_execution_intent,
@@ -97,3 +98,32 @@ def test_accumulates_multiple_rejection_reasons():
         "symbol_not_allowed",
         "unsupported_side",
     }
+
+
+def test_execution_context_defaults_to_direct_account_rest_agnostic_shape():
+    context = ExecutionContext()
+
+    assert context.execution_account_id is None
+    assert context.signer_id is None
+    assert context.signer_type == "direct"
+    assert context.routing_target == "account"
+    assert context.transport_preference == "either"
+    assert context.expires_after is None
+
+
+def test_execution_context_can_model_hyperliquid_style_signer_and_routing():
+    context = ExecutionContext(
+        execution_account_id="0xsubaccount",
+        signer_id="0xagentwallet",
+        signer_type="agent_wallet",
+        routing_target="subaccount",
+        transport_preference="websocket",
+        expires_after=1710000000000,
+    )
+
+    assert context.execution_account_id == "0xsubaccount"
+    assert context.signer_id == "0xagentwallet"
+    assert context.signer_type == "agent_wallet"
+    assert context.routing_target == "subaccount"
+    assert context.transport_preference == "websocket"
+    assert context.expires_after == 1710000000000

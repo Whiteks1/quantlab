@@ -8,7 +8,7 @@ execution work must pass through before any exchange-specific adapter is used.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Literal, Protocol
 
 
 @dataclass(frozen=True)
@@ -41,6 +41,24 @@ class ExecutionPolicy:
 
 
 @dataclass(frozen=True)
+class ExecutionContext:
+    """
+    Optional execution-venue context that sits beside the core execution intent.
+
+    This is intentionally small. It exists so future venue integrations can
+    model signer and routing concerns without overloading the strategy-facing
+    ``ExecutionIntent`` object.
+    """
+
+    execution_account_id: str | None = None
+    signer_id: str | None = None
+    signer_type: Literal["direct", "api_wallet", "agent_wallet"] = "direct"
+    routing_target: Literal["account", "subaccount", "vault"] = "account"
+    transport_preference: Literal["rest", "websocket", "either"] = "either"
+    expires_after: int | None = None
+
+
+@dataclass(frozen=True)
 class ExecutionPreflight:
     """
     Deterministic result of validating an execution intent against local policy.
@@ -61,12 +79,17 @@ class BrokerAdapter(Protocol):
         self,
         intent: ExecutionIntent,
         policy: ExecutionPolicy,
+        context: ExecutionContext | None = None,
     ) -> ExecutionPreflight:
         """
         Validate a broker-bound intent before any broker-specific action occurs.
         """
 
-    def build_order_payload(self, intent: ExecutionIntent) -> dict[str, object]:
+    def build_order_payload(
+        self,
+        intent: ExecutionIntent,
+        context: ExecutionContext | None = None,
+    ) -> dict[str, object]:
         """
         Translate a validated execution intent into an exchange-specific payload.
         """
