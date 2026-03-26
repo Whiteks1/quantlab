@@ -143,6 +143,8 @@ python main.py --help
 - `--broker-order-validations-submit-real`: submit a first tightly gated real Kraken order and persist the broker response artifact
 - `--broker-order-validations-reconcile`: reconcile an existing submit response against Kraken order state
 - `--broker-order-validations-status`: refresh normalized post-submit order status for a submitted broker validation session
+- `--broker-order-validations-health`: summarize broker submission health across broker validation sessions
+- `--broker-order-validations-alerts`: emit a deterministic alert snapshot for notable broker submission states
 - `--forward-eval`: launch a forward evaluation from a prior run directory
 - `--portfolio-report`: aggregate forward sessions into a portfolio report
 - `--portfolio-compare`: compare allocation modes across forward sessions
@@ -472,6 +474,18 @@ This writes:
 
 ```text
 outputs/broker_order_validations/<session_id>/broker_order_status.json
+```
+
+And it can now summarize broker submission health:
+
+```bash
+python main.py --broker-order-validations-health outputs/broker_order_validations
+```
+
+And emit a deterministic broker submission alert snapshot:
+
+```bash
+python main.py --broker-order-validations-alerts outputs/broker_order_validations
 ```
 
 And it can now persist canonical broker dry-run sessions under:

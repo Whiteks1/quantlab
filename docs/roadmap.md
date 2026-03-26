@@ -33,12 +33,12 @@ QuantLab has already completed most of the original research foundation and quan
 ### In progress / partially completed
 
 - paper-trading operationalization
+- supervised broker submit safety, reconciliation, and post-submit visibility
 - optional Stepbit-facing automation readiness at the external boundary
 
 ### Not started as production capability
 
-- broker execution boundary
-- live order routing
+- broad live order routing beyond the first supervised Kraken path
 - automated live trading
 
 ## Stage A - Foundations
@@ -290,6 +290,7 @@ Initial slice already present:
 - explicit refusal of blind re-submit when a prior submit response artifact already exists
 - authenticated reconciliation of submit sessions against Kraken order state using stable session-derived `userref`
 - persistent broker order-status artifacts with normalized local state for submitted sessions
+- broker submission health summaries and alert snapshots over broker order-validation sessions
 
 Exit condition:
 
