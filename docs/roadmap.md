@@ -33,6 +33,7 @@ QuantLab has already completed most of the original research foundation and quan
 ### In progress / partially completed
 
 - paper-trading operationalization
+- supervised broker submit safety, reconciliation, and post-submit visibility
 - initial real-execution safety and Kraken boundary work
 - optional Stepbit-facing automation readiness at the external boundary
 
@@ -273,7 +274,7 @@ Exit condition:
 
 ## Stage D.2 - Broker Sandbox / Simulated Execution
 
-Status: not started
+Status: in progress
 
 Goal:
 
@@ -286,6 +287,17 @@ Scope:
 - handling partial fills, rejects, rate limits, and transient API failures
 - execution-state persistence
 - restart/resume behavior
+
+Initial slice already present:
+
+- supervised submit gate artifacts ahead of any real submit call
+- supervised submit stub artifacts for payload review before live submission
+- first tightly gated real Kraken submit response artifacts
+- local pre-write of submit response state before the remote submit path
+- explicit refusal of blind re-submit when a prior submit response artifact already exists
+- authenticated reconciliation of submit sessions against Kraken order state using stable session-derived `userref`
+- persistent broker order-status artifacts with normalized local state for submitted sessions
+- broker submission health summaries and alert snapshots over broker order-validation sessions
 
 Exit condition:
 

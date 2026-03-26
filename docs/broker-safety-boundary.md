@@ -82,6 +82,9 @@ Current Stage D.1 scope covered:
 - local supervised submit gate artifacts generated only from pre-submit bundles
 - local supervised submit stub artifacts generated only from submit gates
 - first real supervised submit response artifacts generated only from previously validated sessions that already have a supervised submit gate and explicit live confirmation
+- Kraken submit reconciliation over canonical broker order-validation sessions using stable session-derived `userref`
+- persistent post-submit order status artifacts for broker order-validation sessions
+- broker submission health summaries and alert snapshots over canonical broker order-validation sessions
 - stable dry-run audit snapshot for local review
 - local `broker_dry_run.json` artifact generation through the CLI
 - canonical broker dry-run sessions and shared registry under `outputs/broker_dry_runs/`
@@ -100,12 +103,15 @@ Boundary note:
 - supervised submit gate artifacts are the final local confirmation step before any future submit implementation, but they still do not submit anything by themselves
 - supervised submit stub artifacts are the first operational shape of a future submit path, but they still remain local and do not hit the broker
 - supervised real-submit response artifacts are the first intentionally narrow path that can hit Kraken's real order endpoint, and they still require explicit confirmation plus a previously validated source session
+- reconciliation is now the required safety path for ambiguous submit states before any future retry logic is introduced
+- persistent order-status refresh is now the first operator-facing post-submit visibility layer before any future continuous supervision or cancel flow
+- broker submission health and alerts are local operator surfaces only; they summarize risky states but do not trigger broker-side actions by themselves
 
 ## Next Step
 
-After this dry-run adapter slice is stable, the next logical implementation step is:
+After this submit-safety slice is stable, the next logical implementation step is:
 
-- richer authenticated account capability checks and, only after that, more sensitive broker connectivity work behind the same boundary
+- deeper post-submit supervision such as cancel boundaries and richer order-state reconciliation behind the same boundary
 
 ## Related Documents
 

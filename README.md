@@ -15,15 +15,15 @@ The architectural rule is simple:
 
 ## Current Status
 
-QuantLab is currently prioritizing **Stage C.1 - Paper Trading Operationalization**.
+QuantLab is currently transitioning from **Stage C.1** into **Stage D.2 - supervised broker submit safety and reconciliation**.
 
-The primary goal is to turn the existing paper-trading capabilities into an operationally disciplined layer:
+The paper layer is now materially operational, and the current broker-facing focus is:
 
-- stable paper session lifecycle
-- operator-facing traceability and session health
-- public operator guidance for repeated paper-session use
-- clearer distinction between research runs and paper sessions
-- stronger confidence in repeated paper operation before real broker work
+- reconcile the first supervised Kraken submit path before widening live execution
+- close idempotency and ambiguous-submit gaps before adding more broker power
+- keep paper-session discipline as a prerequisite, not as the current bottleneck
+
+A secondary contract boundary track remains active:
 
 Execution venue strategy note:
 
@@ -149,6 +149,10 @@ python main.py --help
 - `--broker-order-validations-submit-gate`: materialize a supervised submit gate artifact from a pre-submit bundle
 - `--broker-order-validations-submit-stub`: materialize a supervised submit stub artifact from a submit gate
 - `--broker-order-validations-submit-real`: submit a first tightly gated real Kraken order and persist the broker response artifact
+- `--broker-order-validations-reconcile`: reconcile an existing submit response against Kraken order state
+- `--broker-order-validations-status`: refresh normalized post-submit order status for a submitted broker validation session
+- `--broker-order-validations-health`: summarize broker submission health across broker validation sessions
+- `--broker-order-validations-alerts`: emit a deterministic alert snapshot for notable broker submission states
 - `--forward-eval`: launch a forward evaluation from a prior run directory
 - `--portfolio-report`: aggregate forward sessions into a portfolio report
 - `--portfolio-compare`: compare allocation modes across forward sessions
@@ -462,6 +466,36 @@ outputs/broker_order_validations/<session_id>/broker_submit_response.json
 ```
 
 The response artifact captures the final submit payload, auth preflight context, remote submit status, broker response, and any returned `txid` values.
+
+And it can reconcile an existing submit response against Kraken order state using the stable session-derived `userref`:
+
+```bash
+python main.py --broker-order-validations-reconcile outputs/broker_order_validations/<session_id>
+```
+
+And it can refresh normalized post-submit order state for a submitted session:
+
+```bash
+python main.py --broker-order-validations-status outputs/broker_order_validations/<session_id>
+```
+
+This writes:
+
+```text
+outputs/broker_order_validations/<session_id>/broker_order_status.json
+```
+
+And it can now summarize broker submission health:
+
+```bash
+python main.py --broker-order-validations-health outputs/broker_order_validations
+```
+
+And emit a deterministic broker submission alert snapshot:
+
+```bash
+python main.py --broker-order-validations-alerts outputs/broker_order_validations
+```
 
 And it can now persist canonical broker dry-run sessions under:
 

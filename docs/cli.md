@@ -535,6 +535,7 @@ The submit response currently includes:
 - generation timestamp
 - authenticated preflight summary
 - final submit payload with stable `userref`
+- a pre-remote local artifact write before the real submit call path
 - whether the remote submit call was attempted
 - whether the order was submitted successfully
 - returned `txid` values where available
@@ -551,6 +552,110 @@ Important notes:
 - this is the first path that can hit Kraken's real order endpoint
 - it is intentionally narrow and currently meant for supervised market-order submission only
 - the session will persist `broker_submit_response.json` even when the remote submit is rejected or auth is not ready
+
+### `--broker-order-validations-reconcile`
+
+Reconcile an existing broker submit response against Kraken order state:
+
+```bash
+python main.py --broker-order-validations-reconcile outputs/broker_order_validations/<session_id>
+```
+
+This command:
+
+- requires an existing `broker_submit_response.json`
+- uses the stable session-derived `userref`
+- checks Kraken order state through authenticated account-data endpoints
+- updates the existing submit response artifact in place with reconciliation details
+
+The reconciliation update currently includes:
+
+- whether reconciliation was attempted
+- whether any matching order was found
+- matched sources such as `open` or `closed`
+- matched `txid` values
+- matched order statuses
+- explicit reconciliation errors
+
+Important notes:
+
+- this command is meant for ambiguous or post-submit review states, not for ordinary preflight
+- it does not place a new order
+- it is the current safety path before any future auto-retry or broader live routing logic
+
+### `--broker-order-validations-status`
+
+Refresh normalized post-submit order status for a submitted broker validation session:
+
+```bash
+python main.py --broker-order-validations-status outputs/broker_order_validations/<session_id>
+```
+
+This writes:
+
+- `outputs/broker_order_validations/<session_id>/broker_order_status.json`
+
+The order-status artifact currently includes:
+
+- query mode (`txid` or `userref_fallback`)
+- whether status lookup was attempted
+- whether status is known
+- normalized local state
+- matched `txid` values
+- raw exchange statuses
+- matched order payloads where available
+- explicit errors
+
+Normalized local state currently maps to:
+
+- `open`
+- `closed`
+- `canceled`
+- `expired`
+- `unknown`
+
+Important notes:
+
+- this command requires an existing `broker_submit_response.json`
+- it does not place a new order
+- it is the first persistent post-submit status surface for supervised broker sessions
+
+### `--broker-order-validations-health`
+
+Summarize broker submission health across broker order-validation sessions:
+
+```bash
+python main.py --broker-order-validations-health outputs/broker_order_validations
+```
+
+This command currently summarizes:
+
+- total broker validation sessions
+- how many sessions reached local approval
+- how many reached submit-gate
+- how many have submit responses
+- how many were actually submitted
+- how many already have known persistent order status
+- latest submit session and latest notable issue
+
+This surface is operator-facing and read-only.
+
+### `--broker-order-validations-alerts`
+
+Emit a deterministic alert snapshot for notable broker submission states:
+
+```bash
+python main.py --broker-order-validations-alerts outputs/broker_order_validations
+```
+
+The alert snapshot currently highlights:
+
+- submitted sessions with missing order-status artifacts
+- submitted sessions whose order state is still unknown
+- rejected or not-ready submit states
+- expired or canceled remote order states when known
+
+The output is machine-readable JSON intended for local operator review and future low-coupling automation.
 
 ### `--kraken-dry-run-outdir`
 

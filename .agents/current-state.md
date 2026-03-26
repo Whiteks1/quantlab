@@ -1,9 +1,9 @@
 # Current State - QuantLab
 
 ## Active Stage
-- **Stage**: Stage C.1 — Paper Trading Operationalization
+- **Stage**: Stage D.2 — Supervised Broker Submit Safety
 - **Last Updated**: 2026-03-26
-- **Focus**: Stage C.1 is centered on turning the existing paper-oriented flows into a repeatable operational paper-trading discipline.
+- **Focus**: Stage D.2 is centered on closing ambiguity around supervised Kraken submit, especially idempotency, reconciliation, and post-submit operator safety.
 - **Authority Note**: Stepbit-facing integration remains a secondary boundary track. QuantLab stays autonomous and external consumer needs do not override QuantLab-owned priorities.
 
 ## Completed/Planned Stages
@@ -28,14 +28,15 @@
 | O | Stepbit Automation Readiness (I/O & CLI Stability) | 🟨 In Progress |
 
 ## Active Work
-- **Stage Open**: Stage C.1 is the primary product focus.
-- **Current Priority**: Strengthen paper-session discipline, traceability, and operator confidence before advancing into real execution safety work.
+- **Stage Open**: Stage D.2 is now the primary execution-safety focus.
+- **Current Priority**: Close ambiguous-submit risk before widening broker execution beyond the first supervised Kraken submit path.
 - **Active Focus Areas**:
-  - define a clearer paper-session lifecycle and operator expectations
-  - strengthen distinction between research artifacts and paper-trading artifacts
-  - make paper-mode failures and health signals more explicit
+  - make the first supervised broker submit path idempotency-safer
+  - reconcile ambiguous submit states against real Kraken order state
+  - add aggregate health and alert visibility over canonical broker submission sessions
+  - keep broker execution auditable before any broader live routing or retry logic
+  - preserve paper-session discipline as a prerequisite, not the current bottleneck
   - keep Kraken as the first implemented execution boundary while positioning Hyperliquid as the first next venue intended for personal connection
-  - keep the external execution contract stable only where real consumer friction appears
 - **Implemented Direction**:
   - canonical run artifacts now center on `metadata.json`, `config.json`, `metrics.json`, and `report.json`
   - successful plain `run` executions now write that canonical artifact pack under `outputs/runs/<run_id>/`
@@ -64,6 +65,9 @@
   - pre-submit bundles can now materialize `broker_submit_gate.json` as the final local supervised confirmation step before any future submit implementation
   - submit gates can now materialize `broker_submit_attempt.json` in `stub` mode as the first operational shape of a future supervised submit path
   - supervised submit gates can now materialize `broker_submit_response.json` as the first tightly gated real Kraken submit artifact, including remote submit status and returned `txid` values where available
+  - broker submit now writes a pending local response artifact before the remote submit path and supports explicit reconciliation against Kraken order state using session-derived `userref`
+  - submitted broker validation sessions can now materialize `broker_order_status.json` as the first persistent post-submit status surface with normalized local state
+  - broker submission sessions now support aggregate health summaries and deterministic alert snapshots for operator visibility
   - execution-venue strategy now keeps `Kraken` as the first implemented backend while moving `Hyperliquid` ahead of `Binance` as the first next venue intended for personal supervised use
 
 

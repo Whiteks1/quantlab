@@ -478,6 +478,18 @@ def main() -> None:
         help="Show details for a single broker order-validation session.",
     )
     parser.add_argument(
+        "--broker-order-validations-health",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Summarize broker submission health in a directory.",
+    )
+    parser.add_argument(
+        "--broker-order-validations-alerts",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Emit a deterministic alert snapshot for broker submission sessions in a directory.",
+    )
+    parser.add_argument(
         "--broker-order-validations-index",
         metavar="ROOT_DIR",
         default=None,
@@ -512,6 +524,18 @@ def main() -> None:
         metavar="SESSION_DIR",
         default=None,
         help="Submit a real Kraken order from a supervised submit gate and persist the response artifact.",
+    )
+    parser.add_argument(
+        "--broker-order-validations-reconcile",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Reconcile an existing broker submit response against Kraken order state.",
+    )
+    parser.add_argument(
+        "--broker-order-validations-status",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Refresh normalized post-submit order status for a broker order-validation session.",
     )
     parser.add_argument(
         "--broker-approval-reviewer",
@@ -694,12 +718,16 @@ def main() -> None:
             or args.kraken_order_validate_session
             or args.broker_order_validations_list
             or args.broker_order_validations_show
+            or args.broker_order_validations_health
+            or args.broker_order_validations_alerts
             or args.broker_order_validations_index
             or args.broker_order_validations_approve
             or args.broker_order_validations_bundle
             or args.broker_order_validations_submit_gate
             or args.broker_order_validations_submit_stub
             or args.broker_order_validations_submit_real
+            or args.broker_order_validations_reconcile
+            or args.broker_order_validations_status
         ):
             session_metadata["mode"] = "broker_validate"
         elif (
