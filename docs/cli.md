@@ -209,6 +209,39 @@ The index is intentionally separate from `outputs/runs/runs_index.*` and is mean
 
 ## 5. Broker Dry-Run
 
+### `--hyperliquid-preflight-outdir`
+
+Persist a read-only Hyperliquid venue preflight artifact:
+
+```bash
+python main.py --hyperliquid-preflight-outdir outputs/broker_preflight/hyperliquid_demo --broker-symbol ETH --execution-transport-preference websocket
+```
+
+This writes:
+
+- `outputs/broker_preflight/hyperliquid_demo/broker_preflight.json`
+
+The artifact currently includes:
+
+- adapter name
+- generated timestamp
+- input and normalized symbol
+- market type (`perp` or `spot`)
+- public API reachability
+- market support result against Hyperliquid `meta` or `spotMeta`
+- resolved coin and asset identifiers where available
+- mid-price snapshot from `allMids` where available
+- resolved execution-context details:
+  - execution account
+  - signer identity
+  - routing target
+  - transport preference
+  - nonce scope
+  - optional user-role lookups when valid addresses are provided
+- explicit errors when market or context checks fail
+
+This surface is read-only and does not place or validate orders.
+
 ### `--kraken-preflight-outdir`
 
 Persist a read-only Kraken public preflight artifact:
