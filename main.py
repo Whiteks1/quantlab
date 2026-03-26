@@ -398,6 +398,12 @@ def main() -> None:
         help="Persist a local Hyperliquid read-only venue preflight artifact in a directory.",
     )
     parser.add_argument(
+        "--hyperliquid-account-readiness-outdir",
+        metavar="DIR",
+        default=None,
+        help="Persist a local Hyperliquid read-only account/signer readiness artifact in a directory.",
+    )
+    parser.add_argument(
         "--kraken-preflight-outdir",
         metavar="DIR",
         default=None,
@@ -739,6 +745,7 @@ def main() -> None:
             session_metadata["mode"] = "paper_sessions"
         elif (
             args.hyperliquid_preflight_outdir
+            or args.hyperliquid_account_readiness_outdir
             or args.kraken_preflight_outdir
             or args.kraken_auth_preflight_outdir
             or args.kraken_account_readiness_outdir

@@ -25,6 +25,7 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
 
     Commands:
     - ``--hyperliquid-preflight-outdir <DIR>`` : run read-only Hyperliquid venue preflight and persist artifact
+    - ``--hyperliquid-account-readiness-outdir <DIR>`` : run read-only Hyperliquid account/signer readiness and persist artifact
     - ``--kraken-preflight-outdir <DIR>`` : run read-only Kraken readiness probes and persist artifact
     - ``--kraken-auth-preflight-outdir <DIR>`` : run authenticated Kraken read-only preflight and persist artifact
     - ``--kraken-account-readiness-outdir <DIR>`` : run authenticated account snapshot and intent readiness check
@@ -64,6 +65,36 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
             "artifact_path": str(artifact_path),
             "market_supported": report["market_supported"],
             "resolved_transport": report["execution_context"]["resolved_transport"],
+        }
+
+    if getattr(args, "hyperliquid_account_readiness_outdir", None):
+        outdir = Path(args.hyperliquid_account_readiness_outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
+
+        adapter = HyperliquidBrokerAdapter()
+        context = _build_execution_context_from_args(args)
+        report = adapter.build_account_readiness_report(
+            intent_account_id=getattr(args, "broker_account_id", None),
+            context=context,
+            timeout_seconds=float(getattr(args, "hyperliquid_preflight_timeout", 10.0)),
+        ).to_dict()
+
+        artifact_path = outdir / "hyperliquid_account_readiness.json"
+        with open(artifact_path, "w", encoding="utf-8") as fh:
+            json.dump(report, fh, indent=2, ensure_ascii=False)
+
+        print("\nHyperliquid account readiness generated:\n")
+        print(f"  artifact_path                : {artifact_path}")
+        print(f"  readiness_allowed            : {report['readiness_allowed']}")
+        print(f"  account_visibility_available : {report['account_visibility_available']}")
+
+        return {
+            "status": "success",
+            "mode": "broker_account_readiness",
+            "adapter_name": report["adapter_name"],
+            "artifact_path": str(artifact_path),
+            "readiness_allowed": report["readiness_allowed"],
+            "account_visibility_available": report["account_visibility_available"],
         }
 
     if getattr(args, "kraken_preflight_outdir", None):
