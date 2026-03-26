@@ -15,6 +15,7 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "kraken_auth_preflight_outdir": None,
         "kraken_account_readiness_outdir": None,
         "kraken_order_validate_outdir": None,
+        "kraken_order_validate_session": False,
         "kraken_preflight_timeout": 10.0,
         "broker_symbol": None,
         "ticker": None,
@@ -25,6 +26,10 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "broker_strategy_id": None,
         "broker_max_notional": None,
         "broker_allowed_symbols": None,
+        "broker_order_validations_root": None,
+        "broker_order_validations_list": None,
+        "broker_order_validations_show": None,
+        "broker_order_validations_index": None,
         "broker_kill_switch": False,
         "broker_allow_missing_account_id": False,
         "kraken_api_key": None,
@@ -377,3 +382,87 @@ def test_order_validate_requires_intent_inputs(tmp_path):
     args = _make_args(kraken_order_validate_outdir=str(tmp_path / "order_validate"))
     with pytest.raises(ConfigError):
         handle_broker_preflight_commands(args)
+
+
+def test_writes_order_validate_session_and_index(monkeypatch, tmp_path):
+    from quantlab.cli import broker_preflight as module
+
+    def fake_report(self, intent, policy, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.kraken.order_validate",
+                    "adapter_name": "kraken",
+                    "generated_at": "2026-03-26T08:00:00",
+                    "authenticated_preflight": {
+                        "artifact_type": "quantlab.kraken.auth_preflight",
+                        "adapter_name": "kraken",
+                        "generated_at": "2026-03-26T08:00:00",
+                        "credentials_present": True,
+                        "authenticated": True,
+                        "api_key_env": "KRAKEN_API_KEY",
+                        "api_secret_env": "KRAKEN_API_SECRET",
+                        "key_name": "quantlab-demo",
+                        "permissions": {"orders": "create_modify"},
+                        "restrictions": {},
+                        "created_at": None,
+                        "updated_at": None,
+                        "errors": [],
+                    },
+                    "intent": {
+                        "broker_target": "kraken",
+                        "symbol": intent.symbol,
+                        "side": intent.side,
+                        "quantity": intent.quantity,
+                        "notional": intent.notional,
+                        "account_id": intent.account_id,
+                        "strategy_id": intent.strategy_id,
+                        "request_id": intent.request_id,
+                        "dry_run": True,
+                    },
+                    "policy": {
+                        "kill_switch_active": False,
+                        "max_notional_per_order": None,
+                        "allowed_symbols": [],
+                        "require_account_id": True,
+                    },
+                    "local_preflight": {"allowed": True, "reasons": []},
+                    "validate_payload": {
+                        "pair": "ETH/USD",
+                        "type": "buy",
+                        "ordertype": "market",
+                        "volume": "0.25",
+                        "validate": "true",
+                    },
+                    "remote_validation_called": True,
+                    "validation_accepted": True,
+                    "validation_reasons": [],
+                    "exchange_response": {"error": [], "result": {"descr": {"order": "buy 0.25 ETHUSD @ market"}}},
+                    "errors": [],
+                }
+
+        return _Fake()
+
+    monkeypatch.setattr(module.KrakenBrokerAdapter, "build_order_validate_report", fake_report)
+
+    root = tmp_path / "broker_order_validations"
+    args = _make_args(
+        kraken_order_validate_session=True,
+        broker_order_validations_root=str(root),
+        broker_symbol="ETH-USD",
+        broker_side="buy",
+        broker_quantity=0.25,
+        broker_notional=500.0,
+        broker_account_id="acct_demo",
+    )
+    result = handle_broker_preflight_commands(args)
+
+    assert isinstance(result, dict)
+    assert result["validation_accepted"] is True
+    assert result["session_id"]
+    session_dir = root / result["session_id"]
+    assert (session_dir / "broker_order_validate.json").exists()
+    assert (session_dir / "session_metadata.json").exists()
+    assert (session_dir / "session_status.json").exists()
+    assert (root / "broker_order_validations_index.csv").exists()
+    assert (root / "broker_order_validations_index.json").exists()

@@ -362,6 +362,52 @@ Important note:
 - this does not place an order
 - but it still uses Kraken's order-validation path and therefore may require order-related API permissions
 
+### `--kraken-order-validate-session`
+
+Persist a canonical broker order-validation session:
+
+```bash
+python main.py --kraken-order-validate-session --broker-symbol ETH-USD --broker-side buy --broker-quantity 0.25 --broker-notional 500 --broker-account-id acct_demo
+```
+
+This writes a canonical session under:
+
+```text
+outputs/broker_order_validations/<session_id>/
+  broker_order_validate.json
+  session_metadata.json
+  session_status.json
+```
+
+And refreshes the shared registry:
+
+- `outputs/broker_order_validations/broker_order_validations_index.csv`
+- `outputs/broker_order_validations/broker_order_validations_index.json`
+
+### `--broker-order-validations-list`
+
+List broker order-validation sessions:
+
+```bash
+python main.py --broker-order-validations-list outputs/broker_order_validations
+```
+
+### `--broker-order-validations-show`
+
+Show one broker order-validation session:
+
+```bash
+python main.py --broker-order-validations-show outputs/broker_order_validations/<session_id>
+```
+
+### `--broker-order-validations-index`
+
+Refresh the shared broker order-validation registry explicitly:
+
+```bash
+python main.py --broker-order-validations-index outputs/broker_order_validations
+```
+
 ### `--kraken-dry-run-outdir`
 
 Persist a local Kraken dry-run audit artifact:
