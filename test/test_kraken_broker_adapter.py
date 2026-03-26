@@ -707,3 +707,88 @@ def test_order_reconciliation_reports_missing_credentials_cleanly(monkeypatch):
     assert report["matched"] is False
     assert "missing_api_key" in report["errors"]
     assert "missing_api_secret" in report["errors"]
+
+
+def test_order_status_uses_query_orders_info_when_txid_is_available():
+    adapter = KrakenBrokerAdapter()
+
+    def fake_private_json(path, **kwargs):
+        if path == "/0/private/GetAPIKeyInfo":
+            return {
+                "error": [],
+                "result": {
+                    "name": "quantlab-demo",
+                    "permissions": {"orders": "query"},
+                },
+            }
+        if path == "/0/private/QueryOrders":
+            assert kwargs["payload"]["txid"] == "OABC-123-XYZ"
+            return {
+                "error": [],
+                "result": {
+                    "OABC-123-XYZ": {
+                        "status": "closed",
+                        "userref": 123456,
+                        "descr": {"order": "buy 0.25 ETHUSD @ market"},
+                    }
+                },
+            }
+        raise AssertionError(path)
+
+    report = adapter.build_order_status_report(
+        source_session_id="validate_001",
+        txid=["OABC-123-XYZ"],
+        userref=123456,
+        api_key="demo-key",
+        api_secret="ZGVtby1zZWNyZXQ=",
+        fetch_private_json=fake_private_json,
+    ).to_dict()
+
+    assert report["query_mode"] == "txid"
+    assert report["status_known"] is True
+    assert report["normalized_state"] == "closed"
+    assert report["matched_txid"] == ["OABC-123-XYZ"]
+
+
+def test_order_status_falls_back_to_userref_reconciliation_when_txid_missing():
+    adapter = KrakenBrokerAdapter()
+
+    def fake_private_json(path, **kwargs):
+        if path == "/0/private/GetAPIKeyInfo":
+            return {
+                "error": [],
+                "result": {
+                    "name": "quantlab-demo",
+                    "permissions": {"orders": "query"},
+                },
+            }
+        if path == "/0/private/OpenOrders":
+            return {
+                "error": [],
+                "result": {
+                    "open": {
+                        "OOPEN-123-XYZ": {
+                            "userref": 123456,
+                            "status": "open",
+                            "descr": {"order": "buy 0.25 ETHUSD @ market"},
+                        }
+                    }
+                },
+            }
+        if path == "/0/private/ClosedOrders":
+            return {"error": [], "result": {"closed": {}}}
+        raise AssertionError(path)
+
+    report = adapter.build_order_status_report(
+        source_session_id="validate_001",
+        txid=[],
+        userref=123456,
+        api_key="demo-key",
+        api_secret="ZGVtby1zZWNyZXQ=",
+        fetch_private_json=fake_private_json,
+    ).to_dict()
+
+    assert report["query_mode"] == "userref_fallback"
+    assert report["status_known"] is True
+    assert report["normalized_state"] == "open"
+    assert report["matched_txid"] == ["OOPEN-123-XYZ"]
