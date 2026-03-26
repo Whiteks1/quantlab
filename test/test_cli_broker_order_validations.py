@@ -7,11 +7,89 @@ from pathlib import Path
 import pytest
 
 from quantlab.cli.broker_order_validations import (
+    build_broker_submission_alerts,
+    build_broker_submission_health,
     handle_broker_order_validations_commands,
     load_broker_order_validation_summary,
 )
 from quantlab.errors import ConfigError
 from quantlab.reporting.broker_order_validation_index import build_broker_order_validations_index
+
+
+def _write_validation_session(
+    root: Path,
+    *,
+    session_id: str,
+    status: str,
+    accepted: bool,
+    remote_called: bool,
+    updated_at: str = "2026-03-26T10:05:00",
+    submit_response: dict | None = None,
+    order_status: dict | None = None,
+) -> Path:
+    session_dir = root / session_id
+    session_dir.mkdir()
+    (session_dir / "session_metadata.json").write_text(
+        json.dumps(
+            {
+                "session_id": session_id,
+                "adapter_name": "kraken",
+                "status": status,
+                "created_at": "2026-03-26T10:00:00",
+                "request_id": f"req_{session_id}",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "session_status.json").write_text(
+        json.dumps(
+            {
+                "session_id": session_id,
+                "status": status,
+                "updated_at": updated_at,
+                "remote_validation_called": remote_called,
+                "validation_accepted": accepted,
+                "validation_reasons": [] if accepted else ["EOrder:Insufficient funds"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "broker_order_validate.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.kraken.order_validate",
+                "adapter_name": "kraken",
+                "generated_at": updated_at,
+                "authenticated_preflight": {"authenticated": True},
+                "intent": {"request_id": f"req_{session_id}"},
+                "local_preflight": {"allowed": True, "reasons": []},
+                "validate_payload": {
+                    "pair": "ETH/USD",
+                    "type": "buy",
+                    "ordertype": "market",
+                    "volume": "0.25",
+                    "validate": "true",
+                },
+                "remote_validation_called": remote_called,
+                "validation_accepted": accepted,
+                "validation_reasons": [] if accepted else ["EOrder:Insufficient funds"],
+                "exchange_response": {"error": [] if accepted else ["EOrder:Insufficient funds"]},
+                "errors": [] if accepted else ["EOrder:Insufficient funds"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    if submit_response is not None:
+        (session_dir / "broker_submit_response.json").write_text(
+            json.dumps(submit_response),
+            encoding="utf-8",
+        )
+    if order_status is not None:
+        (session_dir / "broker_order_status.json").write_text(
+            json.dumps(order_status),
+            encoding="utf-8",
+        )
+    return session_dir
 
 
 @pytest.fixture()
@@ -23,59 +101,105 @@ def broker_order_validations_root(tmp_path: Path) -> Path:
         ("validate_001", "validated", True, True),
         ("validate_002", "rejected_remote", False, True),
     ]:
-        session_dir = root / session_id
-        session_dir.mkdir()
-        (session_dir / "session_metadata.json").write_text(
-            json.dumps(
-                {
-                    "session_id": session_id,
-                    "adapter_name": "kraken",
-                    "status": status,
-                    "created_at": "2026-03-26T10:00:00",
-                    "request_id": f"req_{session_id}",
-                }
-            ),
-            encoding="utf-8",
-        )
-        (session_dir / "session_status.json").write_text(
-            json.dumps(
-                {
-                    "session_id": session_id,
-                    "status": status,
-                    "updated_at": "2026-03-26T10:05:00",
-                    "remote_validation_called": remote_called,
-                    "validation_accepted": accepted,
-                    "validation_reasons": [] if accepted else ["EOrder:Insufficient funds"],
-                }
-            ),
-            encoding="utf-8",
-        )
-        (session_dir / "broker_order_validate.json").write_text(
-            json.dumps(
-                {
-                    "artifact_type": "quantlab.kraken.order_validate",
-                    "adapter_name": "kraken",
-                    "generated_at": "2026-03-26T10:05:00",
-                    "authenticated_preflight": {"authenticated": True},
-                    "intent": {"request_id": f"req_{session_id}"},
-                    "local_preflight": {"allowed": True, "reasons": []},
-                    "validate_payload": {
-                        "pair": "ETH/USD",
-                        "type": "buy",
-                        "ordertype": "market",
-                        "volume": "0.25",
-                        "validate": "true",
-                    },
-                    "remote_validation_called": remote_called,
-                    "validation_accepted": accepted,
-                    "validation_reasons": [] if accepted else ["EOrder:Insufficient funds"],
-                    "exchange_response": {"error": [] if accepted else ["EOrder:Insufficient funds"]},
-                    "errors": [] if accepted else ["EOrder:Insufficient funds"],
-                }
-            ),
-            encoding="utf-8",
+        _write_validation_session(
+            root,
+            session_id=session_id,
+            status=status,
+            accepted=accepted,
+            remote_called=remote_called,
         )
 
+    return root
+
+
+@pytest.fixture()
+def broker_submission_monitoring_root(tmp_path: Path) -> Path:
+    root = tmp_path / "broker_order_validations"
+    root.mkdir()
+
+    _write_validation_session(
+        root,
+        session_id="submitted_known",
+        status="order_open",
+        accepted=True,
+        remote_called=True,
+        updated_at="2026-03-26T10:20:00",
+        submit_response={
+            "artifact_type": "quantlab.kraken.submit_response",
+            "adapter_name": "kraken",
+            "generated_at": "2026-03-26T10:19:00",
+            "submit_state": "submitted_remote",
+            "submitted": True,
+            "remote_submit_called": True,
+            "txid": ["OABC-123-XYZ"],
+            "userref": 123456,
+            "errors": [],
+        },
+        order_status={
+            "artifact_type": "quantlab.kraken.order_status",
+            "generated_at": "2026-03-26T10:20:00",
+            "query_mode": "query_orders",
+            "status_known": True,
+            "normalized_state": "open",
+            "matched_txid": ["OABC-123-XYZ"],
+            "errors": [],
+        },
+    )
+    _write_validation_session(
+        root,
+        session_id="submitted_unknown",
+        status="order_unknown",
+        accepted=True,
+        remote_called=True,
+        updated_at="2026-03-26T10:25:00",
+        submit_response={
+            "artifact_type": "quantlab.kraken.submit_response",
+            "adapter_name": "kraken",
+            "generated_at": "2026-03-26T10:24:00",
+            "submit_state": "submitted_remote",
+            "submitted": True,
+            "remote_submit_called": True,
+            "txid": ["ODEF-456-XYZ"],
+            "userref": 654321,
+            "errors": [],
+        },
+        order_status={
+            "artifact_type": "quantlab.kraken.order_status",
+            "generated_at": "2026-03-26T10:25:00",
+            "query_mode": "query_orders",
+            "status_known": False,
+            "normalized_state": None,
+            "matched_txid": ["ODEF-456-XYZ"],
+            "errors": ["temporary_query_failure"],
+        },
+    )
+    _write_validation_session(
+        root,
+        session_id="submit_rejected",
+        status="submit_rejected",
+        accepted=True,
+        remote_called=True,
+        updated_at="2026-03-26T10:22:00",
+        submit_response={
+            "artifact_type": "quantlab.kraken.submit_response",
+            "adapter_name": "kraken",
+            "generated_at": "2026-03-26T10:21:00",
+            "submit_state": "submit_rejected",
+            "submitted": False,
+            "remote_submit_called": True,
+            "txid": [],
+            "userref": 111222,
+            "errors": ["EOrder:Insufficient funds"],
+        },
+    )
+    _write_validation_session(
+        root,
+        session_id="validate_only",
+        status="validated",
+        accepted=True,
+        remote_called=True,
+        updated_at="2026-03-26T10:10:00",
+    )
     return root
 
 
@@ -83,6 +207,8 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
     defaults = {
         "broker_order_validations_list": None,
         "broker_order_validations_show": None,
+        "broker_order_validations_health": None,
+        "broker_order_validations_alerts": None,
         "broker_order_validations_index": None,
         "broker_order_validations_approve": None,
         "broker_order_validations_bundle": None,
@@ -128,6 +254,48 @@ def test_shows_single_broker_order_validation_session(broker_order_validations_r
     assert "validate_002" in out
     assert "EOrder:Insufficient funds" in out
     assert "quantlab.kraken.order_validate" in out
+
+
+def test_summarizes_broker_submission_health(broker_submission_monitoring_root: Path, capsys):
+    health = build_broker_submission_health(broker_submission_monitoring_root)
+    assert health["submit_response_sessions"] == 3
+    assert health["submitted_sessions"] == 2
+    assert health["latest_issue_session_id"] == "submitted_unknown"
+
+    args = _make_args(broker_order_validations_health=str(broker_submission_monitoring_root))
+    result = handle_broker_order_validations_commands(args)
+    assert result is True
+
+    out = capsys.readouterr().out
+    assert "Broker submission health" in out
+    assert "total_sessions          : 4" in out
+    assert "submit_response_sessions: 3" in out
+    assert "submitted_sessions      : 2" in out
+    assert "order_status_known      : 1" in out
+    assert "latest_issue_id         : submitted_unknown" in out
+
+
+def test_builds_broker_submission_alerts_snapshot(broker_submission_monitoring_root: Path):
+    payload = build_broker_submission_alerts(broker_submission_monitoring_root)
+
+    assert payload["total_sessions"] == 4
+    assert payload["submit_response_sessions"] == 3
+    assert payload["submitted_sessions"] == 2
+    assert payload["alert_status"] == "critical"
+    codes = {alert["alert_code"] for alert in payload["alerts"]}
+    assert "BROKER_ORDER_STATUS_UNKNOWN" in codes
+    assert "BROKER_SUBMIT_REJECTED" in codes
+
+
+def test_emits_broker_submission_alerts_command(broker_submission_monitoring_root: Path, capsys):
+    args = _make_args(broker_order_validations_alerts=str(broker_submission_monitoring_root))
+    result = handle_broker_order_validations_commands(args)
+    assert result is True
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["has_alerts"] is True
+    assert payload["latest_alert_session_id"] == "submitted_unknown"
+    assert any(alert["alert_code"] == "BROKER_ORDER_STATUS_UNKNOWN" for alert in payload["alerts"])
 
 
 def test_builds_broker_order_validations_index(broker_order_validations_root: Path):
