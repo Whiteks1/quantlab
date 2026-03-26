@@ -31,6 +31,7 @@ handle_paper_session_commands = None
 handle_broker_preflight_commands = None
 handle_broker_dry_run_commands = None
 handle_broker_dry_runs_commands = None
+handle_broker_order_validations_commands = None
 run_sweep = None
 write_run_report = None
 write_advanced_report = None
@@ -137,6 +138,7 @@ def _load_runtime_dependencies() -> None:
     global handle_broker_preflight_commands
     global handle_broker_dry_run_commands
     global handle_broker_dry_runs_commands
+    global handle_broker_order_validations_commands
     global run_sweep
     global write_run_report
     global write_advanced_report
@@ -200,6 +202,12 @@ def _load_runtime_dependencies() -> None:
         )
 
         handle_broker_dry_runs_commands = _handle_broker_dry_runs_commands
+    if handle_broker_order_validations_commands is None:
+        from quantlab.cli.broker_order_validations import (
+            handle_broker_order_validations_commands as _handle_broker_order_validations_commands,
+        )
+
+        handle_broker_order_validations_commands = _handle_broker_order_validations_commands
     if run_sweep is None:
         from quantlab.experiments import run_sweep as _run_sweep
 
@@ -408,6 +416,11 @@ def main() -> None:
         help="Persist a local Kraken validate-only order probe artifact in a directory.",
     )
     parser.add_argument(
+        "--kraken-order-validate-session",
+        action="store_true",
+        help="Persist a canonical broker order-validation session under outputs/broker_order_validations.",
+    )
+    parser.add_argument(
         "--kraken-preflight-timeout",
         type=float,
         default=10.0,
@@ -445,6 +458,30 @@ def main() -> None:
         metavar="ROOT_DIR",
         default=None,
         help="Refresh the shared broker dry-run index artifacts in a directory.",
+    )
+    parser.add_argument(
+        "--broker-order-validations-root",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Root directory for canonical broker order-validation sessions.",
+    )
+    parser.add_argument(
+        "--broker-order-validations-list",
+        metavar="ROOT_DIR",
+        default=None,
+        help="List broker order-validation sessions in a directory.",
+    )
+    parser.add_argument(
+        "--broker-order-validations-show",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Show details for a single broker order-validation session.",
+    )
+    parser.add_argument(
+        "--broker-order-validations-index",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Refresh the shared broker order-validation index artifacts in a directory.",
     )
     parser.add_argument("--broker-symbol", default=None)
     parser.add_argument("--broker-side", default=None)
@@ -592,7 +629,13 @@ def main() -> None:
             or args.kraken_account_readiness_outdir
         ):
             session_metadata["mode"] = "broker_preflight"
-        elif args.kraken_order_validate_outdir:
+        elif (
+            args.kraken_order_validate_outdir
+            or args.kraken_order_validate_session
+            or args.broker_order_validations_list
+            or args.broker_order_validations_show
+            or args.broker_order_validations_index
+        ):
             session_metadata["mode"] = "broker_validate"
         elif (
             args.kraken_dry_run_outdir
@@ -641,6 +684,9 @@ def main() -> None:
 
         if result_ctx in (None, False):
             result_ctx = handle_broker_dry_runs_commands(args)
+
+        if result_ctx in (None, False):
+            result_ctx = handle_broker_order_validations_commands(args)
 
         if result_ctx in (None, False):
             result_ctx = handle_paper_session_commands(args)

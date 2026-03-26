@@ -4,15 +4,19 @@ CLI handler for read-only broker preflight probes.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 from pathlib import Path
 
 from quantlab.brokers import KrakenBrokerAdapter
+from quantlab.brokers.session_store import BrokerOrderValidationStore
 from quantlab.cli.broker_dry_run import (
     _build_execution_intent_from_args,
     _build_execution_policy_from_args,
 )
 from quantlab.errors import ConfigError
+from quantlab.reporting.broker_order_validation_index import write_broker_order_validations_index
+from quantlab.runs.run_id import generate_run_id
 
 
 def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
@@ -24,6 +28,7 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
     - ``--kraken-auth-preflight-outdir <DIR>`` : run authenticated Kraken read-only preflight and persist artifact
     - ``--kraken-account-readiness-outdir <DIR>`` : run authenticated account snapshot and intent readiness check
     - ``--kraken-order-validate-outdir <DIR>`` : run validate-only Kraken order probe and persist artifact
+    - ``--kraken-order-validate-session`` : persist a canonical broker order-validation session
     """
     if getattr(args, "kraken_preflight_outdir", None):
         symbol = getattr(args, "broker_symbol", None) or getattr(args, "ticker", None)
@@ -127,12 +132,9 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
             "readiness_allowed": readiness["allowed"],
         }
 
-    if getattr(args, "kraken_order_validate_outdir", None):
+    if getattr(args, "kraken_order_validate_outdir", None) or getattr(args, "kraken_order_validate_session", False):
         intent = _build_execution_intent_from_args(args)
         policy = _build_execution_policy_from_args(args)
-
-        outdir = Path(args.kraken_order_validate_outdir)
-        outdir.mkdir(parents=True, exist_ok=True)
 
         adapter = KrakenBrokerAdapter()
         report = adapter.build_order_validate_report(
@@ -145,6 +147,68 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
             timeout_seconds=float(getattr(args, "kraken_preflight_timeout", 10.0)),
         ).to_dict()
 
+        if getattr(args, "kraken_order_validate_session", False):
+            request_id = getattr(args, "_request_id", None)
+            session_id = generate_run_id(
+                "broker_order_validate",
+                {
+                    "broker_target": intent.broker_target,
+                    "symbol": intent.symbol,
+                    "side": intent.side,
+                    "quantity": intent.quantity,
+                    "notional": intent.notional,
+                    "request_id": request_id,
+                },
+            )
+            root_dir = Path(
+                getattr(args, "broker_order_validations_root", None) or "outputs/broker_order_validations"
+            ).resolve()
+            store = BrokerOrderValidationStore(session_id, base_dir=str(root_dir))
+            session_path = store.initialize().resolve()
+
+            status_value = _derive_order_validation_status(report)
+            metadata = {
+                "session_id": session_id,
+                "adapter_name": report["adapter_name"],
+                "status": status_value,
+                "created_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+                "request_id": request_id,
+            }
+            status = {
+                "session_id": session_id,
+                "status": status_value,
+                "updated_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+                "remote_validation_called": report["remote_validation_called"],
+                "validation_accepted": report["validation_accepted"],
+                "validation_reasons": report["validation_reasons"],
+            }
+            if report["validation_reasons"]:
+                status["message"] = ", ".join(report["validation_reasons"])
+
+            store.write_metadata(metadata)
+            store.write_status(status)
+            store.write_report(report)
+            csv_path, json_path = write_broker_order_validations_index(root_dir)
+
+            print("\nKraken order validation session generated:\n")
+            print(f"  session_path            : {session_path}")
+            print(f"  validation_accepted     : {report['validation_accepted']}")
+            print(f"  remote_validation_called: {report['remote_validation_called']}")
+            print(f"  index_csv               : {csv_path}")
+            print(f"  index_json              : {json_path}")
+
+            return {
+                "status": "success",
+                "mode": "broker_order_validate",
+                "adapter_name": report["adapter_name"],
+                "artifacts_path": str(session_path),
+                "session_id": session_id,
+                "validation_accepted": report["validation_accepted"],
+                "remote_validation_called": report["remote_validation_called"],
+            }
+
+        outdir = Path(args.kraken_order_validate_outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
         artifact_path = outdir / "broker_order_validate.json"
         with open(artifact_path, "w", encoding="utf-8") as fh:
             json.dump(report, fh, indent=2, ensure_ascii=False)
@@ -164,3 +228,14 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
         }
 
     return False
+
+
+def _derive_order_validation_status(report: dict[str, object]) -> str:
+    if bool(report.get("validation_accepted")):
+        return "validated"
+    if not bool(report.get("remote_validation_called")):
+        reasons = report.get("validation_reasons") or []
+        if "private_auth_not_ready" in reasons:
+            return "auth_not_ready"
+        return "rejected_local"
+    return "rejected_remote"
