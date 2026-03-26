@@ -77,6 +77,9 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "broker_order_validations_list": None,
         "broker_order_validations_show": None,
         "broker_order_validations_index": None,
+        "broker_order_validations_approve": None,
+        "broker_approval_reviewer": None,
+        "broker_approval_note": None,
     }
     defaults.update(kwargs)
     return types.SimpleNamespace(**defaults)
@@ -124,3 +127,51 @@ def test_invalid_session_dir_raises_config_error(broker_order_validations_root: 
 def test_load_summary_requires_valid_dir(tmp_path: Path):
     with pytest.raises(ConfigError):
         load_broker_order_validation_summary(tmp_path / "missing")
+
+
+def test_approves_broker_order_validation_session(broker_order_validations_root: Path, capsys):
+    args = _make_args(
+        broker_order_validations_approve=str(broker_order_validations_root / "validate_001"),
+        broker_approval_reviewer="marce",
+        broker_approval_note="Approved after validate-only review",
+    )
+    result = handle_broker_order_validations_commands(args)
+    assert result is True
+
+    out = capsys.readouterr().out
+    assert "Broker order validation approved" in out
+
+    approval_path = broker_order_validations_root / "validate_001" / "approval.json"
+    assert approval_path.exists()
+
+    payload = json.loads(approval_path.read_text(encoding="utf-8"))
+    assert payload["status"] == "approved"
+    assert payload["reviewed_by"] == "marce"
+    assert payload["note"] == "Approved after validate-only review"
+
+
+def test_show_includes_approval_state_after_approval(broker_order_validations_root: Path, capsys):
+    approve_args = _make_args(
+        broker_order_validations_approve=str(broker_order_validations_root / "validate_001"),
+        broker_approval_reviewer="marce",
+    )
+    assert handle_broker_order_validations_commands(approve_args) is True
+    _ = capsys.readouterr()
+
+    show_args = _make_args(broker_order_validations_show=str(broker_order_validations_root / "validate_001"))
+    result = handle_broker_order_validations_commands(show_args)
+    assert result is True
+
+    out = capsys.readouterr().out
+    assert "approval_status" in out
+    assert "approved" in out
+    assert "marce" in out
+
+
+def test_approve_requires_reviewer(broker_order_validations_root: Path):
+    args = _make_args(
+        broker_order_validations_approve=str(broker_order_validations_root / "validate_001"),
+        broker_approval_reviewer=None,
+    )
+    with pytest.raises(ConfigError):
+        handle_broker_order_validations_commands(args)
