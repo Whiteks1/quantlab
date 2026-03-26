@@ -278,6 +278,7 @@ class KrakenOrderSubmitReport:
     source_session_id: str
     submit_payload: dict[str, object] | None
     userref: int | None
+    submit_state: str
     remote_submit_called: bool
     submitted: bool
     txid: tuple[str, ...]
@@ -293,10 +294,44 @@ class KrakenOrderSubmitReport:
             "source_session_id": self.source_session_id,
             "submit_payload": self.submit_payload,
             "userref": self.userref,
+            "submit_state": self.submit_state,
             "remote_submit_called": self.remote_submit_called,
             "submitted": self.submitted,
             "txid": list(self.txid),
             "exchange_response": self.exchange_response,
+            "errors": list(self.errors),
+        }
+
+
+@dataclass(frozen=True)
+class KrakenOrderReconciliationReport:
+    adapter_name: str
+    generated_at: str
+    authenticated_preflight: KrakenAuthPreflightReport
+    source_session_id: str
+    userref: int | None
+    reconciliation_attempted: bool
+    matched: bool
+    matched_sources: tuple[str, ...]
+    matched_txid: tuple[str, ...]
+    matched_statuses: tuple[str, ...]
+    matched_orders: tuple[dict[str, object], ...]
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact_type": "quantlab.kraken.submit_reconciliation",
+            "adapter_name": self.adapter_name,
+            "generated_at": self.generated_at,
+            "authenticated_preflight": self.authenticated_preflight.to_dict(),
+            "source_session_id": self.source_session_id,
+            "userref": self.userref,
+            "reconciliation_attempted": self.reconciliation_attempted,
+            "matched": self.matched,
+            "matched_sources": list(self.matched_sources),
+            "matched_txid": list(self.matched_txid),
+            "matched_statuses": list(self.matched_statuses),
+            "matched_orders": list(self.matched_orders),
             "errors": list(self.errors),
         }
 
@@ -731,6 +766,7 @@ class KrakenBrokerAdapter(BrokerAdapter):
         api_secret_env: str = "KRAKEN_API_SECRET",
         timeout_seconds: float = 10.0,
         fetch_private_json=None,
+        remote_submit: bool = True,
     ) -> KrakenOrderSubmitReport:
         auth_report = self.build_authenticated_preflight_report(
             api_key=api_key,
@@ -757,6 +793,7 @@ class KrakenBrokerAdapter(BrokerAdapter):
                 source_session_id=source_session_id,
                 submit_payload=None,
                 userref=None,
+                submit_state="missing_validate_payload",
                 remote_submit_called=False,
                 submitted=False,
                 txid=(),
@@ -776,6 +813,23 @@ class KrakenBrokerAdapter(BrokerAdapter):
                 source_session_id=source_session_id,
                 submit_payload=submit_payload,
                 userref=userref,
+                submit_state="submit_auth_not_ready",
+                remote_submit_called=False,
+                submitted=False,
+                txid=(),
+                exchange_response=None,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        if not remote_submit:
+            return KrakenOrderSubmitReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                authenticated_preflight=auth_report,
+                source_session_id=source_session_id,
+                submit_payload=submit_payload,
+                userref=userref,
+                submit_state="pending_remote_submit",
                 remote_submit_called=False,
                 submitted=False,
                 txid=(),
@@ -812,10 +866,116 @@ class KrakenBrokerAdapter(BrokerAdapter):
             source_session_id=source_session_id,
             submit_payload=submit_payload,
             userref=userref,
+            submit_state="submitted_remote" if submitted else "submit_rejected",
             remote_submit_called=remote_submit_called,
             submitted=submitted,
             txid=txid,
             exchange_response=exchange_response,
+            errors=tuple(_unique_reasons(errors)),
+        )
+
+    def build_order_reconciliation_report(
+        self,
+        *,
+        source_session_id: str,
+        userref: int | None,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        api_key_env: str = "KRAKEN_API_KEY",
+        api_secret_env: str = "KRAKEN_API_SECRET",
+        timeout_seconds: float = 10.0,
+        fetch_private_json=None,
+    ) -> KrakenOrderReconciliationReport:
+        auth_report = self.build_authenticated_preflight_report(
+            api_key=api_key,
+            api_secret=api_secret,
+            api_key_env=api_key_env,
+            api_secret_env=api_secret_env,
+            timeout_seconds=timeout_seconds,
+            fetch_private_json=fetch_private_json,
+        )
+        errors: list[str] = list(auth_report.errors)
+        matched_orders: list[dict[str, object]] = []
+
+        if userref is None:
+            errors.append("missing_userref")
+            return KrakenOrderReconciliationReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                authenticated_preflight=auth_report,
+                source_session_id=source_session_id,
+                userref=None,
+                reconciliation_attempted=False,
+                matched=False,
+                matched_sources=(),
+                matched_txid=(),
+                matched_statuses=(),
+                matched_orders=(),
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        if not auth_report.authenticated:
+            errors.append("private_auth_not_ready")
+            return KrakenOrderReconciliationReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                authenticated_preflight=auth_report,
+                source_session_id=source_session_id,
+                userref=userref,
+                reconciliation_attempted=False,
+                matched=False,
+                matched_sources=(),
+                matched_txid=(),
+                matched_statuses=(),
+                matched_orders=(),
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        try:
+            open_orders_payload = fetch_kraken_open_orders(
+                api_key=api_key or os.getenv(api_key_env, ""),
+                api_secret=api_secret or os.getenv(api_secret_env, ""),
+                timeout_seconds=timeout_seconds,
+                fetch_private_json=fetch_private_json,
+            )
+            closed_orders_payload = fetch_kraken_closed_orders(
+                api_key=api_key or os.getenv(api_key_env, ""),
+                api_secret=api_secret or os.getenv(api_secret_env, ""),
+                timeout_seconds=timeout_seconds,
+                fetch_private_json=fetch_private_json,
+            )
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"order_reconciliation_failed:{exc.__class__.__name__}")
+            return KrakenOrderReconciliationReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                authenticated_preflight=auth_report,
+                source_session_id=source_session_id,
+                userref=userref,
+                reconciliation_attempted=True,
+                matched=False,
+                matched_sources=(),
+                matched_txid=(),
+                matched_statuses=(),
+                matched_orders=(),
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        matched_orders.extend(_extract_orders_by_userref(open_orders_payload, "open", userref))
+        matched_orders.extend(_extract_orders_by_userref(closed_orders_payload, "closed", userref))
+
+        return KrakenOrderReconciliationReport(
+            adapter_name=self.adapter_name,
+            generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+            authenticated_preflight=auth_report,
+            source_session_id=source_session_id,
+            userref=userref,
+            reconciliation_attempted=True,
+            matched=bool(matched_orders),
+            matched_sources=tuple(_unique_reasons(str(order["source"]) for order in matched_orders)),
+            matched_txid=tuple(str(order["txid"]) for order in matched_orders),
+            matched_statuses=tuple(_unique_reasons(str(order["status"]) for order in matched_orders)),
+            matched_orders=tuple(matched_orders),
             errors=tuple(_unique_reasons(errors)),
         )
 
@@ -872,6 +1032,38 @@ def fetch_kraken_extended_balance(
     fetcher = fetch_private_json or _fetch_private_json
     return fetcher(
         "/0/private/BalanceEx",
+        api_key=api_key,
+        api_secret=api_secret,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def fetch_kraken_open_orders(
+    *,
+    api_key: str,
+    api_secret: str,
+    timeout_seconds: float = 10.0,
+    fetch_private_json=None,
+) -> dict[str, object]:
+    fetcher = fetch_private_json or _fetch_private_json
+    return fetcher(
+        "/0/private/OpenOrders",
+        api_key=api_key,
+        api_secret=api_secret,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def fetch_kraken_closed_orders(
+    *,
+    api_key: str,
+    api_secret: str,
+    timeout_seconds: float = 10.0,
+    fetch_private_json=None,
+) -> dict[str, object]:
+    fetcher = fetch_private_json or _fetch_private_json
+    return fetcher(
+        "/0/private/ClosedOrders",
         api_key=api_key,
         api_secret=api_secret,
         timeout_seconds=timeout_seconds,
@@ -992,6 +1184,37 @@ def _find_matching_asset_pair(
                 "status": str(payload.get("status")) if payload.get("status") is not None else "",
             }
     return None
+
+
+def _extract_orders_by_userref(
+    payload: dict[str, object],
+    section: str,
+    userref: int,
+) -> list[dict[str, object]]:
+    result = payload.get("result", {}) if isinstance(payload, dict) else {}
+    orders = result.get(section, {}) if isinstance(result, dict) else {}
+    matches: list[dict[str, object]] = []
+
+    if not isinstance(orders, dict):
+        return matches
+
+    target = str(userref)
+    for txid, order_payload in orders.items():
+        if not isinstance(order_payload, dict):
+            continue
+        candidate_userref = order_payload.get("userref")
+        if candidate_userref is None or str(candidate_userref) != target:
+            continue
+        matches.append(
+            {
+                "source": section,
+                "txid": str(txid),
+                "status": str(order_payload.get("status") or section),
+                "descr": order_payload.get("descr"),
+                "userref": candidate_userref,
+            }
+        )
+    return matches
 
 
 def _compact_symbol(symbol: str) -> str:

@@ -25,6 +25,71 @@ from quantlab.runs.artifacts import load_json_with_fallback
 
 
 def handle_broker_order_validations_commands(args) -> bool:
+    if getattr(args, "broker_order_validations_reconcile", None):
+        session_dir = _require_directory(
+            args.broker_order_validations_reconcile,
+            "Broker order validation session directory",
+        )
+        summary = load_broker_order_validation_summary(session_dir)
+        if summary.get("adapter_name") != "kraken":
+            raise ConfigError(f"Unsupported adapter for broker reconciliation: {summary.get('adapter_name')}")
+
+        submit_response, submit_response_path = load_json_with_fallback(session_dir, BROKER_SUBMIT_RESPONSE_FILENAME)
+        if not submit_response_path:
+            raise ConfigError("Broker order validation session must have a broker submit response artifact before reconciliation.")
+
+        adapter = KrakenBrokerAdapter()
+        reconciliation = adapter.build_order_reconciliation_report(
+            source_session_id=summary["session_id"],
+            userref=submit_response.get("userref"),
+            api_key=getattr(args, "kraken_api_key", None),
+            api_secret=getattr(args, "kraken_api_secret", None),
+            api_key_env=getattr(args, "kraken_api_key_env", "KRAKEN_API_KEY"),
+            api_secret_env=getattr(args, "kraken_api_secret_env", "KRAKEN_API_SECRET"),
+            timeout_seconds=float(getattr(args, "kraken_preflight_timeout", 10.0)),
+        ).to_dict()
+
+        submit_response["reconciliation"] = reconciliation
+        submit_response["reconciliation_attempted"] = reconciliation["reconciliation_attempted"]
+        submit_response["reconciled"] = reconciliation["matched"]
+        submit_response["reconciliation_matched_txid"] = reconciliation["matched_txid"]
+        submit_response["reconciliation_matched_sources"] = reconciliation["matched_sources"]
+        submit_response["reconciliation_matched_statuses"] = reconciliation["matched_statuses"]
+        submit_response["reconciliation_errors"] = reconciliation["errors"]
+        if reconciliation["matched"]:
+            submit_response["submitted"] = True
+            submit_response["txid"] = reconciliation["matched_txid"]
+            submit_response["submit_state"] = _derive_reconciled_submit_state(reconciliation)
+        else:
+            submit_response["submit_state"] = "reconciliation_not_found"
+
+        store = BrokerOrderValidationStore(summary["session_id"], base_dir=str(session_dir.parent))
+        store.write_submit_response(submit_response)
+        status = {
+            "status": submit_response.get("submit_state"),
+            "updated_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+            "remote_validation_called": summary.get("remote_validation_called"),
+            "validation_accepted": summary.get("validation_accepted"),
+            "validation_reasons": summary.get("validation_reasons"),
+            "remote_submit_called": submit_response.get("remote_submit_called"),
+            "submitted": submit_response.get("submitted"),
+            "txid": submit_response.get("txid"),
+            "submit_errors": submit_response.get("errors"),
+            "reconciled": submit_response.get("reconciled"),
+        }
+        if reconciliation.get("errors"):
+            status["message"] = ", ".join(str(item) for item in reconciliation["errors"])
+        elif reconciliation.get("matched"):
+            status["message"] = ", ".join(str(item) for item in reconciliation["matched_txid"])
+        store.write_status(status)
+
+        print("\nBroker submit reconciliation completed:\n")
+        print(f"  session_path   : {session_dir}")
+        print(f"  reconciled     : {reconciliation['matched']}")
+        print(f"  matched_txid   : {', '.join(reconciliation['matched_txid']) if reconciliation['matched_txid'] else '-'}")
+        print(f"  submit_state   : {submit_response['submit_state']}")
+        return True
+
     if getattr(args, "broker_order_validations_submit_real", None):
         session_dir = _require_directory(
             args.broker_order_validations_submit_real,
@@ -36,7 +101,12 @@ def handle_broker_order_validations_commands(args) -> bool:
         if not bool(summary.get("validation_accepted")):
             raise ConfigError("Broker order validation session must have a successful validate-only result before a real broker submit.")
         if (session_dir / BROKER_SUBMIT_RESPONSE_FILENAME).exists():
-            raise ConfigError("Broker order validation session already has a broker submit response artifact.")
+            existing_response, _ = load_json_with_fallback(session_dir, BROKER_SUBMIT_RESPONSE_FILENAME)
+            existing_state = str(existing_response.get("submit_state") or "")
+            if existing_state in {"submit_auth_not_ready", "missing_validate_payload"} and not bool(existing_response.get("remote_submit_called")):
+                pass
+            else:
+                raise ConfigError("Broker order validation session already has a broker submit response artifact. Reconcile or inspect it before any new submit attempt.")
 
         reviewer = getattr(args, "broker_submit_reviewer", None)
         if not isinstance(reviewer, str) or not reviewer.strip():
@@ -52,6 +122,24 @@ def handle_broker_order_validations_commands(args) -> bool:
         submit_gate, _ = load_json_with_fallback(session_dir, BROKER_SUBMIT_GATE_FILENAME)
         validate_payload = report.get("validate_payload")
         adapter = KrakenBrokerAdapter()
+        pending_response = adapter.build_order_submit_report(
+            source_session_id=summary["session_id"],
+            validate_payload=validate_payload if isinstance(validate_payload, dict) else None,
+            api_key=getattr(args, "kraken_api_key", None),
+            api_secret=getattr(args, "kraken_api_secret", None),
+            api_key_env=getattr(args, "kraken_api_key_env", "KRAKEN_API_KEY"),
+            api_secret_env=getattr(args, "kraken_api_secret_env", "KRAKEN_API_SECRET"),
+            timeout_seconds=float(getattr(args, "kraken_preflight_timeout", 10.0)),
+            remote_submit=False,
+        ).to_dict()
+        submit_note = getattr(args, "broker_submit_note", None)
+        store = BrokerOrderValidationStore(summary["session_id"], base_dir=str(session_dir.parent))
+        pending_response["submitted_by"] = reviewer.strip()
+        pending_response["submit_note"] = submit_note.strip() if isinstance(submit_note, str) and submit_note.strip() else None
+        pending_response["source_submit_gate"] = submit_gate
+        if pending_response.get("submit_state") == "pending_remote_submit":
+            store.write_submit_response(pending_response)
+
         submit_response = adapter.build_order_submit_report(
             source_session_id=summary["session_id"],
             validate_payload=validate_payload if isinstance(validate_payload, dict) else None,
@@ -60,13 +148,14 @@ def handle_broker_order_validations_commands(args) -> bool:
             api_key_env=getattr(args, "kraken_api_key_env", "KRAKEN_API_KEY"),
             api_secret_env=getattr(args, "kraken_api_secret_env", "KRAKEN_API_SECRET"),
             timeout_seconds=float(getattr(args, "kraken_preflight_timeout", 10.0)),
+            remote_submit=True,
         ).to_dict()
-        submit_note = getattr(args, "broker_submit_note", None)
         submit_response["submitted_by"] = reviewer.strip()
         submit_response["submit_note"] = submit_note.strip() if isinstance(submit_note, str) and submit_note.strip() else None
         submit_response["source_submit_gate"] = submit_gate
-
-        store = BrokerOrderValidationStore(summary["session_id"], base_dir=str(session_dir.parent))
+        submit_response.setdefault("reconciliation", None)
+        submit_response.setdefault("reconciliation_attempted", False)
+        submit_response.setdefault("reconciled", False)
         store.write_submit_response(submit_response)
         status = {
             "status": _derive_order_submit_status(submit_response),
@@ -313,9 +402,11 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
         "submit_attempt_mode": submit_attempt.get("submit_mode"),
         "submit_attempt_would_submit": submit_attempt.get("would_submit"),
         "submit_response_present": bool(submit_response_path),
+        "submit_response_state": submit_response.get("submit_state"),
         "submit_response_submitted": submit_response.get("submitted"),
         "submit_response_txid": submit_response.get("txid"),
         "submit_response_remote_called": submit_response.get("remote_submit_called"),
+        "submit_response_reconciled": submit_response.get("reconciled"),
         "path": str(path),
         "metadata_path": str(path / BROKER_ORDER_VALIDATE_METADATA_FILENAME),
         "status_path": str(path / BROKER_ORDER_VALIDATE_STATUS_FILENAME),
@@ -364,6 +455,9 @@ def _print_sessions_table(sessions: list[dict[str, Any]]) -> None:
 
 
 def _derive_order_submit_status(submit_response: dict[str, Any]) -> str:
+    explicit_state = submit_response.get("submit_state")
+    if isinstance(explicit_state, str) and explicit_state.strip():
+        return explicit_state
     if bool(submit_response.get("submitted")):
         return "submitted_remote"
     if not bool(submit_response.get("remote_submit_called")):
@@ -372,3 +466,12 @@ def _derive_order_submit_status(submit_response: dict[str, Any]) -> str:
             return "submit_auth_not_ready"
         return "submit_not_ready"
     return "submit_rejected"
+
+
+def _derive_reconciled_submit_state(reconciliation: dict[str, Any]) -> str:
+    sources = reconciliation.get("matched_sources") or []
+    if "closed" in sources:
+        return "reconciled_closed"
+    if "open" in sources:
+        return "reconciled_open"
+    return "reconciled_matched"

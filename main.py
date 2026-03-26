@@ -514,6 +514,12 @@ def main() -> None:
         help="Submit a real Kraken order from a supervised submit gate and persist the response artifact.",
     )
     parser.add_argument(
+        "--broker-order-validations-reconcile",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Reconcile an existing broker submit response against Kraken order state.",
+    )
+    parser.add_argument(
         "--broker-approval-reviewer",
         default=None,
         help="Reviewer name/id for local broker approval actions.",
@@ -700,6 +706,7 @@ def main() -> None:
             or args.broker_order_validations_submit_gate
             or args.broker_order_validations_submit_stub
             or args.broker_order_validations_submit_real
+            or args.broker_order_validations_reconcile
         ):
             session_metadata["mode"] = "broker_validate"
         elif (
