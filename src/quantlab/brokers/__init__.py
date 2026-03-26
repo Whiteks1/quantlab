@@ -9,6 +9,7 @@ This package intentionally starts small in Stage D.0:
 
 from .boundary import (
     BrokerAdapter,
+    ExecutionContext,
     ExecutionIntent,
     ExecutionPolicy,
     ExecutionPreflight,
@@ -30,6 +31,7 @@ from .kraken import (
 
 __all__ = [
     "BrokerAdapter",
+    "ExecutionContext",
     "ExecutionIntent",
     "ExecutionPolicy",
     "ExecutionPreflight",
