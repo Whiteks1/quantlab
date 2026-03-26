@@ -163,6 +163,7 @@ See also:
 - [docs/broker-safety-boundary.md](./docs/broker-safety-boundary.md)
 - [docs/execution-context-layer.md](./docs/execution-context-layer.md)
 - [docs/execution-venue-strategy.md](./docs/execution-venue-strategy.md)
+- [docs/hyperliquid-boundary-review.md](./docs/hyperliquid-boundary-review.md)
 - [docs/paper-session-runbook.md](./docs/paper-session-runbook.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/workflow-operativo-codex.md](./docs/workflow-operativo-codex.md)

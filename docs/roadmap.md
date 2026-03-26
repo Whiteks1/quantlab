@@ -270,6 +270,13 @@ Scope:
 - identify any abstraction leaks that should be fixed in `BrokerAdapter`
 - keep `Binance` as optional later comparison work if a second CEX-style contrast still adds value
 
+Before runtime work, a narrow boundary-review slice should clarify the minimal contract support needed for:
+
+- signer identity distinct from execution account
+- API / agent wallets
+- subaccounts or vault routing
+- websocket-first transport preferences
+
 Exit condition:
 
 - QuantLab can support a second materially different venue without moving strategy or risk authority into venue-specific code
@@ -399,3 +406,4 @@ From the current repository state, the most rational order is:
 - [advantages-and-future.md](./advantages-and-future.md)
 - [execution-context-layer.md](./execution-context-layer.md)
 - [execution-venue-strategy.md](./execution-venue-strategy.md)
+- [hyperliquid-boundary-review.md](./hyperliquid-boundary-review.md)

@@ -69,6 +69,8 @@ The first concrete dry-run backend now exists as:
 
 - `KrakenBrokerAdapter`
 
+The next architecture pressure now documented for this boundary is Hyperliquid-style venue support, especially around signer identity, API wallets, subaccounts/vaults, and websocket-first execution semantics.
+
 Current Stage D.1 scope covered:
 
 - shared preflight validation through the Stage D.0 boundary
@@ -121,5 +123,6 @@ After this submit-safety slice is stable, the next logical implementation step i
 - [roadmap.md](./roadmap.md)
 - [execution-context-layer.md](./execution-context-layer.md)
 - [execution-venue-strategy.md](./execution-venue-strategy.md)
+- [hyperliquid-boundary-review.md](./hyperliquid-boundary-review.md)
 - [paper-session-runbook.md](./paper-session-runbook.md)
 - [quantlab-stepbit-boundaries.md](./quantlab-stepbit-boundaries.md)
