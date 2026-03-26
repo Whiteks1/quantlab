@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from quantlab.brokers import ExecutionContext, ExecutionIntent, ExecutionPolicy
-from quantlab.brokers.hyperliquid import HyperliquidBrokerAdapter
+from quantlab.brokers.hyperliquid import (
+    HyperliquidBrokerAdapter,
+    recover_hyperliquid_l1_action_signer,
+)
 
 
 def _make_intent(**overrides) -> ExecutionIntent:
@@ -330,3 +333,98 @@ def test_hyperliquid_signed_action_report_rejects_when_account_readiness_is_not_
     assert report["action_payload"] is None
     assert "missing_execution_account_id" in report["readiness_reasons"]
     assert "action_payload_not_ready" in report["errors"]
+
+
+def test_hyperliquid_signed_action_report_signs_with_local_private_key():
+    adapter = HyperliquidBrokerAdapter()
+    policy = ExecutionPolicy(max_notional_per_order=1000.0)
+    signer_private_key = "0x59c6995e998f97a5a0044966f0945382d7f6f9d5c4bbf34c95a98e2ce42928f1"
+    context = ExecutionContext(
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        signer_id="0x4ad91849099DcD0E9e4b80214D8B4969a69f1861",
+        signer_type="agent_wallet",
+        routing_target="subaccount",
+        transport_preference="websocket",
+        expires_after=60000,
+        nonce_hint=1700000000000,
+    )
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "allMids":
+            return {"ETH": "2450.1"}
+        if payload["type"] == "meta":
+            return {"universe": [{"name": "ETH", "szDecimals": 4}]}
+        if payload["type"] == "userRole" and payload["user"] == "0x1111111111111111111111111111111111111111":
+            return {"role": "subAccount"}
+        if payload["type"] == "userRole" and payload["user"] == "0x4ad91849099DcD0E9e4b80214D8B4969a69f1861":
+            return {"role": "agent"}
+        if payload["type"] == "openOrders":
+            return []
+        if payload["type"] == "frontendOpenOrders":
+            return []
+        raise AssertionError(payload)
+
+    report = adapter.build_signed_action_report(
+        _make_intent(),
+        policy,
+        context=context,
+        fetch_json=fake_fetch_json,
+        signing_private_key=signer_private_key,
+    ).to_dict()
+
+    assert report["readiness_allowed"] is True
+    assert report["signer_backend"] == "hyperliquid_local_private_key"
+    assert report["signature_envelope"]["signature_state"] == "signed"
+    assert report["signature_envelope"]["signature_present"] is True
+    recovered = recover_hyperliquid_l1_action_signer(
+        action_payload=report["action_payload"],
+        signature=report["signature_envelope"]["signature"],
+        vault_address=report["signature_envelope"]["signing_payload"]["vaultAddress"],
+        nonce=report["nonce"],
+        expires_after=report["expires_after"],
+    )
+    assert recovered.lower() == report["signature_envelope"]["derived_signer_address"].lower()
+    assert recovered.lower() == context.signer_id.lower()
+
+
+def test_hyperliquid_signed_action_report_flags_signer_identity_mismatch():
+    adapter = HyperliquidBrokerAdapter()
+    policy = ExecutionPolicy(max_notional_per_order=1000.0)
+    signer_private_key = "0x59c6995e998f97a5a0044966f0945382d7f6f9d5c4bbf34c95a98e2ce42928f1"
+    context = ExecutionContext(
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        signer_id="0x2222222222222222222222222222222222222222",
+        signer_type="agent_wallet",
+        routing_target="subaccount",
+        transport_preference="websocket",
+        expires_after=60000,
+        nonce_hint=1700000000000,
+    )
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "allMids":
+            return {"ETH": "2450.1"}
+        if payload["type"] == "meta":
+            return {"universe": [{"name": "ETH", "szDecimals": 4}]}
+        if payload["type"] == "userRole" and payload["user"] == "0x1111111111111111111111111111111111111111":
+            return {"role": "subAccount"}
+        if payload["type"] == "userRole" and payload["user"] == "0x2222222222222222222222222222222222222222":
+            return {"role": "agent"}
+        if payload["type"] == "openOrders":
+            return []
+        if payload["type"] == "frontendOpenOrders":
+            return []
+        raise AssertionError(payload)
+
+    report = adapter.build_signed_action_report(
+        _make_intent(),
+        policy,
+        context=context,
+        fetch_json=fake_fetch_json,
+        signing_private_key=signer_private_key,
+    ).to_dict()
+
+    assert report["readiness_allowed"] is False
+    assert "signer_identity_mismatch" in report["readiness_reasons"]
+    assert "signer_identity_mismatch" in report["errors"]
+    assert report["signature_envelope"]["signature_state"] == "signer_identity_mismatch"
