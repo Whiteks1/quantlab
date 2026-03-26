@@ -33,6 +33,7 @@
 - **Active Focus Areas**:
   - make the first supervised broker submit path idempotency-safer
   - reconcile ambiguous submit states against real Kraken order state
+  - add aggregate health and alert visibility over canonical broker submission sessions
   - keep broker execution auditable before any broader live routing or retry logic
   - preserve paper-session discipline as a prerequisite, not the current bottleneck
 - **Implemented Direction**:
@@ -65,6 +66,7 @@
   - supervised submit gates can now materialize `broker_submit_response.json` as the first tightly gated real Kraken submit artifact, including remote submit status and returned `txid` values where available
   - broker submit now writes a pending local response artifact before the remote submit path and supports explicit reconciliation against Kraken order state using session-derived `userref`
   - submitted broker validation sessions can now materialize `broker_order_status.json` as the first persistent post-submit status surface with normalized local state
+  - broker submission sessions now support aggregate health summaries and deterministic alert snapshots for operator visibility
 
 
 ## Known Issues / Technical Debt

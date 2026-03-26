@@ -620,6 +620,43 @@ Important notes:
 - it does not place a new order
 - it is the first persistent post-submit status surface for supervised broker sessions
 
+### `--broker-order-validations-health`
+
+Summarize broker submission health across broker order-validation sessions:
+
+```bash
+python main.py --broker-order-validations-health outputs/broker_order_validations
+```
+
+This command currently summarizes:
+
+- total broker validation sessions
+- how many sessions reached local approval
+- how many reached submit-gate
+- how many have submit responses
+- how many were actually submitted
+- how many already have known persistent order status
+- latest submit session and latest notable issue
+
+This surface is operator-facing and read-only.
+
+### `--broker-order-validations-alerts`
+
+Emit a deterministic alert snapshot for notable broker submission states:
+
+```bash
+python main.py --broker-order-validations-alerts outputs/broker_order_validations
+```
+
+The alert snapshot currently highlights:
+
+- submitted sessions with missing order-status artifacts
+- submitted sessions whose order state is still unknown
+- rejected or not-ready submit states
+- expired or canceled remote order states when known
+
+The output is machine-readable JSON intended for local operator review and future low-coupling automation.
+
 ### `--kraken-dry-run-outdir`
 
 Persist a local Kraken dry-run audit artifact:
