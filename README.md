@@ -138,6 +138,7 @@ python main.py --help
 - `--broker-dry-runs-show`: inspect one broker dry-run session
 - `--broker-order-validations-list`: inspect broker order-validation sessions under a root
 - `--broker-order-validations-show`: inspect one broker order-validation session
+- `--broker-order-validations-approve`: persist a local approval decision for one broker order-validation session
 - `--forward-eval`: launch a forward evaluation from a prior run directory
 - `--portfolio-report`: aggregate forward sessions into a portfolio report
 - `--portfolio-compare`: compare allocation modes across forward sessions
@@ -411,6 +412,12 @@ And it can now persist canonical broker order-validation sessions under:
 
 ```text
 outputs/broker_order_validations/<session_id>/
+```
+
+And it can now persist a local approval decision for a reviewed validation session:
+
+```bash
+python main.py --broker-order-validations-approve outputs/broker_order_validations/<session_id> --broker-approval-reviewer marce --broker-approval-note "Approved after validate-only review"
 ```
 
 And it can now persist canonical broker dry-run sessions under:

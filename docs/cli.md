@@ -408,6 +408,32 @@ Refresh the shared broker order-validation registry explicitly:
 python main.py --broker-order-validations-index outputs/broker_order_validations
 ```
 
+### `--broker-order-validations-approve`
+
+Persist a local approval decision for one broker order-validation session:
+
+```bash
+python main.py --broker-order-validations-approve outputs/broker_order_validations/<session_id> --broker-approval-reviewer marce --broker-approval-note "Approved after validate-only review"
+```
+
+This writes:
+
+- `outputs/broker_order_validations/<session_id>/approval.json`
+
+The approval artifact currently includes:
+
+- `status = approved`
+- `reviewed_by`
+- `reviewed_at`
+- optional `note`
+- validation context fields carried forward from the reviewed session
+
+Important note:
+
+- this is a local human approval gate only
+- it does not place an order
+- it does not imply broker submission has happened
+
 ### `--kraken-dry-run-outdir`
 
 Persist a local Kraken dry-run audit artifact:

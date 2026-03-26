@@ -58,6 +58,7 @@
   - Kraken account readiness can now materialize a read-only `broker_account_snapshot.json` artifact with balance-aware intent readiness
   - Kraken validate-only probes can now materialize `broker_order_validate.json` without placing a live order
   - broker order validation now supports canonical sessions and a shared registry under `outputs/broker_order_validations/`
+  - broker order validation sessions now support local approval artifacts as an explicit human gate
 
 
 ## Known Issues / Technical Debt

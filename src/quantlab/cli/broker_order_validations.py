@@ -4,19 +4,51 @@ CLI handler for broker order-validation session inspection.
 
 from __future__ import annotations
 
+import datetime as dt
 from pathlib import Path
 from typing import Any, Iterator
 
 from quantlab.brokers.session_store import (
+    BROKER_ORDER_APPROVAL_FILENAME,
     BROKER_ORDER_VALIDATE_FILENAME,
     BROKER_ORDER_VALIDATE_METADATA_FILENAME,
     BROKER_ORDER_VALIDATE_STATUS_FILENAME,
+    BrokerOrderValidationStore,
 )
 from quantlab.errors import ConfigError
 from quantlab.runs.artifacts import load_json_with_fallback
 
 
 def handle_broker_order_validations_commands(args) -> bool:
+    if getattr(args, "broker_order_validations_approve", None):
+        session_dir = _require_directory(
+            args.broker_order_validations_approve,
+            "Broker order validation session directory",
+        )
+        summary = load_broker_order_validation_summary(session_dir)
+        reviewer = getattr(args, "broker_approval_reviewer", None)
+        if not isinstance(reviewer, str) or not reviewer.strip():
+            raise ConfigError("broker_approval_reviewer is required to approve a broker order validation session.")
+
+        approval_note = getattr(args, "broker_approval_note", None)
+        store = BrokerOrderValidationStore(summary["session_id"], base_dir=str(session_dir.parent))
+        approval = {
+            "session_id": summary["session_id"],
+            "status": "approved",
+            "reviewed_by": reviewer.strip(),
+            "reviewed_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+            "note": approval_note.strip() if isinstance(approval_note, str) and approval_note.strip() else None,
+            "validation_accepted": summary.get("validation_accepted"),
+            "remote_validation_called": summary.get("remote_validation_called"),
+        }
+        store.write_approval(approval)
+
+        print("\nBroker order validation approved:\n")
+        print(f"  session_path : {session_dir}")
+        print(f"  reviewed_by  : {approval['reviewed_by']}")
+        print(f"  reviewed_at  : {approval['reviewed_at']}")
+        return True
+
     if getattr(args, "broker_order_validations_list", None):
         root_dir = _require_directory(args.broker_order_validations_list, "Broker order validations root")
         sessions = [load_broker_order_validation_summary(path) for path in scan_broker_order_validations(root_dir)]
@@ -76,6 +108,7 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
     metadata, _ = load_json_with_fallback(path, BROKER_ORDER_VALIDATE_METADATA_FILENAME)
     status, _ = load_json_with_fallback(path, BROKER_ORDER_VALIDATE_STATUS_FILENAME)
     report, report_path = load_json_with_fallback(path, BROKER_ORDER_VALIDATE_FILENAME)
+    approval, approval_path = load_json_with_fallback(path, BROKER_ORDER_APPROVAL_FILENAME)
 
     return {
         "session_id": metadata.get("session_id") or status.get("session_id") or path.name,
@@ -89,10 +122,16 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
         "validation_reasons": report.get("validation_reasons"),
         "artifact_type": report.get("artifact_type"),
         "report_present": bool(report_path),
+        "approval_status": approval.get("status"),
+        "approved_by": approval.get("reviewed_by"),
+        "approved_at": approval.get("reviewed_at"),
+        "approval_note": approval.get("note"),
+        "approval_present": bool(approval_path),
         "path": str(path),
         "metadata_path": str(path / BROKER_ORDER_VALIDATE_METADATA_FILENAME),
         "status_path": str(path / BROKER_ORDER_VALIDATE_STATUS_FILENAME),
         "report_path": str(path / BROKER_ORDER_VALIDATE_FILENAME),
+        "approval_path": str(path / BROKER_ORDER_APPROVAL_FILENAME),
     }
 
 

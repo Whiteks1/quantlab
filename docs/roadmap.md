@@ -233,6 +233,7 @@ Initial slice already present:
 - read-only Kraken account snapshot and balance-aware intent readiness
 - Kraken validate-only order probes before any real order placement work
 - canonical broker order-validation sessions and shared registry for repeated review
+- local approval gate artifacts before any future submit path
 - deterministic Kraken payload translation for validated intent
 - dry-run audit snapshot without real broker connectivity
 - local dry-run artifact persistence via `broker_dry_run.json`
