@@ -535,6 +535,7 @@ The submit response currently includes:
 - generation timestamp
 - authenticated preflight summary
 - final submit payload with stable `userref`
+- a pre-remote local artifact write before the real submit call path
 - whether the remote submit call was attempted
 - whether the order was submitted successfully
 - returned `txid` values where available
@@ -551,6 +552,36 @@ Important notes:
 - this is the first path that can hit Kraken's real order endpoint
 - it is intentionally narrow and currently meant for supervised market-order submission only
 - the session will persist `broker_submit_response.json` even when the remote submit is rejected or auth is not ready
+
+### `--broker-order-validations-reconcile`
+
+Reconcile an existing broker submit response against Kraken order state:
+
+```bash
+python main.py --broker-order-validations-reconcile outputs/broker_order_validations/<session_id>
+```
+
+This command:
+
+- requires an existing `broker_submit_response.json`
+- uses the stable session-derived `userref`
+- checks Kraken order state through authenticated account-data endpoints
+- updates the existing submit response artifact in place with reconciliation details
+
+The reconciliation update currently includes:
+
+- whether reconciliation was attempted
+- whether any matching order was found
+- matched sources such as `open` or `closed`
+- matched `txid` values
+- matched order statuses
+- explicit reconciliation errors
+
+Important notes:
+
+- this command is meant for ambiguous or post-submit review states, not for ordinary preflight
+- it does not place a new order
+- it is the current safety path before any future auto-retry or broader live routing logic
 
 ### `--kraken-dry-run-outdir`
 

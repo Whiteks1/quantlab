@@ -249,7 +249,7 @@ Exit condition:
 
 ## Stage D.1.b - Second Broker Comparison
 
-Status: in progress
+Status: not started
 
 Goal:
 
@@ -267,7 +267,7 @@ Exit condition:
 
 ## Stage D.2 - Broker Sandbox / Simulated Execution
 
-Status: not started
+Status: in progress
 
 Goal:
 
@@ -280,6 +280,15 @@ Scope:
 - handling partial fills, rejects, rate limits, and transient API failures
 - execution-state persistence
 - restart/resume behavior
+
+Initial slice already present:
+
+- supervised submit gate artifacts ahead of any real submit call
+- supervised submit stub artifacts for payload review before live submission
+- first tightly gated real Kraken submit response artifacts
+- local pre-write of submit response state before the remote submit path
+- explicit refusal of blind re-submit when a prior submit response artifact already exists
+- authenticated reconciliation of submit sessions against Kraken order state using stable session-derived `userref`
 
 Exit condition:
 
