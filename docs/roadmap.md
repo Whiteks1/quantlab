@@ -237,6 +237,7 @@ Initial slice already present:
 - local pre-submit bundles generated only from approved validation sessions
 - local supervised submit gate artifacts generated only from pre-submit bundles
 - local supervised submit stub artifacts generated only from submit gates
+- first real supervised submit response artifacts generated only from previously validated sessions that already have a supervised submit gate and explicit live confirmation
 - deterministic Kraken payload translation for validated intent
 - dry-run audit snapshot without real broker connectivity
 - local dry-run artifact persistence via `broker_dry_run.json`
@@ -248,7 +249,7 @@ Exit condition:
 
 ## Stage D.1.b - Second Broker Comparison
 
-Status: not started
+Status: in progress
 
 Goal:
 
