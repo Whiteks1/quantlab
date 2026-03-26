@@ -75,6 +75,7 @@ Current Stage D.1 scope covered:
 - canonical broker order-validation sessions and shared registry under `outputs/broker_order_validations/`
 - local human approval artifacts for reviewed broker order-validation sessions
 - local pre-submit bundles generated only from approved validation sessions
+- local supervised submit gate artifacts generated only from pre-submit bundles
 - stable dry-run audit snapshot for local review
 - local `broker_dry_run.json` artifact generation through the CLI
 - canonical broker dry-run sessions and shared registry under `outputs/broker_dry_runs/`
@@ -90,6 +91,7 @@ Boundary note:
 - validate-only order probes are more sensitive than read-only preflight because they use Kraken's order-validation path, but they still do not place live orders
 - approval artifacts are a local QuantLab gate only; they do not submit anything to Kraken by themselves
 - pre-submit bundles are the final local handoff artifact before any future supervised submit path, but they still do not submit anything by themselves
+- supervised submit gate artifacts are the final local confirmation step before any future submit implementation, but they still do not submit anything by themselves
 
 ## Next Step
 

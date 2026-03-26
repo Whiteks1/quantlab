@@ -462,6 +462,34 @@ Important note:
 - it still does not place an order
 - it is the final local handoff artifact before any future supervised submit path
 
+### `--broker-order-validations-submit-gate`
+
+Generate a supervised submit gate artifact from a session that already has a pre-submit bundle:
+
+```bash
+python main.py --broker-order-validations-submit-gate outputs/broker_order_validations/<session_id> --broker-submit-reviewer marce --broker-submit-confirm --broker-submit-note "Ready for supervised submit review"
+```
+
+This writes:
+
+- `outputs/broker_order_validations/<session_id>/broker_submit_gate.json`
+
+The submit gate currently includes:
+
+- source session id
+- generation timestamp
+- `submit_state = ready_for_supervised_submit_gate`
+- reviewer identity
+- optional reviewer note
+- embedded source `broker_pre_submit_bundle.json`
+
+Important note:
+
+- this command fails if the source session does not already have a pre-submit bundle
+- `--broker-submit-confirm` is required
+- it still does not place an order
+- it is the final local supervised gate before any future submit implementation
+
 ### `--kraken-dry-run-outdir`
 
 Persist a local Kraken dry-run audit artifact:

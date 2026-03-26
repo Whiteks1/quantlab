@@ -235,6 +235,7 @@ Initial slice already present:
 - canonical broker order-validation sessions and shared registry for repeated review
 - local approval gate artifacts before any future submit path
 - local pre-submit bundles generated only from approved validation sessions
+- local supervised submit gate artifacts generated only from pre-submit bundles
 - deterministic Kraken payload translation for validated intent
 - dry-run audit snapshot without real broker connectivity
 - local dry-run artifact persistence via `broker_dry_run.json`
