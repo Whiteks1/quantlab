@@ -90,6 +90,7 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "broker_order_validations_submit_stub": None,
         "broker_order_validations_submit_real": None,
         "broker_order_validations_reconcile": None,
+        "broker_order_validations_status": None,
         "broker_approval_reviewer": None,
         "broker_approval_note": None,
         "broker_submit_reviewer": None,
@@ -581,6 +582,86 @@ def test_real_submit_refuses_blind_resubmit_when_response_already_exists(broker_
         broker_submit_reviewer="marce",
         broker_submit_confirm=True,
         broker_submit_live=True,
+    )
+    with pytest.raises(ConfigError):
+        handle_broker_order_validations_commands(args)
+
+
+def test_refreshes_broker_order_status_for_existing_submit_response(broker_order_validations_root: Path, capsys, monkeypatch):
+    response_path = broker_order_validations_root / "validate_001" / "broker_submit_response.json"
+    response_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.kraken.submit_response",
+                "adapter_name": "kraken",
+                "generated_at": "2026-03-26T10:10:00",
+                "authenticated_preflight": {"authenticated": True},
+                "source_session_id": "validate_001",
+                "submit_payload": {"pair": "ETH/USD", "userref": "123456"},
+                "userref": 123456,
+                "submit_state": "submitted_remote",
+                "remote_submit_called": True,
+                "submitted": True,
+                "txid": ["OABC-123-XYZ"],
+                "exchange_response": None,
+                "errors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_status(self, **kwargs):
+        return types.SimpleNamespace(
+            to_dict=lambda: {
+                "artifact_type": "quantlab.kraken.order_status",
+                "adapter_name": "kraken",
+                "generated_at": "2026-03-26T10:12:00",
+                "authenticated_preflight": {"authenticated": True},
+                "source_session_id": "validate_001",
+                "query_mode": "txid",
+                "query_attempted": True,
+                "status_known": True,
+                "normalized_state": "closed",
+                "matched_txid": ["OABC-123-XYZ"],
+                "raw_statuses": ["closed"],
+                "orders": [{"txid": "OABC-123-XYZ", "status": "closed"}],
+                "errors": [],
+            }
+        )
+
+    monkeypatch.setattr(
+        "quantlab.cli.broker_order_validations.KrakenBrokerAdapter.build_order_status_report",
+        fake_status,
+    )
+
+    args = _make_args(
+        broker_order_validations_status=str(broker_order_validations_root / "validate_001"),
+    )
+    result = handle_broker_order_validations_commands(args)
+    assert result is True
+
+    out = capsys.readouterr().out
+    assert "Broker order status refreshed" in out
+
+    status_path = broker_order_validations_root / "validate_001" / "broker_order_status.json"
+    assert status_path.exists()
+    payload = json.loads(status_path.read_text(encoding="utf-8"))
+    assert payload["normalized_state"] == "closed"
+    assert payload["matched_txid"] == ["OABC-123-XYZ"]
+
+    show_args = _make_args(
+        broker_order_validations_show=str(broker_order_validations_root / "validate_001"),
+    )
+    assert handle_broker_order_validations_commands(show_args) is True
+    show_out = capsys.readouterr().out
+    assert "order_status_present" in show_out
+    assert "order_status_state" in show_out
+    assert "closed" in show_out
+
+
+def test_order_status_requires_submit_response(broker_order_validations_root: Path):
+    args = _make_args(
+        broker_order_validations_status=str(broker_order_validations_root / "validate_001"),
     )
     with pytest.raises(ConfigError):
         handle_broker_order_validations_commands(args)

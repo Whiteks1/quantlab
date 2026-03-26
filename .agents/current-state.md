@@ -64,6 +64,7 @@
   - submit gates can now materialize `broker_submit_attempt.json` in `stub` mode as the first operational shape of a future supervised submit path
   - supervised submit gates can now materialize `broker_submit_response.json` as the first tightly gated real Kraken submit artifact, including remote submit status and returned `txid` values where available
   - broker submit now writes a pending local response artifact before the remote submit path and supports explicit reconciliation against Kraken order state using session-derived `userref`
+  - submitted broker validation sessions can now materialize `broker_order_status.json` as the first persistent post-submit status surface with normalized local state
 
 
 ## Known Issues / Technical Debt

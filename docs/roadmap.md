@@ -289,6 +289,7 @@ Initial slice already present:
 - local pre-write of submit response state before the remote submit path
 - explicit refusal of blind re-submit when a prior submit response artifact already exists
 - authenticated reconciliation of submit sessions against Kraken order state using stable session-derived `userref`
+- persistent broker order-status artifacts with normalized local state for submitted sessions
 
 Exit condition:
 

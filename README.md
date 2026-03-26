@@ -142,6 +142,7 @@ python main.py --help
 - `--broker-order-validations-submit-stub`: materialize a supervised submit stub artifact from a submit gate
 - `--broker-order-validations-submit-real`: submit a first tightly gated real Kraken order and persist the broker response artifact
 - `--broker-order-validations-reconcile`: reconcile an existing submit response against Kraken order state
+- `--broker-order-validations-status`: refresh normalized post-submit order status for a submitted broker validation session
 - `--forward-eval`: launch a forward evaluation from a prior run directory
 - `--portfolio-report`: aggregate forward sessions into a portfolio report
 - `--portfolio-compare`: compare allocation modes across forward sessions
@@ -459,6 +460,18 @@ And it can reconcile an existing submit response against Kraken order state usin
 
 ```bash
 python main.py --broker-order-validations-reconcile outputs/broker_order_validations/<session_id>
+```
+
+And it can refresh normalized post-submit order state for a submitted session:
+
+```bash
+python main.py --broker-order-validations-status outputs/broker_order_validations/<session_id>
+```
+
+This writes:
+
+```text
+outputs/broker_order_validations/<session_id>/broker_order_status.json
 ```
 
 And it can now persist canonical broker dry-run sessions under:
