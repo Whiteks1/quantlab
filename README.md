@@ -23,13 +23,12 @@ The paper layer is now materially operational, and the current broker-facing foc
 - close idempotency and ambiguous-submit gaps before adding more broker power
 - keep paper-session discipline as a prerequisite, not as the current bottleneck
 
-A secondary contract boundary track remains active:
-
 Execution venue strategy note:
 
 - `Kraken` remains the first implemented real-execution backend
 - `Hyperliquid` is the first next venue intended for personal connection and supervised practical use
 - `BrokerAdapter` remains the current code name, but the architecture should now be read as an execution-venue boundary, not only a CEX-style broker boundary
+- a minimal `ExecutionContext` layer now exists in code so future venue work can model signer and routing semantics without overloading `ExecutionIntent`
 
 A secondary boundary track remains active:
 
@@ -161,6 +160,7 @@ See also:
 
 - [docs/cli.md](./docs/cli.md)
 - [docs/broker-safety-boundary.md](./docs/broker-safety-boundary.md)
+- [docs/execution-context-layer.md](./docs/execution-context-layer.md)
 - [docs/execution-venue-strategy.md](./docs/execution-venue-strategy.md)
 - [docs/paper-session-runbook.md](./docs/paper-session-runbook.md)
 - [docs/roadmap.md](./docs/roadmap.md)

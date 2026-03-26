@@ -37,6 +37,7 @@
   - keep broker execution auditable before any broader live routing or retry logic
   - preserve paper-session discipline as a prerequisite, not the current bottleneck
   - keep Kraken as the first implemented execution boundary while positioning Hyperliquid as the first next venue intended for personal connection
+  - keep the boundary expressive enough for signer and routing semantics before any Hyperliquid runtime work starts
 - **Implemented Direction**:
   - canonical run artifacts now center on `metadata.json`, `config.json`, `metrics.json`, and `report.json`
   - successful plain `run` executions now write that canonical artifact pack under `outputs/runs/<run_id>/`
@@ -69,6 +70,7 @@
   - submitted broker validation sessions can now materialize `broker_order_status.json` as the first persistent post-submit status surface with normalized local state
   - broker submission sessions now support aggregate health summaries and deterministic alert snapshots for operator visibility
   - execution-venue strategy now keeps `Kraken` as the first implemented backend while moving `Hyperliquid` ahead of `Binance` as the first next venue intended for personal supervised use
+  - Stage D.0 now also exposes a minimal `ExecutionContext` layer beside `ExecutionIntent` for signer identity, routing target, transport preference, and expiry metadata
 
 
 ## Known Issues / Technical Debt

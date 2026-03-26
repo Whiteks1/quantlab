@@ -181,6 +181,7 @@ Scope:
 Initial slice already present:
 
 - `ExecutionIntent`
+- `ExecutionContext`
 - `ExecutionPolicy`
 - `ExecutionPreflight`
 - `BrokerAdapter` contract
@@ -395,4 +396,5 @@ From the current repository state, the most rational order is:
 - [stepbit-integration.md](./stepbit-integration.md)
 - [quantlab-stepbit-boundaries.md](./quantlab-stepbit-boundaries.md)
 - [advantages-and-future.md](./advantages-and-future.md)
+- [execution-context-layer.md](./execution-context-layer.md)
 - [execution-venue-strategy.md](./execution-venue-strategy.md)

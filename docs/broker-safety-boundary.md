@@ -12,6 +12,7 @@ The goal is to make future broker work pass through a local QuantLab-owned safet
 Stage D.0 currently defines:
 
 - `ExecutionIntent`: normalized broker-bound order intent
+- `ExecutionContext`: optional signer/routing/transport execution metadata
 - `ExecutionPolicy`: local safety policy for execution approval
 - `ExecutionPreflight`: deterministic allow/reject result
 - `BrokerAdapter`: broker-agnostic adapter contract
@@ -71,6 +72,7 @@ The first concrete dry-run backend now exists as:
 Current Stage D.1 scope covered:
 
 - shared preflight validation through the Stage D.0 boundary
+- minimal `ExecutionContext` support in the shared boundary so future venue work can model signer and routing concerns without overloading `ExecutionIntent`
 - deterministic Kraken-style payload translation
 - read-only Kraken public preflight probes for pair support and basic readiness
 - read-only Kraken authenticated preflight probes for private boundary readiness
@@ -116,6 +118,7 @@ After this submit-safety slice is stable, the next logical implementation step i
 ## Related Documents
 
 - [roadmap.md](./roadmap.md)
+- [execution-context-layer.md](./execution-context-layer.md)
 - [execution-venue-strategy.md](./execution-venue-strategy.md)
 - [paper-session-runbook.md](./paper-session-runbook.md)
 - [quantlab-stepbit-boundaries.md](./quantlab-stepbit-boundaries.md)
