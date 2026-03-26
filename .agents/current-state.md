@@ -59,6 +59,7 @@
   - Kraken validate-only probes can now materialize `broker_order_validate.json` without placing a live order
   - broker order validation now supports canonical sessions and a shared registry under `outputs/broker_order_validations/`
   - broker order validation sessions now support local approval artifacts as an explicit human gate
+  - approved broker order validation sessions can now materialize `broker_pre_submit_bundle.json` as the final local handoff artifact before any future supervised submit path
 
 
 ## Known Issues / Technical Debt
