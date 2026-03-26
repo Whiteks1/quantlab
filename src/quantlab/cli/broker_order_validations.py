@@ -8,11 +8,13 @@ import datetime as dt
 from pathlib import Path
 from typing import Any, Iterator
 
+from quantlab.brokers import KrakenBrokerAdapter
 from quantlab.brokers.session_store import (
     BROKER_ORDER_APPROVAL_FILENAME,
     BROKER_PRE_SUBMIT_BUNDLE_FILENAME,
     BROKER_SUBMIT_GATE_FILENAME,
     BROKER_SUBMIT_ATTEMPT_FILENAME,
+    BROKER_SUBMIT_RESPONSE_FILENAME,
     BROKER_ORDER_VALIDATE_FILENAME,
     BROKER_ORDER_VALIDATE_METADATA_FILENAME,
     BROKER_ORDER_VALIDATE_STATUS_FILENAME,
@@ -23,6 +25,73 @@ from quantlab.runs.artifacts import load_json_with_fallback
 
 
 def handle_broker_order_validations_commands(args) -> bool:
+    if getattr(args, "broker_order_validations_submit_real", None):
+        session_dir = _require_directory(
+            args.broker_order_validations_submit_real,
+            "Broker order validation session directory",
+        )
+        summary = load_broker_order_validation_summary(session_dir)
+        if not summary.get("submit_gate_present"):
+            raise ConfigError("Broker order validation session must have a supervised submit gate before a real broker submit.")
+        if not bool(summary.get("validation_accepted")):
+            raise ConfigError("Broker order validation session must have a successful validate-only result before a real broker submit.")
+        if (session_dir / BROKER_SUBMIT_RESPONSE_FILENAME).exists():
+            raise ConfigError("Broker order validation session already has a broker submit response artifact.")
+
+        reviewer = getattr(args, "broker_submit_reviewer", None)
+        if not isinstance(reviewer, str) or not reviewer.strip():
+            raise ConfigError("broker_submit_reviewer is required to perform a real broker submit.")
+        if not bool(getattr(args, "broker_submit_confirm", False)):
+            raise ConfigError("broker_submit_confirm is required to perform a real broker submit.")
+        if not bool(getattr(args, "broker_submit_live", False)):
+            raise ConfigError("broker_submit_live is required to perform a real broker submit.")
+        if summary.get("adapter_name") != "kraken":
+            raise ConfigError(f"Unsupported adapter for supervised submit: {summary.get('adapter_name')}")
+
+        report, _ = load_json_with_fallback(session_dir, BROKER_ORDER_VALIDATE_FILENAME)
+        submit_gate, _ = load_json_with_fallback(session_dir, BROKER_SUBMIT_GATE_FILENAME)
+        validate_payload = report.get("validate_payload")
+        adapter = KrakenBrokerAdapter()
+        submit_response = adapter.build_order_submit_report(
+            source_session_id=summary["session_id"],
+            validate_payload=validate_payload if isinstance(validate_payload, dict) else None,
+            api_key=getattr(args, "kraken_api_key", None),
+            api_secret=getattr(args, "kraken_api_secret", None),
+            api_key_env=getattr(args, "kraken_api_key_env", "KRAKEN_API_KEY"),
+            api_secret_env=getattr(args, "kraken_api_secret_env", "KRAKEN_API_SECRET"),
+            timeout_seconds=float(getattr(args, "kraken_preflight_timeout", 10.0)),
+        ).to_dict()
+        submit_note = getattr(args, "broker_submit_note", None)
+        submit_response["submitted_by"] = reviewer.strip()
+        submit_response["submit_note"] = submit_note.strip() if isinstance(submit_note, str) and submit_note.strip() else None
+        submit_response["source_submit_gate"] = submit_gate
+
+        store = BrokerOrderValidationStore(summary["session_id"], base_dir=str(session_dir.parent))
+        store.write_submit_response(submit_response)
+        status = {
+            "status": _derive_order_submit_status(submit_response),
+            "updated_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+            "remote_validation_called": summary.get("remote_validation_called"),
+            "validation_accepted": summary.get("validation_accepted"),
+            "validation_reasons": summary.get("validation_reasons"),
+            "remote_submit_called": submit_response.get("remote_submit_called"),
+            "submitted": submit_response.get("submitted"),
+            "txid": submit_response.get("txid"),
+            "submit_errors": submit_response.get("errors"),
+        }
+        if submit_response.get("errors"):
+            status["message"] = ", ".join(str(item) for item in submit_response["errors"])
+        store.write_status(status)
+
+        response_path = session_dir / BROKER_SUBMIT_RESPONSE_FILENAME
+        print("\nBroker supervised submit response generated:\n")
+        print(f"  session_path         : {session_dir}")
+        print(f"  response_path        : {response_path}")
+        print(f"  submitted            : {submit_response['submitted']}")
+        print(f"  remote_submit_called : {submit_response['remote_submit_called']}")
+        print(f"  txid                 : {', '.join(submit_response['txid']) if submit_response['txid'] else '-'}")
+        return True
+
     if getattr(args, "broker_order_validations_submit_stub", None):
         session_dir = _require_directory(
             args.broker_order_validations_submit_stub,
@@ -216,6 +285,7 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
     bundle, bundle_path = load_json_with_fallback(path, BROKER_PRE_SUBMIT_BUNDLE_FILENAME)
     submit_gate, submit_gate_path = load_json_with_fallback(path, BROKER_SUBMIT_GATE_FILENAME)
     submit_attempt, submit_attempt_path = load_json_with_fallback(path, BROKER_SUBMIT_ATTEMPT_FILENAME)
+    submit_response, submit_response_path = load_json_with_fallback(path, BROKER_SUBMIT_RESPONSE_FILENAME)
 
     return {
         "session_id": metadata.get("session_id") or status.get("session_id") or path.name,
@@ -242,6 +312,10 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
         "submit_attempt_present": bool(submit_attempt_path),
         "submit_attempt_mode": submit_attempt.get("submit_mode"),
         "submit_attempt_would_submit": submit_attempt.get("would_submit"),
+        "submit_response_present": bool(submit_response_path),
+        "submit_response_submitted": submit_response.get("submitted"),
+        "submit_response_txid": submit_response.get("txid"),
+        "submit_response_remote_called": submit_response.get("remote_submit_called"),
         "path": str(path),
         "metadata_path": str(path / BROKER_ORDER_VALIDATE_METADATA_FILENAME),
         "status_path": str(path / BROKER_ORDER_VALIDATE_STATUS_FILENAME),
@@ -250,6 +324,7 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
         "pre_submit_bundle_path": str(path / BROKER_PRE_SUBMIT_BUNDLE_FILENAME),
         "submit_gate_path": str(path / BROKER_SUBMIT_GATE_FILENAME),
         "submit_attempt_path": str(path / BROKER_SUBMIT_ATTEMPT_FILENAME),
+        "submit_response_path": str(path / BROKER_SUBMIT_RESPONSE_FILENAME),
     }
 
 
@@ -286,3 +361,14 @@ def _print_sessions_table(sessions: list[dict[str, Any]]) -> None:
         row = "  ".join(str(session.get(field) or "").ljust(widths[field]) for field in fields)
         print(row)
     print()
+
+
+def _derive_order_submit_status(submit_response: dict[str, Any]) -> str:
+    if bool(submit_response.get("submitted")):
+        return "submitted_remote"
+    if not bool(submit_response.get("remote_submit_called")):
+        errors = submit_response.get("errors") or []
+        if "private_auth_not_ready" in errors:
+            return "submit_auth_not_ready"
+        return "submit_not_ready"
+    return "submit_rejected"

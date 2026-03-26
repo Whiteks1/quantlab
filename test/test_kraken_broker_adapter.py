@@ -511,3 +511,111 @@ def test_order_validate_reports_exchange_side_validation_errors():
     assert report["validation_accepted"] is False
     assert "EOrder:Insufficient funds" in report["validation_reasons"]
     assert "EOrder:Insufficient funds" in report["errors"]
+
+
+def test_order_submit_builds_real_payload_without_validate_and_with_stable_userref():
+    adapter = KrakenBrokerAdapter()
+
+    payload = adapter.build_submit_payload(
+        {
+            "pair": "ETH/USD",
+            "type": "buy",
+            "ordertype": "market",
+            "volume": "0.25",
+            "validate": "true",
+        },
+        session_id="validate_001",
+    )
+
+    assert payload["pair"] == "ETH/USD"
+    assert payload["type"] == "buy"
+    assert payload["ordertype"] == "market"
+    assert payload["volume"] == "0.25"
+    assert "validate" not in payload
+    assert payload["userref"].isdigit()
+
+
+def test_order_submit_reports_missing_credentials_without_remote_call(monkeypatch):
+    monkeypatch.delenv("KRAKEN_API_KEY", raising=False)
+    monkeypatch.delenv("KRAKEN_API_SECRET", raising=False)
+    adapter = KrakenBrokerAdapter()
+
+    report = adapter.build_order_submit_report(
+        source_session_id="validate_001",
+        validate_payload={"pair": "ETH/USD", "type": "buy", "ordertype": "market", "volume": "0.25"},
+    ).to_dict()
+
+    assert report["submitted"] is False
+    assert report["remote_submit_called"] is False
+    assert "missing_api_key" in report["errors"]
+    assert "missing_api_secret" in report["errors"]
+    assert "private_auth_not_ready" in report["errors"]
+
+
+def test_order_submit_accepts_successful_mocked_exchange_submit():
+    adapter = KrakenBrokerAdapter()
+
+    def fake_private_json(path, **kwargs):
+        if path == "/0/private/GetAPIKeyInfo":
+            return {
+                "error": [],
+                "result": {
+                    "name": "quantlab-demo",
+                    "permissions": {"orders": "create_modify"},
+                },
+            }
+        if path == "/0/private/AddOrder":
+            assert kwargs["payload"]["userref"].isdigit()
+            assert "validate" not in kwargs["payload"]
+            return {
+                "error": [],
+                "result": {
+                    "descr": {"order": "buy 0.25 ETHUSD @ market"},
+                    "txid": ["OABC-123-XYZ"],
+                },
+            }
+        raise AssertionError(path)
+
+    report = adapter.build_order_submit_report(
+        source_session_id="validate_001",
+        validate_payload={"pair": "ETH/USD", "type": "buy", "ordertype": "market", "volume": "0.25"},
+        api_key="demo-key",
+        api_secret="ZGVtby1zZWNyZXQ=",
+        fetch_private_json=fake_private_json,
+    ).to_dict()
+
+    assert report["remote_submit_called"] is True
+    assert report["submitted"] is True
+    assert report["txid"] == ["OABC-123-XYZ"]
+
+
+def test_order_submit_reports_exchange_side_submit_errors():
+    adapter = KrakenBrokerAdapter()
+
+    def fake_private_json(path, **kwargs):
+        if path == "/0/private/GetAPIKeyInfo":
+            return {
+                "error": [],
+                "result": {
+                    "name": "quantlab-demo",
+                    "permissions": {"orders": "create_modify"},
+                },
+            }
+        if path == "/0/private/AddOrder":
+            return {
+                "error": ["EOrder:Rate limit exceeded"],
+                "result": {},
+            }
+        raise AssertionError(path)
+
+    report = adapter.build_order_submit_report(
+        source_session_id="validate_001",
+        validate_payload={"pair": "ETH/USD", "type": "buy", "ordertype": "market", "volume": "0.25"},
+        api_key="demo-key",
+        api_secret="ZGVtby1zZWNyZXQ=",
+        fetch_private_json=fake_private_json,
+    ).to_dict()
+
+    assert report["remote_submit_called"] is True
+    assert report["submitted"] is False
+    assert "EOrder:Rate limit exceeded" in report["errors"]

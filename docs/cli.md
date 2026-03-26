@@ -517,6 +517,41 @@ Important note:
 - it still does not place an order
 - it is the first operational shape of a future supervised submit path, but still entirely local
 
+### `--broker-order-validations-submit-real`
+
+Perform a first tightly gated real Kraken submit from a session that already has a submit gate:
+
+```bash
+python main.py --broker-order-validations-submit-real outputs/broker_order_validations/<session_id> --broker-submit-reviewer marce --broker-submit-confirm --broker-submit-live --broker-submit-note "First supervised live submit"
+```
+
+This writes:
+
+- `outputs/broker_order_validations/<session_id>/broker_submit_response.json`
+
+The submit response currently includes:
+
+- source session id
+- generation timestamp
+- authenticated preflight summary
+- final submit payload with stable `userref`
+- whether the remote submit call was attempted
+- whether the order was submitted successfully
+- returned `txid` values where available
+- raw exchange response
+- explicit errors
+- local reviewer identity and optional note
+- embedded source `broker_submit_gate.json`
+
+Important notes:
+
+- this command fails if the source session does not already have a submit gate
+- this command fails if the source validation session was not previously accepted by Kraken validate-only
+- both `--broker-submit-confirm` and `--broker-submit-live` are required
+- this is the first path that can hit Kraken's real order endpoint
+- it is intentionally narrow and currently meant for supervised market-order submission only
+- the session will persist `broker_submit_response.json` even when the remote submit is rejected or auth is not ready
+
 ### `--kraken-dry-run-outdir`
 
 Persist a local Kraken dry-run audit artifact:

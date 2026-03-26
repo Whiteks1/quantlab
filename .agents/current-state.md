@@ -62,6 +62,7 @@
   - approved broker order validation sessions can now materialize `broker_pre_submit_bundle.json` as the final local handoff artifact before any future supervised submit path
   - pre-submit bundles can now materialize `broker_submit_gate.json` as the final local supervised confirmation step before any future submit implementation
   - submit gates can now materialize `broker_submit_attempt.json` in `stub` mode as the first operational shape of a future supervised submit path
+  - supervised submit gates can now materialize `broker_submit_response.json` as the first tightly gated real Kraken submit artifact, including remote submit status and returned `txid` values where available
 
 
 ## Known Issues / Technical Debt
