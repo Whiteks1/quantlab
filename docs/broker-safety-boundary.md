@@ -16,6 +16,9 @@ Stage D.0 currently defines:
 - `ExecutionPreflight`: deterministic allow/reject result
 - `BrokerAdapter`: broker-agnostic adapter contract
 
+For continuity, the code still uses the name `BrokerAdapter`.
+Architecturally, it should now be read as an execution-venue boundary, not only a traditional CEX broker boundary.
+
 ## Architectural Rule
 
 Strategies, risk policy, and execution safety must depend on `BrokerAdapter`, never on exchange-specific code.
@@ -23,6 +26,7 @@ Strategies, risk policy, and execution safety must depend on `BrokerAdapter`, ne
 This means:
 
 - no strategy should talk directly to Kraken, Binance, or any other exchange client
+- the same rule should eventually hold for venue types such as Hyperliquid as well
 - no exchange-specific risk checks should become the primary safety authority
 - no broker dry-run integration should happen before local preflight exists
 
@@ -112,5 +116,6 @@ After this submit-safety slice is stable, the next logical implementation step i
 ## Related Documents
 
 - [roadmap.md](./roadmap.md)
+- [execution-venue-strategy.md](./execution-venue-strategy.md)
 - [paper-session-runbook.md](./paper-session-runbook.md)
 - [quantlab-stepbit-boundaries.md](./quantlab-stepbit-boundaries.md)

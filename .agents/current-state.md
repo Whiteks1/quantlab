@@ -36,6 +36,7 @@
   - add aggregate health and alert visibility over canonical broker submission sessions
   - keep broker execution auditable before any broader live routing or retry logic
   - preserve paper-session discipline as a prerequisite, not the current bottleneck
+  - keep Kraken as the first implemented execution boundary while positioning Hyperliquid as the first next venue intended for personal connection
 - **Implemented Direction**:
   - canonical run artifacts now center on `metadata.json`, `config.json`, `metrics.json`, and `report.json`
   - successful plain `run` executions now write that canonical artifact pack under `outputs/runs/<run_id>/`
@@ -67,6 +68,7 @@
   - broker submit now writes a pending local response artifact before the remote submit path and supports explicit reconciliation against Kraken order state using session-derived `userref`
   - submitted broker validation sessions can now materialize `broker_order_status.json` as the first persistent post-submit status surface with normalized local state
   - broker submission sessions now support aggregate health summaries and deterministic alert snapshots for operator visibility
+  - execution-venue strategy now keeps `Kraken` as the first implemented backend while moving `Hyperliquid` ahead of `Binance` as the first next venue intended for personal supervised use
 
 
 ## Known Issues / Technical Debt

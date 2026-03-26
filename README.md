@@ -25,6 +25,14 @@ The paper layer is now materially operational, and the current broker-facing foc
 
 A secondary contract boundary track remains active:
 
+Execution venue strategy note:
+
+- `Kraken` remains the first implemented real-execution backend
+- `Hyperliquid` is the first next venue intended for personal connection and supervised practical use
+- `BrokerAdapter` remains the current code name, but the architecture should now be read as an execution-venue boundary, not only a CEX-style broker boundary
+
+A secondary boundary track remains active:
+
 - stable `run` and `sweep` behavior
 - stable `report.json.machine_contract`
 - automatic refresh of `outputs/runs/runs_index.*`
@@ -153,6 +161,7 @@ See also:
 
 - [docs/cli.md](./docs/cli.md)
 - [docs/broker-safety-boundary.md](./docs/broker-safety-boundary.md)
+- [docs/execution-venue-strategy.md](./docs/execution-venue-strategy.md)
 - [docs/paper-session-runbook.md](./docs/paper-session-runbook.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/workflow-operativo-codex.md](./docs/workflow-operativo-codex.md)
