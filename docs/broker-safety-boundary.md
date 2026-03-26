@@ -73,6 +73,7 @@ Current Stage D.1 scope covered:
 - read-only Kraken account snapshot and balance-aware intent readiness
 - Kraken validate-only order probes for exchange-side order acceptance checks
 - canonical broker order-validation sessions and shared registry under `outputs/broker_order_validations/`
+- local human approval artifacts for reviewed broker order-validation sessions
 - stable dry-run audit snapshot for local review
 - local `broker_dry_run.json` artifact generation through the CLI
 - canonical broker dry-run sessions and shared registry under `outputs/broker_dry_runs/`
@@ -86,6 +87,7 @@ Still intentionally out of scope:
 Boundary note:
 
 - validate-only order probes are more sensitive than read-only preflight because they use Kraken's order-validation path, but they still do not place live orders
+- approval artifacts are a local QuantLab gate only; they do not submit anything to Kraken by themselves
 
 ## Next Step
 
