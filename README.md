@@ -1,6 +1,12 @@
 # QuantLab
 
-QuantLab is a CLI-first quantitative research system for running reproducible strategy experiments, forward evaluation workflows, run indexing, and portfolio-level reporting.
+QuantLab is a web3 trading and execution app with a CLI-first core for reproducible strategy research, supervised execution safety, and venue-aware operational workflows.
+
+Today, the product should be read as:
+
+- a sovereign QuantLab app for research, paper ops, and execution discipline
+- moving toward practical onchain and broker-connected trading operation
+- still intentionally supervised, not yet broad autonomous live routing
 
 It is intentionally split from Stepbit:
 
@@ -15,7 +21,7 @@ The architectural rule is simple:
 
 ## Current Status
 
-QuantLab is currently transitioning from **Stage C.1** into **Stage D.2 - supervised broker submit safety and reconciliation**.
+QuantLab is currently transitioning from a strong paper-operations base into **Stage D.2 - supervised broker submit safety and reconciliation**.
 
 The paper layer is now materially operational, and the current broker-facing focus is:
 
@@ -27,6 +33,7 @@ Execution venue strategy note:
 
 - `Kraken` remains the first implemented real-execution backend
 - `Hyperliquid` is the first next venue intended for personal connection and supervised practical use
+- this is why `QuantLab web3 app` is now the right public direction, even though the product is still earlier in runtime maturity than that label's end-state implies
 - `BrokerAdapter` remains the current code name, but the architecture should now be read as an execution-venue boundary, not only a CEX-style broker boundary
 - a minimal `ExecutionContext` layer now exists in code so future venue work can model signer and routing semantics without overloading `ExecutionIntent`
 
