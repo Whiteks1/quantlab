@@ -78,6 +78,7 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "broker_order_validations_show": None,
         "broker_order_validations_index": None,
         "broker_order_validations_approve": None,
+        "broker_order_validations_bundle": None,
         "broker_approval_reviewer": None,
         "broker_approval_note": None,
     }
@@ -172,6 +173,40 @@ def test_approve_requires_reviewer(broker_order_validations_root: Path):
     args = _make_args(
         broker_order_validations_approve=str(broker_order_validations_root / "validate_001"),
         broker_approval_reviewer=None,
+    )
+    with pytest.raises(ConfigError):
+        handle_broker_order_validations_commands(args)
+
+
+def test_generates_pre_submit_bundle_from_approved_session(broker_order_validations_root: Path, capsys):
+    approve_args = _make_args(
+        broker_order_validations_approve=str(broker_order_validations_root / "validate_001"),
+        broker_approval_reviewer="marce",
+    )
+    assert handle_broker_order_validations_commands(approve_args) is True
+    _ = capsys.readouterr()
+
+    bundle_args = _make_args(
+        broker_order_validations_bundle=str(broker_order_validations_root / "validate_001"),
+    )
+    result = handle_broker_order_validations_commands(bundle_args)
+    assert result is True
+
+    out = capsys.readouterr().out
+    assert "Broker pre-submit bundle generated" in out
+
+    bundle_path = broker_order_validations_root / "validate_001" / "broker_pre_submit_bundle.json"
+    assert bundle_path.exists()
+    payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+    assert payload["artifact_type"] == "quantlab.broker.pre_submit_bundle"
+    assert payload["source_session_id"] == "validate_001"
+    assert payload["approval"]["status"] == "approved"
+    assert payload["bundle_state"] == "ready_for_supervised_submit"
+
+
+def test_bundle_requires_approved_session(broker_order_validations_root: Path):
+    args = _make_args(
+        broker_order_validations_bundle=str(broker_order_validations_root / "validate_002"),
     )
     with pytest.raises(ConfigError):
         handle_broker_order_validations_commands(args)

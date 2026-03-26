@@ -434,6 +434,34 @@ Important note:
 - it does not place an order
 - it does not imply broker submission has happened
 
+### `--broker-order-validations-bundle`
+
+Generate a pre-submit bundle from an approved broker order-validation session:
+
+```bash
+python main.py --broker-order-validations-bundle outputs/broker_order_validations/<session_id>
+```
+
+This writes:
+
+- `outputs/broker_order_validations/<session_id>/broker_pre_submit_bundle.json`
+
+The bundle currently includes:
+
+- source `session_metadata.json`
+- source `session_status.json`
+- source `broker_order_validate.json`
+- source `approval.json`
+- source session id
+- generation timestamp
+- `bundle_state = ready_for_supervised_submit`
+
+Important note:
+
+- this command fails if the source validation session is not approved
+- it still does not place an order
+- it is the final local handoff artifact before any future supervised submit path
+
 ### `--kraken-dry-run-outdir`
 
 Persist a local Kraken dry-run audit artifact:

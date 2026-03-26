@@ -10,6 +10,7 @@ from typing import Any, Iterator
 
 from quantlab.brokers.session_store import (
     BROKER_ORDER_APPROVAL_FILENAME,
+    BROKER_PRE_SUBMIT_BUNDLE_FILENAME,
     BROKER_ORDER_VALIDATE_FILENAME,
     BROKER_ORDER_VALIDATE_METADATA_FILENAME,
     BROKER_ORDER_VALIDATE_STATUS_FILENAME,
@@ -20,6 +21,41 @@ from quantlab.runs.artifacts import load_json_with_fallback
 
 
 def handle_broker_order_validations_commands(args) -> bool:
+    if getattr(args, "broker_order_validations_bundle", None):
+        session_dir = _require_directory(
+            args.broker_order_validations_bundle,
+            "Broker order validation session directory",
+        )
+        summary = load_broker_order_validation_summary(session_dir)
+        if summary.get("approval_status") != "approved":
+            raise ConfigError("Broker order validation session must be approved before generating a pre-submit bundle.")
+
+        metadata, _ = load_json_with_fallback(session_dir, BROKER_ORDER_VALIDATE_METADATA_FILENAME)
+        status, _ = load_json_with_fallback(session_dir, BROKER_ORDER_VALIDATE_STATUS_FILENAME)
+        report, _ = load_json_with_fallback(session_dir, BROKER_ORDER_VALIDATE_FILENAME)
+        approval, _ = load_json_with_fallback(session_dir, BROKER_ORDER_APPROVAL_FILENAME)
+
+        bundle = {
+            "artifact_type": "quantlab.broker.pre_submit_bundle",
+            "generated_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+            "source_session_id": summary["session_id"],
+            "adapter_name": summary.get("adapter_name"),
+            "session_metadata": metadata,
+            "session_status": status,
+            "order_validation": report,
+            "approval": approval,
+            "bundle_state": "ready_for_supervised_submit",
+        }
+        store = BrokerOrderValidationStore(summary["session_id"], base_dir=str(session_dir.parent))
+        store.write_pre_submit_bundle(bundle)
+
+        bundle_path = session_dir / BROKER_PRE_SUBMIT_BUNDLE_FILENAME
+        print("\nBroker pre-submit bundle generated:\n")
+        print(f"  session_path : {session_dir}")
+        print(f"  bundle_path  : {bundle_path}")
+        print(f"  session_id   : {summary['session_id']}")
+        return True
+
     if getattr(args, "broker_order_validations_approve", None):
         session_dir = _require_directory(
             args.broker_order_validations_approve,
@@ -109,6 +145,7 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
     status, _ = load_json_with_fallback(path, BROKER_ORDER_VALIDATE_STATUS_FILENAME)
     report, report_path = load_json_with_fallback(path, BROKER_ORDER_VALIDATE_FILENAME)
     approval, approval_path = load_json_with_fallback(path, BROKER_ORDER_APPROVAL_FILENAME)
+    bundle, bundle_path = load_json_with_fallback(path, BROKER_PRE_SUBMIT_BUNDLE_FILENAME)
 
     return {
         "session_id": metadata.get("session_id") or status.get("session_id") or path.name,
@@ -127,11 +164,14 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
         "approved_at": approval.get("reviewed_at"),
         "approval_note": approval.get("note"),
         "approval_present": bool(approval_path),
+        "pre_submit_bundle_present": bool(bundle_path),
+        "pre_submit_bundle_state": bundle.get("bundle_state"),
         "path": str(path),
         "metadata_path": str(path / BROKER_ORDER_VALIDATE_METADATA_FILENAME),
         "status_path": str(path / BROKER_ORDER_VALIDATE_STATUS_FILENAME),
         "report_path": str(path / BROKER_ORDER_VALIDATE_FILENAME),
         "approval_path": str(path / BROKER_ORDER_APPROVAL_FILENAME),
+        "pre_submit_bundle_path": str(path / BROKER_PRE_SUBMIT_BUNDLE_FILENAME),
     }
 
 
