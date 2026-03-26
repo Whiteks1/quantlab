@@ -508,6 +508,12 @@ def main() -> None:
         help="Generate a supervised submit stub artifact from a submit gate.",
     )
     parser.add_argument(
+        "--broker-order-validations-submit-real",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Submit a real Kraken order from a supervised submit gate and persist the response artifact.",
+    )
+    parser.add_argument(
         "--broker-approval-reviewer",
         default=None,
         help="Reviewer name/id for local broker approval actions.",
@@ -530,7 +536,12 @@ def main() -> None:
     parser.add_argument(
         "--broker-submit-confirm",
         action="store_true",
-        help="Explicit confirmation flag required to generate a supervised submit gate.",
+        help="Explicit confirmation flag required for supervised submit gate and real submit actions.",
+    )
+    parser.add_argument(
+        "--broker-submit-live",
+        action="store_true",
+        help="Explicit live-submit flag required before sending a real broker order.",
     )
     parser.add_argument("--broker-symbol", default=None)
     parser.add_argument("--broker-side", default=None)
@@ -688,6 +699,7 @@ def main() -> None:
             or args.broker_order_validations_bundle
             or args.broker_order_validations_submit_gate
             or args.broker_order_validations_submit_stub
+            or args.broker_order_validations_submit_real
         ):
             session_metadata["mode"] = "broker_validate"
         elif (

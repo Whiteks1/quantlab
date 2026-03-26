@@ -16,6 +16,7 @@ BROKER_ORDER_APPROVAL_FILENAME = "approval.json"
 BROKER_PRE_SUBMIT_BUNDLE_FILENAME = "broker_pre_submit_bundle.json"
 BROKER_SUBMIT_GATE_FILENAME = "broker_submit_gate.json"
 BROKER_SUBMIT_ATTEMPT_FILENAME = "broker_submit_attempt.json"
+BROKER_SUBMIT_RESPONSE_FILENAME = "broker_submit_response.json"
 
 
 class BrokerDryRunStore:
@@ -103,6 +104,10 @@ class BrokerOrderValidationStore:
     def write_submit_attempt(self, attempt: dict[str, Any]) -> None:
         self._ensure_initialized()
         save_json(attempt, self.session_path / BROKER_SUBMIT_ATTEMPT_FILENAME)
+
+    def write_submit_response(self, response: dict[str, Any]) -> None:
+        self._ensure_initialized()
+        save_json(response, self.session_path / BROKER_SUBMIT_RESPONSE_FILENAME)
 
     def get_session_path(self) -> Path:
         return self.session_path.resolve()

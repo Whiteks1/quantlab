@@ -270,6 +270,37 @@ class KrakenOrderValidateReport:
         }
 
 
+@dataclass(frozen=True)
+class KrakenOrderSubmitReport:
+    adapter_name: str
+    generated_at: str
+    authenticated_preflight: KrakenAuthPreflightReport
+    source_session_id: str
+    submit_payload: dict[str, object] | None
+    userref: int | None
+    remote_submit_called: bool
+    submitted: bool
+    txid: tuple[str, ...]
+    exchange_response: dict[str, object] | None
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact_type": "quantlab.kraken.submit_response",
+            "adapter_name": self.adapter_name,
+            "generated_at": self.generated_at,
+            "authenticated_preflight": self.authenticated_preflight.to_dict(),
+            "source_session_id": self.source_session_id,
+            "submit_payload": self.submit_payload,
+            "userref": self.userref,
+            "remote_submit_called": self.remote_submit_called,
+            "submitted": self.submitted,
+            "txid": list(self.txid),
+            "exchange_response": self.exchange_response,
+            "errors": list(self.errors),
+        }
+
+
 class KrakenBrokerAdapter(BrokerAdapter):
     """
     First dry-run broker adapter target for QuantLab.
@@ -325,6 +356,20 @@ class KrakenBrokerAdapter(BrokerAdapter):
             "volume": _format_quantity(intent.quantity),
             "validate": "true",
         }
+
+    def build_submit_payload(
+        self,
+        validate_payload: dict[str, object],
+        *,
+        session_id: str,
+    ) -> dict[str, object]:
+        payload = {
+            key: value
+            for key, value in validate_payload.items()
+            if key != "validate" and value is not None
+        }
+        payload["userref"] = str(_build_kraken_userref(session_id))
+        return payload
 
     def build_public_preflight_report(
         self,
@@ -675,12 +720,116 @@ class KrakenBrokerAdapter(BrokerAdapter):
             errors=tuple(_unique_reasons(errors)),
         )
 
+    def build_order_submit_report(
+        self,
+        *,
+        source_session_id: str,
+        validate_payload: dict[str, object] | None,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        api_key_env: str = "KRAKEN_API_KEY",
+        api_secret_env: str = "KRAKEN_API_SECRET",
+        timeout_seconds: float = 10.0,
+        fetch_private_json=None,
+    ) -> KrakenOrderSubmitReport:
+        auth_report = self.build_authenticated_preflight_report(
+            api_key=api_key,
+            api_secret=api_secret,
+            api_key_env=api_key_env,
+            api_secret_env=api_secret_env,
+            timeout_seconds=timeout_seconds,
+            fetch_private_json=fetch_private_json,
+        )
+        errors: list[str] = list(auth_report.errors)
+        submit_payload = None
+        userref = None
+        exchange_response: dict[str, object] | None = None
+        remote_submit_called = False
+        submitted = False
+        txid: tuple[str, ...] = ()
+
+        if not isinstance(validate_payload, dict) or not validate_payload:
+            errors.append("missing_validate_payload")
+            return KrakenOrderSubmitReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                authenticated_preflight=auth_report,
+                source_session_id=source_session_id,
+                submit_payload=None,
+                userref=None,
+                remote_submit_called=False,
+                submitted=False,
+                txid=(),
+                exchange_response=None,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        submit_payload = self.build_submit_payload(validate_payload, session_id=source_session_id)
+        userref = int(str(submit_payload["userref"]))
+
+        if not auth_report.authenticated:
+            errors.append("private_auth_not_ready")
+            return KrakenOrderSubmitReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                authenticated_preflight=auth_report,
+                source_session_id=source_session_id,
+                submit_payload=submit_payload,
+                userref=userref,
+                remote_submit_called=False,
+                submitted=False,
+                txid=(),
+                exchange_response=None,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        try:
+            exchange_response = fetch_kraken_add_order(
+                api_key=api_key or os.getenv(api_key_env, ""),
+                api_secret=api_secret or os.getenv(api_secret_env, ""),
+                payload=submit_payload,
+                timeout_seconds=timeout_seconds,
+                fetch_private_json=fetch_private_json,
+            )
+            remote_submit_called = True
+            response_errors = exchange_response.get("error", []) if isinstance(exchange_response, dict) else []
+            if response_errors:
+                errors.extend(str(err) for err in response_errors)
+            else:
+                submitted = True
+                result = exchange_response.get("result", {}) if isinstance(exchange_response, dict) else {}
+                raw_txid = result.get("txid", [])
+                if isinstance(raw_txid, list):
+                    txid = tuple(str(item) for item in raw_txid)
+        except Exception as exc:  # noqa: BLE001
+            remote_submit_called = True
+            errors.append(f"order_submit_failed:{exc.__class__.__name__}")
+
+        return KrakenOrderSubmitReport(
+            adapter_name=self.adapter_name,
+            generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+            authenticated_preflight=auth_report,
+            source_session_id=source_session_id,
+            submit_payload=submit_payload,
+            userref=userref,
+            remote_submit_called=remote_submit_called,
+            submitted=submitted,
+            txid=txid,
+            exchange_response=exchange_response,
+            errors=tuple(_unique_reasons(errors)),
+        )
+
 
 def _normalize_kraken_pair(symbol: str) -> str:
     raw = symbol.strip().upper().replace("-", "/")
     parts = [part.strip() for part in raw.split("/") if part.strip()]
     aliased = [_SYMBOL_ALIASES.get(part, part) for part in parts]
     return "/".join(aliased) if aliased else raw
+
+
+def _build_kraken_userref(session_id: str) -> int:
+    digest = hashlib.sha256(session_id.encode("utf-8")).hexdigest()
+    return (int(digest[:8], 16) % 2_147_483_646) + 1
 
 
 def _format_quantity(quantity: float) -> str:
@@ -730,6 +879,24 @@ def fetch_kraken_extended_balance(
 
 
 def fetch_kraken_add_order_validate(
+    *,
+    api_key: str,
+    api_secret: str,
+    payload: dict[str, object],
+    timeout_seconds: float = 10.0,
+    fetch_private_json=None,
+) -> dict[str, object]:
+    fetcher = fetch_private_json or _fetch_private_json
+    return fetcher(
+        "/0/private/AddOrder",
+        api_key=api_key,
+        api_secret=api_secret,
+        payload=payload,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def fetch_kraken_add_order(
     *,
     api_key: str,
     api_secret: str,

@@ -59,6 +59,13 @@ def broker_order_validations_root(tmp_path: Path) -> Path:
                     "authenticated_preflight": {"authenticated": True},
                     "intent": {"request_id": f"req_{session_id}"},
                     "local_preflight": {"allowed": True, "reasons": []},
+                    "validate_payload": {
+                        "pair": "ETH/USD",
+                        "type": "buy",
+                        "ordertype": "market",
+                        "volume": "0.25",
+                        "validate": "true",
+                    },
                     "remote_validation_called": remote_called,
                     "validation_accepted": accepted,
                     "validation_reasons": [] if accepted else ["EOrder:Insufficient funds"],
@@ -81,11 +88,18 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "broker_order_validations_bundle": None,
         "broker_order_validations_submit_gate": None,
         "broker_order_validations_submit_stub": None,
+        "broker_order_validations_submit_real": None,
         "broker_approval_reviewer": None,
         "broker_approval_note": None,
         "broker_submit_reviewer": None,
         "broker_submit_note": None,
         "broker_submit_confirm": False,
+        "broker_submit_live": False,
+        "kraken_api_key": None,
+        "kraken_api_secret": None,
+        "kraken_api_key_env": "KRAKEN_API_KEY",
+        "kraken_api_secret_env": "KRAKEN_API_SECRET",
+        "kraken_preflight_timeout": 10.0,
     }
     defaults.update(kwargs)
     return types.SimpleNamespace(**defaults)
@@ -331,3 +345,127 @@ def test_submit_stub_requires_submit_gate(broker_order_validations_root: Path):
     )
     with pytest.raises(ConfigError):
         handle_broker_order_validations_commands(args)
+
+
+def test_generates_real_submit_response_from_submit_gate(broker_order_validations_root: Path, capsys, monkeypatch):
+    approve_args = _make_args(
+        broker_order_validations_approve=str(broker_order_validations_root / "validate_001"),
+        broker_approval_reviewer="marce",
+    )
+    assert handle_broker_order_validations_commands(approve_args) is True
+    _ = capsys.readouterr()
+
+    bundle_args = _make_args(
+        broker_order_validations_bundle=str(broker_order_validations_root / "validate_001"),
+    )
+    assert handle_broker_order_validations_commands(bundle_args) is True
+    _ = capsys.readouterr()
+
+    gate_args = _make_args(
+        broker_order_validations_submit_gate=str(broker_order_validations_root / "validate_001"),
+        broker_submit_reviewer="marce",
+        broker_submit_confirm=True,
+    )
+    assert handle_broker_order_validations_commands(gate_args) is True
+    _ = capsys.readouterr()
+
+    def fake_submit(self, **kwargs):
+        return types.SimpleNamespace(
+            to_dict=lambda: {
+                "artifact_type": "quantlab.kraken.submit_response",
+                "adapter_name": "kraken",
+                "generated_at": "2026-03-26T10:10:00",
+                "authenticated_preflight": {"authenticated": True},
+                "source_session_id": "validate_001",
+                "submit_payload": {
+                    "pair": "ETH/USD",
+                    "type": "buy",
+                    "ordertype": "market",
+                    "volume": "0.25",
+                    "userref": "123456",
+                },
+                "userref": 123456,
+                "remote_submit_called": True,
+                "submitted": True,
+                "txid": ["OABC-123-XYZ"],
+                "exchange_response": {"error": [], "result": {"txid": ["OABC-123-XYZ"]}},
+                "errors": [],
+            }
+        )
+
+    monkeypatch.setattr(
+        "quantlab.cli.broker_order_validations.KrakenBrokerAdapter.build_order_submit_report",
+        fake_submit,
+    )
+
+    submit_args = _make_args(
+        broker_order_validations_submit_real=str(broker_order_validations_root / "validate_001"),
+        broker_submit_reviewer="marce",
+        broker_submit_note="Submit after supervised review",
+        broker_submit_confirm=True,
+        broker_submit_live=True,
+    )
+    result = handle_broker_order_validations_commands(submit_args)
+    assert result is True
+
+    out = capsys.readouterr().out
+    assert "Broker supervised submit response generated" in out
+
+    response_path = broker_order_validations_root / "validate_001" / "broker_submit_response.json"
+    assert response_path.exists()
+    payload = json.loads(response_path.read_text(encoding="utf-8"))
+    assert payload["submitted"] is True
+    assert payload["txid"] == ["OABC-123-XYZ"]
+    assert payload["submitted_by"] == "marce"
+
+    show_args = _make_args(
+        broker_order_validations_show=str(broker_order_validations_root / "validate_001"),
+    )
+    assert handle_broker_order_validations_commands(show_args) is True
+    show_out = capsys.readouterr().out
+    assert "submit_response_present" in show_out
+    assert "submit_response_submitted" in show_out
+    assert "OABC-123-XYZ" in show_out
+
+
+def test_real_submit_requires_submit_gate(broker_order_validations_root: Path):
+    args = _make_args(
+        broker_order_validations_submit_real=str(broker_order_validations_root / "validate_001"),
+        broker_submit_reviewer="marce",
+        broker_submit_confirm=True,
+        broker_submit_live=True,
+    )
+    with pytest.raises(ConfigError):
+        handle_broker_order_validations_commands(args)
+
+
+def test_real_submit_requires_live_flag(broker_order_validations_root: Path, capsys):
+    approve_args = _make_args(
+        broker_order_validations_approve=str(broker_order_validations_root / "validate_001"),
+        broker_approval_reviewer="marce",
+    )
+    assert handle_broker_order_validations_commands(approve_args) is True
+    _ = capsys.readouterr()
+
+    bundle_args = _make_args(
+        broker_order_validations_bundle=str(broker_order_validations_root / "validate_001"),
+    )
+    assert handle_broker_order_validations_commands(bundle_args) is True
+    _ = capsys.readouterr()
+
+    gate_args = _make_args(
+        broker_order_validations_submit_gate=str(broker_order_validations_root / "validate_001"),
+        broker_submit_reviewer="marce",
+        broker_submit_confirm=True,
+    )
+    assert handle_broker_order_validations_commands(gate_args) is True
+    _ = capsys.readouterr()
+
+    submit_args = _make_args(
+        broker_order_validations_submit_real=str(broker_order_validations_root / "validate_001"),
+        broker_submit_reviewer="marce",
+        broker_submit_confirm=True,
+        broker_submit_live=False,
+    )
+    with pytest.raises(ConfigError):
+        handle_broker_order_validations_commands(submit_args)
