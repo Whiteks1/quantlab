@@ -89,6 +89,7 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "broker_order_validations_submit_gate": None,
         "broker_order_validations_submit_stub": None,
         "broker_order_validations_submit_real": None,
+        "broker_order_validations_reconcile": None,
         "broker_approval_reviewer": None,
         "broker_approval_note": None,
         "broker_submit_reviewer": None,
@@ -370,6 +371,30 @@ def test_generates_real_submit_response_from_submit_gate(broker_order_validation
     _ = capsys.readouterr()
 
     def fake_submit(self, **kwargs):
+        if kwargs.get("remote_submit") is False:
+            return types.SimpleNamespace(
+                to_dict=lambda: {
+                    "artifact_type": "quantlab.kraken.submit_response",
+                    "adapter_name": "kraken",
+                    "generated_at": "2026-03-26T10:09:59",
+                    "authenticated_preflight": {"authenticated": True},
+                    "source_session_id": "validate_001",
+                    "submit_payload": {
+                        "pair": "ETH/USD",
+                        "type": "buy",
+                        "ordertype": "market",
+                        "volume": "0.25",
+                        "userref": "123456",
+                    },
+                    "userref": 123456,
+                    "submit_state": "pending_remote_submit",
+                    "remote_submit_called": False,
+                    "submitted": False,
+                    "txid": [],
+                    "exchange_response": None,
+                    "errors": [],
+                }
+            )
         return types.SimpleNamespace(
             to_dict=lambda: {
                 "artifact_type": "quantlab.kraken.submit_response",
@@ -385,6 +410,7 @@ def test_generates_real_submit_response_from_submit_gate(broker_order_validation
                     "userref": "123456",
                 },
                 "userref": 123456,
+                "submit_state": "submitted_remote",
                 "remote_submit_called": True,
                 "submitted": True,
                 "txid": ["OABC-123-XYZ"],
@@ -469,3 +495,92 @@ def test_real_submit_requires_live_flag(broker_order_validations_root: Path, cap
     )
     with pytest.raises(ConfigError):
         handle_broker_order_validations_commands(submit_args)
+
+
+def test_reconcile_updates_existing_submit_response(broker_order_validations_root: Path, capsys, monkeypatch):
+    response_path = broker_order_validations_root / "validate_001" / "broker_submit_response.json"
+    response_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.kraken.submit_response",
+                "adapter_name": "kraken",
+                "generated_at": "2026-03-26T10:10:00",
+                "authenticated_preflight": {"authenticated": True},
+                "source_session_id": "validate_001",
+                "submit_payload": {"pair": "ETH/USD", "userref": "123456"},
+                "userref": 123456,
+                "submit_state": "pending_remote_submit",
+                "remote_submit_called": False,
+                "submitted": False,
+                "txid": [],
+                "exchange_response": None,
+                "errors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_reconcile(self, **kwargs):
+        return types.SimpleNamespace(
+            to_dict=lambda: {
+                "artifact_type": "quantlab.kraken.submit_reconciliation",
+                "adapter_name": "kraken",
+                "generated_at": "2026-03-26T10:11:00",
+                "authenticated_preflight": {"authenticated": True},
+                "source_session_id": "validate_001",
+                "userref": 123456,
+                "reconciliation_attempted": True,
+                "matched": True,
+                "matched_sources": ["closed"],
+                "matched_txid": ["OABC-123-XYZ"],
+                "matched_statuses": ["closed"],
+                "matched_orders": [{"source": "closed", "txid": "OABC-123-XYZ", "status": "closed"}],
+                "errors": [],
+            }
+        )
+
+    monkeypatch.setattr(
+        "quantlab.cli.broker_order_validations.KrakenBrokerAdapter.build_order_reconciliation_report",
+        fake_reconcile,
+    )
+
+    args = _make_args(
+        broker_order_validations_reconcile=str(broker_order_validations_root / "validate_001"),
+    )
+    result = handle_broker_order_validations_commands(args)
+    assert result is True
+
+    out = capsys.readouterr().out
+    assert "Broker submit reconciliation completed" in out
+
+    payload = json.loads(response_path.read_text(encoding="utf-8"))
+    assert payload["reconciled"] is True
+    assert payload["submit_state"] == "reconciled_closed"
+    assert payload["txid"] == ["OABC-123-XYZ"]
+
+
+def test_real_submit_refuses_blind_resubmit_when_response_already_exists(broker_order_validations_root: Path):
+    response_path = broker_order_validations_root / "validate_001" / "broker_submit_response.json"
+    response_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.kraken.submit_response",
+                "submit_state": "pending_remote_submit",
+                "remote_submit_called": False,
+                "submitted": False,
+                "userref": 123456,
+                "txid": [],
+                "errors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    args = _make_args(
+        broker_order_validations_submit_real=str(broker_order_validations_root / "validate_001"),
+        broker_submit_reviewer="marce",
+        broker_submit_confirm=True,
+        broker_submit_live=True,
+    )
+    with pytest.raises(ConfigError):
+        handle_broker_order_validations_commands(args)

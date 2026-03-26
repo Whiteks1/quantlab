@@ -552,6 +552,35 @@ def test_order_submit_reports_missing_credentials_without_remote_call(monkeypatc
     assert "private_auth_not_ready" in report["errors"]
 
 
+def test_order_submit_can_prepare_pending_remote_submit_without_hitting_exchange():
+    adapter = KrakenBrokerAdapter()
+
+    def fake_private_json(path, **kwargs):
+        if path == "/0/private/GetAPIKeyInfo":
+            return {
+                "error": [],
+                "result": {
+                    "name": "quantlab-demo",
+                    "permissions": {"orders": "create_modify"},
+                },
+            }
+        raise AssertionError(path)
+
+    report = adapter.build_order_submit_report(
+        source_session_id="validate_001",
+        validate_payload={"pair": "ETH/USD", "type": "buy", "ordertype": "market", "volume": "0.25"},
+        api_key="demo-key",
+        api_secret="ZGVtby1zZWNyZXQ=",
+        fetch_private_json=fake_private_json,
+        remote_submit=False,
+    ).to_dict()
+
+    assert report["submit_state"] == "pending_remote_submit"
+    assert report["remote_submit_called"] is False
+    assert report["submitted"] is False
+    assert report["userref"] is not None
+
+
 def test_order_submit_accepts_successful_mocked_exchange_submit():
     adapter = KrakenBrokerAdapter()
 
@@ -619,3 +648,62 @@ def test_order_submit_reports_exchange_side_submit_errors():
     assert report["remote_submit_called"] is True
     assert report["submitted"] is False
     assert "EOrder:Rate limit exceeded" in report["errors"]
+
+
+def test_order_reconciliation_matches_orders_by_userref():
+    adapter = KrakenBrokerAdapter()
+
+    def fake_private_json(path, **kwargs):
+        if path == "/0/private/GetAPIKeyInfo":
+            return {
+                "error": [],
+                "result": {
+                    "name": "quantlab-demo",
+                    "permissions": {"orders": "query"},
+                },
+            }
+        if path == "/0/private/OpenOrders":
+            return {"error": [], "result": {"open": {}}}
+        if path == "/0/private/ClosedOrders":
+            return {
+                "error": [],
+                "result": {
+                    "closed": {
+                        "OABC-123-XYZ": {
+                            "userref": 123456,
+                            "status": "closed",
+                            "descr": {"order": "buy 0.25 ETHUSD @ market"},
+                        }
+                    }
+                },
+            }
+        raise AssertionError(path)
+
+    report = adapter.build_order_reconciliation_report(
+        source_session_id="validate_001",
+        userref=123456,
+        api_key="demo-key",
+        api_secret="ZGVtby1zZWNyZXQ=",
+        fetch_private_json=fake_private_json,
+    ).to_dict()
+
+    assert report["reconciliation_attempted"] is True
+    assert report["matched"] is True
+    assert report["matched_sources"] == ["closed"]
+    assert report["matched_txid"] == ["OABC-123-XYZ"]
+
+
+def test_order_reconciliation_reports_missing_credentials_cleanly(monkeypatch):
+    monkeypatch.delenv("KRAKEN_API_KEY", raising=False)
+    monkeypatch.delenv("KRAKEN_API_SECRET", raising=False)
+    adapter = KrakenBrokerAdapter()
+
+    report = adapter.build_order_reconciliation_report(
+        source_session_id="validate_001",
+        userref=123456,
+    ).to_dict()
+
+    assert report["reconciliation_attempted"] is False
+    assert report["matched"] is False
+    assert "missing_api_key" in report["errors"]
+    assert "missing_api_secret" in report["errors"]
