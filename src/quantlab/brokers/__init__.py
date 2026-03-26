@@ -15,6 +15,11 @@ from .boundary import (
     ExecutionPreflight,
     validate_execution_intent,
 )
+from .hyperliquid import (
+    HyperliquidBrokerAdapter,
+    HyperliquidPreflightReport,
+    HyperliquidResolvedExecutionContext,
+)
 from .kraken import (
     KrakenAccountSnapshotReport,
     KrakenAuthPreflightReport,
@@ -35,6 +40,9 @@ __all__ = [
     "ExecutionIntent",
     "ExecutionPolicy",
     "ExecutionPreflight",
+    "HyperliquidBrokerAdapter",
+    "HyperliquidPreflightReport",
+    "HyperliquidResolvedExecutionContext",
     "KrakenAccountSnapshotReport",
     "KrakenBrokerAdapter",
     "KrakenAuthPreflightReport",

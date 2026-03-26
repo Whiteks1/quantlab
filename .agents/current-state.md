@@ -71,6 +71,7 @@
   - broker submission sessions now support aggregate health summaries and deterministic alert snapshots for operator visibility
   - execution-venue strategy now keeps `Kraken` as the first implemented backend while moving `Hyperliquid` ahead of `Binance` as the first next venue intended for personal supervised use
   - Stage D.0 now also exposes a minimal `ExecutionContext` layer beside `ExecutionIntent` for signer identity, routing target, transport preference, and expiry metadata
+  - Hyperliquid now has a first read-only venue preflight slice that resolves signer/routing context and checks `meta` / `spotMeta` / `allMids` without opening order placement work
 
 
 ## Known Issues / Technical Debt

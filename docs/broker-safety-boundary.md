@@ -73,6 +73,7 @@ Current Stage D.1 scope covered:
 
 - shared preflight validation through the Stage D.0 boundary
 - minimal `ExecutionContext` support in the shared boundary so future venue work can model signer and routing concerns without overloading `ExecutionIntent`
+- read-only Hyperliquid venue preflight with execution-context resolution over signer identity, routing target, transport preference, and nonce scope
 - deterministic Kraken-style payload translation
 - read-only Kraken public preflight probes for pair support and basic readiness
 - read-only Kraken authenticated preflight probes for private boundary readiness
