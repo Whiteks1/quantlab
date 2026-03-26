@@ -79,8 +79,12 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "broker_order_validations_index": None,
         "broker_order_validations_approve": None,
         "broker_order_validations_bundle": None,
+        "broker_order_validations_submit_gate": None,
         "broker_approval_reviewer": None,
         "broker_approval_note": None,
+        "broker_submit_reviewer": None,
+        "broker_submit_note": None,
+        "broker_submit_confirm": False,
     }
     defaults.update(kwargs)
     return types.SimpleNamespace(**defaults)
@@ -210,3 +214,71 @@ def test_bundle_requires_approved_session(broker_order_validations_root: Path):
     )
     with pytest.raises(ConfigError):
         handle_broker_order_validations_commands(args)
+
+
+def test_generates_supervised_submit_gate_from_bundle(broker_order_validations_root: Path, capsys):
+    approve_args = _make_args(
+        broker_order_validations_approve=str(broker_order_validations_root / "validate_001"),
+        broker_approval_reviewer="marce",
+    )
+    assert handle_broker_order_validations_commands(approve_args) is True
+    _ = capsys.readouterr()
+
+    bundle_args = _make_args(
+        broker_order_validations_bundle=str(broker_order_validations_root / "validate_001"),
+    )
+    assert handle_broker_order_validations_commands(bundle_args) is True
+    _ = capsys.readouterr()
+
+    gate_args = _make_args(
+        broker_order_validations_submit_gate=str(broker_order_validations_root / "validate_001"),
+        broker_submit_reviewer="marce",
+        broker_submit_note="Ready for supervised submit review",
+        broker_submit_confirm=True,
+    )
+    result = handle_broker_order_validations_commands(gate_args)
+    assert result is True
+
+    out = capsys.readouterr().out
+    assert "Broker supervised submit gate generated" in out
+
+    gate_path = broker_order_validations_root / "validate_001" / "broker_submit_gate.json"
+    assert gate_path.exists()
+    payload = json.loads(gate_path.read_text(encoding="utf-8"))
+    assert payload["artifact_type"] == "quantlab.broker.submit_gate"
+    assert payload["source_session_id"] == "validate_001"
+    assert payload["confirmed_by"] == "marce"
+    assert payload["submit_state"] == "ready_for_supervised_submit_gate"
+
+
+def test_submit_gate_requires_pre_submit_bundle(broker_order_validations_root: Path):
+    args = _make_args(
+        broker_order_validations_submit_gate=str(broker_order_validations_root / "validate_001"),
+        broker_submit_reviewer="marce",
+        broker_submit_confirm=True,
+    )
+    with pytest.raises(ConfigError):
+        handle_broker_order_validations_commands(args)
+
+
+def test_submit_gate_requires_explicit_confirmation(broker_order_validations_root: Path, capsys):
+    approve_args = _make_args(
+        broker_order_validations_approve=str(broker_order_validations_root / "validate_001"),
+        broker_approval_reviewer="marce",
+    )
+    assert handle_broker_order_validations_commands(approve_args) is True
+    _ = capsys.readouterr()
+
+    bundle_args = _make_args(
+        broker_order_validations_bundle=str(broker_order_validations_root / "validate_001"),
+    )
+    assert handle_broker_order_validations_commands(bundle_args) is True
+    _ = capsys.readouterr()
+
+    gate_args = _make_args(
+        broker_order_validations_submit_gate=str(broker_order_validations_root / "validate_001"),
+        broker_submit_reviewer="marce",
+        broker_submit_confirm=False,
+    )
+    with pytest.raises(ConfigError):
+        handle_broker_order_validations_commands(gate_args)
