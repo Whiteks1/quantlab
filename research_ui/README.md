@@ -1,15 +1,18 @@
-# QuantLab Research Dashboard - Local Preview
+# QuantLab Control Surface - Local Preview
 
-This directory contains a strictly read-only, tangible UI layer for QuantLab research results.
+This directory contains a strictly read-only, tangible UI layer for the QuantLab system as it is actually evolving.
 
-## Phase 1.5: Research Registry + Paper Ops Pulse
+## Current Surface
 This version supports:
 - Automatic synchronization with `outputs/runs/runs_index.json`.
 - Paper-session health visibility from `outputs/paper_sessions/` through the local preview server.
+- Broker order-validation and submission health visibility from `outputs/broker_order_validations/` when present.
+- Hyperliquid surface visibility for read-only preflight, account readiness, and signed-action build progress.
+- Stepbit workspace boundary visibility when local `stepbit-app` and `stepbit-core` repos are present beside `quant_lab`.
 - Sortable table by any metric column.
 - Real-time search by ticker or run ID.
 - Mode filtering (Run, Sweep, Forward).
-- Read-only operator pulse for `Stage C.1 - Paper Trading Operationalization`.
+- Read-only operator pulse for the current bridge from paper operations into supervised execution safety.
 
 ## How to Run (Local Preview)
 
@@ -23,8 +26,9 @@ This version supports:
 
 ## Constraints & Architecture
 - **Read-Only**: This dashboard cannot execute runs or modify data.
-- **Low Coupling**: It reads standard JSON artifacts from the `outputs/` directory and a tiny local health endpoint for paper sessions.
+- **Low Coupling**: It reads standard JSON artifacts from the `outputs/` directory plus a few tiny local summary endpoints for paper, broker, Hyperliquid, and Stepbit workspace state.
 - **No Dependencies**: Built with Vanilla JS/CSS for maximum stability and zero-install preview.
+- **Honest Boundary Model**: Stepbit is shown as an external connected workspace surface, not as an in-process QuantLab runtime.
 
 ---
-*Note: Run Detail views and side-by-side comparison are planned for Phase 2.*
+*Note: The UI stays intentionally read-only even as broker and venue work becomes more operational.*

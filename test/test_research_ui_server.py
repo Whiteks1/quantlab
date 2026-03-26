@@ -57,6 +57,89 @@ def _write_session(root: Path, session_id: str, status: str) -> None:
     )
 
 
+def _write_broker_validation_session(root: Path, session_id: str) -> None:
+    session_dir = root / session_id
+    session_dir.mkdir(parents=True)
+    (session_dir / "session_metadata.json").write_text(
+        json.dumps(
+            {
+                "session_id": session_id,
+                "adapter_name": "kraken",
+                "status": "submitted",
+                "created_at": "2026-03-26T10:00:00",
+                "request_id": f"req_{session_id}",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "session_status.json").write_text(
+        json.dumps(
+            {
+                "session_id": session_id,
+                "status": "submitted",
+                "updated_at": "2026-03-26T10:05:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "broker_order_validate.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.broker.order_validate",
+                "adapter_name": "kraken",
+                "remote_validation_called": True,
+                "validation_accepted": True,
+                "validation_reasons": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "approval.json").write_text(
+        json.dumps(
+            {
+                "status": "approved",
+                "reviewed_by": "marce",
+                "reviewed_at": "2026-03-26T10:06:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "broker_submit_gate.json").write_text(
+        json.dumps(
+            {
+                "submit_state": "ready_for_supervised_submit_gate",
+                "confirmed_by": "marce",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "broker_submit_response.json").write_text(
+        json.dumps(
+            {
+                "submit_state": "submitted",
+                "generated_at": "2026-03-26T10:07:00",
+                "submitted": True,
+                "remote_submit_called": True,
+                "txid": ["ABC123"],
+                "errors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "broker_order_status.json").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-03-26T10:08:00",
+                "status_known": True,
+                "normalized_state": "open",
+                "matched_txid": ["ABC123"],
+                "errors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_build_paper_health_payload_returns_zero_state_when_root_missing(tmp_path: Path):
     payload, status = research_ui_server.build_paper_health_payload(tmp_path)
 
@@ -79,3 +162,85 @@ def test_build_paper_health_payload_summarizes_existing_sessions(tmp_path: Path)
     assert payload["total_sessions"] == 2
     assert payload["status_counts"]["success"] == 1
     assert payload["status_counts"]["failed"] == 1
+
+
+def test_build_broker_health_payload_returns_zero_state_when_root_missing(tmp_path: Path):
+    payload, status = research_ui_server.build_broker_health_payload(tmp_path)
+
+    assert status == 200
+    assert payload["status"] == "ok"
+    assert payload["available"] is False
+    assert payload["total_sessions"] == 0
+    assert payload["has_alerts"] is False
+
+
+def test_build_broker_health_payload_summarizes_existing_sessions(tmp_path: Path):
+    broker_root = tmp_path / "outputs" / "broker_order_validations"
+    _write_broker_validation_session(broker_root, "broker_001")
+
+    payload, status = research_ui_server.build_broker_health_payload(tmp_path)
+
+    assert status == 200
+    assert payload["status"] == "ok"
+    assert payload["available"] is True
+    assert payload["total_sessions"] == 1
+    assert payload["submitted_sessions"] == 1
+    assert payload["order_status_known_sessions"] == 1
+    assert payload["latest_submit_session_id"] == "broker_001"
+
+
+def test_build_hyperliquid_surface_payload_detects_latest_artifacts(tmp_path: Path):
+    outputs_root = tmp_path / "outputs" / "hyperliquid"
+    outputs_root.mkdir(parents=True)
+    (outputs_root / "hyperliquid_account_readiness.json").write_text(
+        json.dumps(
+            {
+                "adapter_name": "hyperliquid",
+                "artifact_type": "quantlab.hyperliquid.account_readiness",
+                "generated_at": "2026-03-26T12:00:00",
+                "readiness_allowed": True,
+                "execution_account_role": "user",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (outputs_root / "hyperliquid_signed_action.json").write_text(
+        json.dumps(
+            {
+                "adapter_name": "hyperliquid",
+                "artifact_type": "quantlab.hyperliquid.signed_action",
+                "generated_at": "2026-03-26T12:05:00",
+                "readiness_allowed": True,
+                "execution_context": {"resolved_transport": "websocket"},
+                "signature_envelope": {"signature_state": "pending_signer_backend"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload, status = research_ui_server.build_hyperliquid_surface_payload(tmp_path)
+
+    assert status == 200
+    assert payload["status"] == "ok"
+    assert payload["implemented_surfaces"]["signed_action_build"] is True
+    assert payload["latest_artifacts"]["signed_action"]["signature_state"] == "pending_signer_backend"
+    assert payload["signature_state"] == "pending_signer_backend"
+
+
+def test_build_stepbit_workspace_payload_detects_local_repos(tmp_path: Path):
+    project_root = tmp_path / "quant_lab"
+    project_root.mkdir()
+    stepbit_app = tmp_path / "stepbit-app"
+    stepbit_core = tmp_path / "stepbit-core"
+    stepbit_app.mkdir()
+    stepbit_core.mkdir()
+    (stepbit_app / "README.md").write_text("# stepbit-app\n", encoding="utf-8")
+    (stepbit_core / "README.md").write_text("# stepbit-core\n", encoding="utf-8")
+
+    payload, status = research_ui_server.build_stepbit_workspace_payload(project_root)
+
+    assert status == 200
+    assert payload["status"] == "ok"
+    assert payload["available"] is True
+    assert payload["repos"]["stepbit_app"]["present"] is True
+    assert payload["repos"]["stepbit_core"]["present"] is True
