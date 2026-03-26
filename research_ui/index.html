@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QuantLab | Research Dashboard</title>
+    <title>QuantLab | Control Surface</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
@@ -20,7 +20,7 @@
                     <span class="logo-icon">QL</span>
                     <div>
                         <div class="logo-text">QuantLab</div>
-                        <div class="version">Stage C.1 Surface</div>
+                        <div class="version">Execution Surface</div>
                     </div>
                 </div>
             </div>
@@ -33,7 +33,7 @@
                         <path d="M8 15h5"></path>
                         <path d="M8 7h3"></path>
                     </svg>
-                    Registry
+                    Surface
                 </a>
                 <a href="#/compare" class="nav-item disabled" id="nav-compare" aria-disabled="true">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -56,34 +56,47 @@
 
             <section class="sidebar-panel">
                 <div class="panel-label">Stage Focus</div>
-                <div class="panel-text">Read-only surface for registry triage plus paper-session visibility during `Stage C.1`.</div>
+                <div class="panel-text">Read-only control surface for QuantLab research, paper ops, broker safety, Hyperliquid readiness, and the external Stepbit boundary.</div>
             </section>
 
             <section class="sidebar-panel sidebar-stage-map">
                 <div class="panel-label">Execution Map</div>
                 <div class="stage-list">
-                    <div class="stage-item is-current">
+                    <div class="stage-item">
                         <span class="stage-dot"></span>
                         <div>
                             <strong>Stage C.1</strong>
-                            <span>Operationalize paper sessions</span>
+                            <span>Paper sessions are operationalized and no longer the main bottleneck</span>
+                        </div>
+                    </div>
+                    <div class="stage-item is-current">
+                        <span class="stage-dot"></span>
+                        <div>
+                            <strong>Stage D.2</strong>
+                            <span>Supervised submit safety, post-submit visibility, and operator control</span>
                         </div>
                     </div>
                     <div class="stage-item">
                         <span class="stage-dot"></span>
                         <div>
-                            <strong>Stage O.1</strong>
-                            <span>Consumer hardening only when friction is real</span>
+                            <strong>Stage D.1.b</strong>
+                            <span>Hyperliquid readiness, signer context, and pre-submit shape</span>
                         </div>
                     </div>
                     <div class="stage-item">
                         <span class="stage-dot"></span>
                         <div>
-                            <strong>Stage D.0</strong>
-                            <span>Execution safety before broker connectivity</span>
+                            <strong>Stepbit Boundary</strong>
+                            <span>External control-plane and runtime connection without surrendering QuantLab authority</span>
                         </div>
                     </div>
                 </div>
+            </section>
+
+            <section class="sidebar-panel">
+                <div class="panel-label">Boundary Link</div>
+                <div class="panel-text" id="sidebar-stepbit-status">Scanning local Stepbit workspace…</div>
+                <div class="mini-meta" id="sidebar-stepbit-meta">Waiting for workspace summary</div>
             </section>
 
             <div class="sidebar-footer">
@@ -99,7 +112,7 @@
             <header class="content-header">
                 <div>
                     <div class="eyebrow">QuantLab Sovereign Interface</div>
-                    <div class="breadcrumb" id="breadcrumb">Research Registry + Paper Ops</div>
+                    <div class="breadcrumb" id="breadcrumb">Research, Paper Ops, Broker Safety, Stepbit Boundary</div>
                 </div>
 
                 <div class="header-actions">
@@ -119,7 +132,7 @@
                             </svg>
                             Sync Registry
                         </button>
-                        <span class="action-hint">Reloads runs registry and paper-session health</span>
+                        <span class="action-hint">Reloads registry, paper ops, broker safety, Hyperliquid, and Stepbit workspace state</span>
                         <span class="sync-meta" id="sync-meta">Last sync: -</span>
                     </div>
                 </div>
@@ -132,9 +145,9 @@
                             <div class="hero-kicker">
                                 <span class="pill pill-live" id="hero-registry-pill">Registry online</span>
                                 <span class="pill pill-static" id="hero-root-pill">Source: outputs/runs</span>
-                                <span class="pill pill-stage">Stage C.1 active</span>
+                                <span class="pill pill-stage">Stage D.2 active</span>
                             </div>
-                            <h1>Research context for strategy triage, with paper operations finally visible in the same room.</h1>
+                            <h1>A control surface for the QuantLab system we are actually building: research, paper ops, broker safety, Hyperliquid readiness, and Stepbit at the edge.</h1>
                             <p id="hero-summary">Loading registry snapshot...</p>
                         </div>
 
@@ -153,6 +166,11 @@
                                 <div class="insight-label">Paper Ops</div>
                                 <div class="paper-strip" id="paper-strip"></div>
                                 <div class="insight-meta" id="paper-health-meta">Paper session health not loaded yet</div>
+                            </article>
+                            <article class="insight-card">
+                                <div class="insight-label">Broker Safety</div>
+                                <div class="paper-strip" id="broker-strip"></div>
+                                <div class="insight-meta" id="broker-health-meta">Broker submission health not loaded yet</div>
                             </article>
                         </div>
                     </div>
@@ -191,21 +209,47 @@
                         </div>
 
                         <div class="ops-card glass">
-                            <div class="stat-label">Open Paper Issues</div>
-                            <div class="stat-value" id="paper-open-issues">-</div>
-                            <div class="stat-foot">Failed, aborted, or still running</div>
+                            <div class="stat-label">Broker Sessions</div>
+                            <div class="stat-value" id="broker-total-sessions">-</div>
+                            <div class="stat-foot" id="broker-availability">Waiting for broker validation root</div>
                         </div>
 
                         <div class="ops-card glass">
-                            <div class="stat-label">Latest Session</div>
+                            <div class="stat-label">Hyperliquid Surface</div>
+                            <div class="stat-value" id="hyperliquid-state">-</div>
+                            <div class="stat-foot" id="hyperliquid-meta">Waiting for Hyperliquid surface</div>
+                        </div>
+
+                        <div class="ops-card glass">
+                            <div class="stat-label">Stepbit Boundary</div>
+                            <div class="stat-value" id="stepbit-state">-</div>
+                            <div class="stat-foot" id="stepbit-meta">Waiting for workspace scan</div>
+                        </div>
+                    </div>
+
+                    <div class="ops-overview">
+                        <div class="ops-card glass">
+                            <div class="stat-label">Paper Latest</div>
                             <div class="stat-value" id="paper-latest-session">-</div>
                             <div class="stat-foot" id="paper-latest-session-meta">No paper activity yet</div>
                         </div>
 
                         <div class="ops-card glass">
-                            <div class="stat-label">Latest Issue</div>
-                            <div class="stat-value" id="paper-latest-issue">-</div>
-                            <div class="stat-foot" id="paper-latest-issue-meta">No visible issues</div>
+                            <div class="stat-label">Broker Latest</div>
+                            <div class="stat-value" id="broker-latest-session">-</div>
+                            <div class="stat-foot" id="broker-latest-session-meta">No broker submissions yet</div>
+                        </div>
+
+                        <div class="ops-card glass">
+                            <div class="stat-label">Hyperliquid Signer</div>
+                            <div class="stat-value" id="hyperliquid-signature-state">-</div>
+                            <div class="stat-foot" id="hyperliquid-signature-meta">Signature backend not wired yet</div>
+                        </div>
+
+                        <div class="ops-card glass">
+                            <div class="stat-label">Stepbit Repos</div>
+                            <div class="stat-value" id="stepbit-repos">-</div>
+                            <div class="stat-foot" id="stepbit-repos-meta">Looking for app/core repos</div>
                         </div>
                     </div>
 

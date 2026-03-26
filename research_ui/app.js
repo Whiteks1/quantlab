@@ -1,6 +1,9 @@
 const CONFIG = {
     registryPath: "/outputs/runs/runs_index.json",
     paperHealthPath: "/api/paper-sessions-health",
+    brokerHealthPath: "/api/broker-submissions-health",
+    hyperliquidSurfacePath: "/api/hyperliquid-surface",
+    stepbitWorkspacePath: "/api/stepbit-workspace",
     refreshInterval: 30000,
     staleRegistryMs: 2 * 60 * 60 * 1000,
     detailArtifacts: ["report.json", "run_report.json"],
@@ -19,6 +22,9 @@ const state = {
     currentRunId: null,
     detailCache: new Map(),
     paperHealth: null,
+    brokerHealth: null,
+    hyperliquidSurface: null,
+    stepbitWorkspace: null,
     lastRegistrySyncAt: null,
     nextRefreshDueAt: null,
 };
@@ -50,6 +56,8 @@ const elements = {
     registryStatus: document.getElementById("registry-status"),
     registryDate: document.getElementById("registry-date"),
     registryDot: document.getElementById("registry-dot"),
+    sidebarStepbitStatus: document.getElementById("sidebar-stepbit-status"),
+    sidebarStepbitMeta: document.getElementById("sidebar-stepbit-meta"),
     heroSummary: document.getElementById("hero-summary"),
     heroBestRun: document.getElementById("hero-best-run"),
     heroBestMeta: document.getElementById("hero-best-meta"),
@@ -58,18 +66,29 @@ const elements = {
     heroModeMeta: document.getElementById("hero-mode-meta"),
     modeStrip: document.getElementById("mode-strip"),
     paperStrip: document.getElementById("paper-strip"),
+    brokerStrip: document.getElementById("broker-strip"),
     paperHealthMeta: document.getElementById("paper-health-meta"),
+    brokerHealthMeta: document.getElementById("broker-health-meta"),
     modePills: document.getElementById("mode-pills"),
     tableSummary: document.getElementById("table-summary"),
     filterSummary: document.getElementById("filter-summary"),
     toastContainer: document.getElementById("toast-container"),
     paperTotalSessions: document.getElementById("paper-total-sessions"),
-    paperOpenIssues: document.getElementById("paper-open-issues"),
+    brokerTotalSessions: document.getElementById("broker-total-sessions"),
     paperLatestSession: document.getElementById("paper-latest-session"),
     paperLatestSessionMeta: document.getElementById("paper-latest-session-meta"),
-    paperLatestIssue: document.getElementById("paper-latest-issue"),
-    paperLatestIssueMeta: document.getElementById("paper-latest-issue-meta"),
     paperAvailability: document.getElementById("paper-availability"),
+    brokerAvailability: document.getElementById("broker-availability"),
+    brokerLatestSession: document.getElementById("broker-latest-session"),
+    brokerLatestSessionMeta: document.getElementById("broker-latest-session-meta"),
+    hyperliquidState: document.getElementById("hyperliquid-state"),
+    hyperliquidMeta: document.getElementById("hyperliquid-meta"),
+    hyperliquidSignatureState: document.getElementById("hyperliquid-signature-state"),
+    hyperliquidSignatureMeta: document.getElementById("hyperliquid-signature-meta"),
+    stepbitState: document.getElementById("stepbit-state"),
+    stepbitMeta: document.getElementById("stepbit-meta"),
+    stepbitRepos: document.getElementById("stepbit-repos"),
+    stepbitReposMeta: document.getElementById("stepbit-repos-meta"),
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -120,6 +139,9 @@ async function fetchRegistry(showToast = false, silent = false) {
         const [response] = await Promise.all([
             fetch(`${CONFIG.registryPath}?t=${Date.now()}`),
             fetchPaperHealth(true),
+            fetchBrokerHealth(true),
+            fetchHyperliquidSurface(true),
+            fetchStepbitWorkspace(true),
         ]);
         if (!response.ok) {
             throw new Error(`Artifact not found: ${response.status}`);
@@ -176,6 +198,70 @@ async function fetchPaperHealth(silent = false) {
         };
         if (!silent) {
             notify(`Paper health fetch failed: ${error.message}`, "error");
+        }
+    }
+}
+
+async function fetchBrokerHealth(silent = false) {
+    try {
+        const response = await fetch(`${CONFIG.brokerHealthPath}?t=${Date.now()}`);
+        if (!response.ok) {
+            throw new Error(`Broker submission health unavailable: ${response.status}`);
+        }
+        state.brokerHealth = await response.json();
+    } catch (error) {
+        state.brokerHealth = {
+            status: "error",
+            available: false,
+            total_sessions: 0,
+            message: error.message,
+            status_counts: {},
+            alert_counts: {},
+            alerts: [],
+        };
+        if (!silent) {
+            notify(`Broker health fetch failed: ${error.message}`, "error");
+        }
+    }
+}
+
+async function fetchHyperliquidSurface(silent = false) {
+    try {
+        const response = await fetch(`${CONFIG.hyperliquidSurfacePath}?t=${Date.now()}`);
+        if (!response.ok) {
+            throw new Error(`Hyperliquid surface unavailable: ${response.status}`);
+        }
+        state.hyperliquidSurface = await response.json();
+    } catch (error) {
+        state.hyperliquidSurface = {
+            status: "error",
+            available: false,
+            message: error.message,
+            implemented_surfaces: {},
+            latest_artifacts: {},
+        };
+        if (!silent) {
+            notify(`Hyperliquid surface fetch failed: ${error.message}`, "error");
+        }
+    }
+}
+
+async function fetchStepbitWorkspace(silent = false) {
+    try {
+        const response = await fetch(`${CONFIG.stepbitWorkspacePath}?t=${Date.now()}`);
+        if (!response.ok) {
+            throw new Error(`Stepbit workspace unavailable: ${response.status}`);
+        }
+        state.stepbitWorkspace = await response.json();
+    } catch (error) {
+        state.stepbitWorkspace = {
+            status: "error",
+            available: false,
+            message: error.message,
+            repos: {},
+        };
+        if (!silent) {
+            notify(`Stepbit workspace fetch failed: ${error.message}`, "error");
         }
     }
 }
@@ -265,7 +351,14 @@ function updateDashboard() {
     const activeRuns = state.runs.filter((run) => run.created_at && Date.now() - new Date(run.created_at).getTime() <= 86400000).length;
     const modeCounts = state.runs.reduce((acc, run) => ({ ...acc, [run.mode || "unknown"]: (acc[run.mode || "unknown"] || 0) + 1 }), {});
     const paperHealth = state.paperHealth || { total_sessions: 0, status_counts: {} };
-    const openPaperIssues = statusCount(paperHealth, "failed") + statusCount(paperHealth, "aborted") + statusCount(paperHealth, "running");
+    const brokerHealth = state.brokerHealth || { total_sessions: 0, status_counts: {}, alert_counts: {} };
+    const hyperliquidSurface = state.hyperliquidSurface || { implemented_surfaces: {}, latest_artifacts: {} };
+    const stepbitWorkspace = state.stepbitWorkspace || { repos: {} };
+    const stepbitRepos = Object.values(stepbitWorkspace.repos || {}).filter((repo) => repo && repo.present);
+    const latestHyperArtifact = hyperliquidSurface.latest_artifacts?.signed_action
+        || hyperliquidSurface.latest_artifacts?.account_readiness
+        || hyperliquidSurface.latest_artifacts?.preflight
+        || null;
 
     elements.totalRuns.textContent = String(state.nRuns);
     elements.activeSessions.textContent = String(activeRuns);
@@ -275,8 +368,8 @@ function updateDashboard() {
     elements.drawdownFloor.textContent = `Drawdown floor: ${Number.isFinite(minDrawdown) ? formatPercent(minDrawdown) : "-"}`;
     elements.generatedAt.textContent = `Artifact generated: ${formatDateTime(state.generatedAt)}`;
     elements.heroSummary.textContent = state.runs.length
-        ? `${state.filteredRuns.length} visible of ${state.nRuns} indexed runs, with ${paperHealth.total_sessions || 0} paper sessions visible for operational context.`
-        : "No indexed runs available yet. Paper-session health will appear when the local root exists.";
+        ? `${state.filteredRuns.length} visible of ${state.nRuns} indexed runs, with paper ops, broker safety, Hyperliquid readiness, and Stepbit workspace state visible beside the registry.`
+        : "No indexed runs available yet. The surface still tracks paper ops, broker safety, Hyperliquid readiness, and the Stepbit boundary.";
     elements.heroBestRun.textContent = topRun ? topRun.run_id : "No best run yet";
     elements.heroBestMeta.textContent = topRun ? `${titleCase(topRun.mode)} · Sharpe ${formatNumber(topRun.sharpe_simple)} · Return ${formatPercent(topRun.total_return)}` : "Waiting for usable metrics";
     elements.heroRootPill.textContent = "Source: outputs/runs";
@@ -286,16 +379,37 @@ function updateDashboard() {
     elements.filterSummary.textContent = buildFilterSummary();
     elements.clearFiltersBtn.disabled = !state.searchQuery && state.filterMode === "all";
     elements.paperStrip.innerHTML = buildPaperStrip(paperHealth);
+    elements.brokerStrip.innerHTML = buildBrokerStrip(brokerHealth);
     elements.paperHealthMeta.textContent = buildPaperMeta(paperHealth);
+    elements.brokerHealthMeta.textContent = buildBrokerMeta(brokerHealth);
     elements.paperTotalSessions.textContent = String(paperHealth.total_sessions || 0);
-    elements.paperOpenIssues.textContent = String(openPaperIssues);
+    elements.brokerTotalSessions.textContent = String(brokerHealth.total_sessions || 0);
     elements.paperLatestSession.textContent = paperHealth.latest_session_id || "No sessions";
     elements.paperLatestSessionMeta.textContent = [titleCase(paperHealth.latest_session_status || "unknown"), formatDateTime(paperHealth.latest_session_at)].filter((value) => value && value !== "-").join(" · ") || "No paper activity yet";
-    elements.paperLatestIssue.textContent = paperHealth.latest_issue_session_id || "No visible issues";
-    elements.paperLatestIssueMeta.textContent = paperHealth.latest_issue_session_id
-        ? [titleCase(paperHealth.latest_issue_status || "unknown"), paperHealth.latest_issue_error_type || null, formatDateTime(paperHealth.latest_issue_at)].filter(Boolean).join(" · ")
-        : "Failed, aborted, or running sessions will surface here";
     elements.paperAvailability.textContent = paperHealth.available ? `Root: ${normalizeDisplayPath(paperHealth.root_dir || "outputs/paper_sessions")}` : (paperHealth.message || "No paper root found yet");
+    elements.brokerAvailability.textContent = brokerHealth.available ? `Root: ${normalizeDisplayPath(brokerHealth.root_dir || "outputs/broker_order_validations")}` : (brokerHealth.message || "No broker validation root found yet");
+    elements.brokerLatestSession.textContent = brokerHealth.latest_submit_session_id || "No submit sessions";
+    elements.brokerLatestSessionMeta.textContent = brokerHealth.latest_submit_session_id
+        ? [titleCase(brokerHealth.latest_submit_state || "unknown"), titleCase(brokerHealth.latest_order_state || "unknown"), formatDateTime(brokerHealth.latest_submit_at)].filter(Boolean).join(" · ")
+        : "No broker submit activity yet";
+    elements.hyperliquidState.textContent = hyperliquidSurface.implemented_surfaces?.signed_action_build ? "Read-only ready" : "Not available";
+    elements.hyperliquidMeta.textContent = latestHyperArtifact
+        ? [titleCase(latestHyperArtifact.artifact_type || "artifact"), formatDateTime(latestHyperArtifact.generated_at), latestHyperArtifact.resolved_transport ? `Transport ${titleCase(latestHyperArtifact.resolved_transport)}` : null].filter(Boolean).join(" · ")
+        : (hyperliquidSurface.message || "Preflight, readiness, and signed-action build are available when local artifacts exist");
+    elements.hyperliquidSignatureState.textContent = titleCase(hyperliquidSurface.signature_state || "pending_local_artifact");
+    elements.hyperliquidSignatureMeta.textContent = buildHyperliquidMeta(hyperliquidSurface);
+    elements.stepbitState.textContent = stepbitWorkspace.available ? "Workspace attached" : "Boundary only";
+    elements.stepbitMeta.textContent = buildStepbitMeta(stepbitWorkspace);
+    elements.stepbitRepos.textContent = String(stepbitRepos.length);
+    elements.stepbitReposMeta.textContent = stepbitRepos.length
+        ? stepbitRepos.map((repo) => `${titleCase(repo.role)}:${repo.branch || "n/a"}`).join(" · ")
+        : "stepbit-app and stepbit-core will surface here when present";
+    elements.sidebarStepbitStatus.textContent = stepbitWorkspace.available
+        ? "Local Stepbit repos are present, so the UI can show the real workspace boundary instead of a mock integration."
+        : "Stepbit is modeled as an external connected boundary. This surface will stay honest if the repos are absent.";
+    elements.sidebarStepbitMeta.textContent = stepbitRepos.length
+        ? stepbitRepos.map((repo) => `${repo.headline || titleCase(repo.role)}${repo.dirty ? " · dirty" : ""}`).join(" · ")
+        : "No local Stepbit repos discovered yet";
 }
 
 function renderTable() {
@@ -355,7 +469,7 @@ function route() {
     state.currentRunId = null;
     elements.views.runs.classList.add("active");
     elements.navItems.runs.classList.add("active");
-    elements.breadcrumb.textContent = "Research Registry + Paper Ops";
+    elements.breadcrumb.textContent = "Research, Paper Ops, Broker Safety, Stepbit Boundary";
 }
 
 async function loadRunDetail(runId, silent = false) {
@@ -632,4 +746,53 @@ function buildPaperMeta(health) {
     const latestId = health.latest_session_id || "no sessions";
     const latestState = titleCase(health.latest_session_status || "unknown");
     return `Latest paper session: ${latestId} · ${latestState}`;
+}
+
+function buildBrokerStrip(health) {
+    if (!health?.available && !health?.total_sessions) {
+        return `<span class="paper-status-pill is-muted">No broker root yet</span>`;
+    }
+    const statuses = [
+        ["approved", Number(health?.approved_sessions || 0), "is-good"],
+        ["submitted", Number(health?.submitted_sessions || 0), "is-live"],
+        ["issues", Number(health?.alerts?.length || 0), (health?.alert_status === "critical" ? "is-bad" : "is-warning")],
+    ].filter(([, count]) => count > 0);
+    return statuses.length
+        ? statuses.map(([label, count, toneClass]) => `<span class="paper-status-pill ${toneClass}"><strong>${count}</strong>${titleCase(label)}</span>`).join("")
+        : `<span class="paper-status-pill is-muted">No broker sessions yet</span>`;
+}
+
+function buildBrokerMeta(health) {
+    if (!health?.available) {
+        return health?.message || "Broker submission health will appear when outputs/broker_order_validations exists";
+    }
+    if (!health.total_sessions) {
+        return "Broker safety surfaces are implemented, but no local validation sessions have been persisted yet.";
+    }
+    const latestId = health.latest_submit_session_id || "no submit";
+    const latestState = titleCase(health.latest_submit_state || "unknown");
+    const issueCode = health.latest_issue_code ? ` · Latest issue ${titleCase(health.latest_issue_code)}` : "";
+    return `Latest broker submit: ${latestId} · ${latestState}${issueCode}`;
+}
+
+function buildHyperliquidMeta(surface) {
+    if (!surface?.available) {
+        return surface?.message || "Hyperliquid surface unavailable";
+    }
+    const implemented = Object.entries(surface.implemented_surfaces || {})
+        .filter(([, value]) => Boolean(value))
+        .map(([key]) => titleCase(key.replace(/_/g, " ")));
+    const latest = surface.latest_ready_generated_at ? `Latest artifact ${formatDateTime(surface.latest_ready_generated_at)}` : "No local Hyperliquid artifact captured yet";
+    return `${implemented.slice(0, 3).join(" · ")}${implemented.length ? " · " : ""}${latest}`;
+}
+
+function buildStepbitMeta(workspace) {
+    if (!workspace?.available) {
+        return workspace?.boundary_note || workspace?.message || "Stepbit remains an external boundary until local repos are present.";
+    }
+    const repos = Object.values(workspace.repos || {}).filter((repo) => repo && repo.present);
+    if (!repos.length) {
+        return "No Stepbit repos discovered yet.";
+    }
+    return repos.map((repo) => `${repo.headline || titleCase(repo.role)} · ${repo.branch || "n/a"}${repo.dirty ? " · dirty" : ""}`).join(" · ");
 }
