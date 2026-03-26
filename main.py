@@ -520,6 +520,12 @@ def main() -> None:
         help="Reconcile an existing broker submit response against Kraken order state.",
     )
     parser.add_argument(
+        "--broker-order-validations-status",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Refresh normalized post-submit order status for a broker order-validation session.",
+    )
+    parser.add_argument(
         "--broker-approval-reviewer",
         default=None,
         help="Reviewer name/id for local broker approval actions.",
@@ -707,6 +713,7 @@ def main() -> None:
             or args.broker_order_validations_submit_stub
             or args.broker_order_validations_submit_real
             or args.broker_order_validations_reconcile
+            or args.broker_order_validations_status
         ):
             session_metadata["mode"] = "broker_validate"
         elif (

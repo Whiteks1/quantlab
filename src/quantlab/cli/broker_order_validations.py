@@ -11,6 +11,7 @@ from typing import Any, Iterator
 from quantlab.brokers import KrakenBrokerAdapter
 from quantlab.brokers.session_store import (
     BROKER_ORDER_APPROVAL_FILENAME,
+    BROKER_ORDER_STATUS_FILENAME,
     BROKER_PRE_SUBMIT_BUNDLE_FILENAME,
     BROKER_SUBMIT_GATE_FILENAME,
     BROKER_SUBMIT_ATTEMPT_FILENAME,
@@ -25,6 +26,67 @@ from quantlab.runs.artifacts import load_json_with_fallback
 
 
 def handle_broker_order_validations_commands(args) -> bool:
+    if getattr(args, "broker_order_validations_status", None):
+        session_dir = _require_directory(
+            args.broker_order_validations_status,
+            "Broker order validation session directory",
+        )
+        summary = load_broker_order_validation_summary(session_dir)
+        if summary.get("adapter_name") != "kraken":
+            raise ConfigError(f"Unsupported adapter for broker order status refresh: {summary.get('adapter_name')}")
+
+        submit_response, submit_response_path = load_json_with_fallback(session_dir, BROKER_SUBMIT_RESPONSE_FILENAME)
+        if not submit_response_path:
+            raise ConfigError("Broker order validation session must have a broker submit response artifact before status refresh.")
+
+        txid = submit_response.get("txid")
+        if not isinstance(txid, list):
+            txid = submit_response.get("reconciliation_matched_txid")
+
+        adapter = KrakenBrokerAdapter()
+        order_status = adapter.build_order_status_report(
+            source_session_id=summary["session_id"],
+            txid=txid if isinstance(txid, list) else None,
+            userref=submit_response.get("userref"),
+            api_key=getattr(args, "kraken_api_key", None),
+            api_secret=getattr(args, "kraken_api_secret", None),
+            api_key_env=getattr(args, "kraken_api_key_env", "KRAKEN_API_KEY"),
+            api_secret_env=getattr(args, "kraken_api_secret_env", "KRAKEN_API_SECRET"),
+            timeout_seconds=float(getattr(args, "kraken_preflight_timeout", 10.0)),
+        ).to_dict()
+
+        submit_response["latest_order_status"] = order_status
+        store = BrokerOrderValidationStore(summary["session_id"], base_dir=str(session_dir.parent))
+        store.write_submit_response(submit_response)
+        store.write_order_status(order_status)
+
+        status = {
+            "status": _derive_order_status_session_state(order_status),
+            "updated_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+            "remote_validation_called": summary.get("remote_validation_called"),
+            "validation_accepted": summary.get("validation_accepted"),
+            "validation_reasons": summary.get("validation_reasons"),
+            "remote_submit_called": summary.get("submit_response_remote_called"),
+            "submitted": summary.get("submit_response_submitted"),
+            "txid": order_status.get("matched_txid"),
+            "submit_errors": summary.get("submit_errors"),
+            "order_status_known": order_status.get("status_known"),
+            "order_status_state": order_status.get("normalized_state"),
+        }
+        if order_status.get("errors"):
+            status["message"] = ", ".join(str(item) for item in order_status["errors"])
+        elif order_status.get("matched_txid"):
+            status["message"] = ", ".join(str(item) for item in order_status["matched_txid"])
+        store.write_status(status)
+
+        status_path = session_dir / BROKER_ORDER_STATUS_FILENAME
+        print("\nBroker order status refreshed:\n")
+        print(f"  session_path   : {session_dir}")
+        print(f"  status_path    : {status_path}")
+        print(f"  state          : {order_status['normalized_state']}")
+        print(f"  status_known   : {order_status['status_known']}")
+        return True
+
     if getattr(args, "broker_order_validations_reconcile", None):
         session_dir = _require_directory(
             args.broker_order_validations_reconcile,
@@ -375,6 +437,7 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
     submit_gate, submit_gate_path = load_json_with_fallback(path, BROKER_SUBMIT_GATE_FILENAME)
     submit_attempt, submit_attempt_path = load_json_with_fallback(path, BROKER_SUBMIT_ATTEMPT_FILENAME)
     submit_response, submit_response_path = load_json_with_fallback(path, BROKER_SUBMIT_RESPONSE_FILENAME)
+    order_status, order_status_path = load_json_with_fallback(path, BROKER_ORDER_STATUS_FILENAME)
 
     return {
         "session_id": metadata.get("session_id") or status.get("session_id") or path.name,
@@ -407,6 +470,11 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
         "submit_response_txid": submit_response.get("txid"),
         "submit_response_remote_called": submit_response.get("remote_submit_called"),
         "submit_response_reconciled": submit_response.get("reconciled"),
+        "order_status_present": bool(order_status_path),
+        "order_status_known": order_status.get("status_known"),
+        "order_status_state": order_status.get("normalized_state"),
+        "order_status_query_mode": order_status.get("query_mode"),
+        "order_status_txid": order_status.get("matched_txid"),
         "path": str(path),
         "metadata_path": str(path / BROKER_ORDER_VALIDATE_METADATA_FILENAME),
         "status_path": str(path / BROKER_ORDER_VALIDATE_STATUS_FILENAME),
@@ -416,6 +484,7 @@ def load_broker_order_validation_summary(session_dir: str | Path) -> dict[str, A
         "submit_gate_path": str(path / BROKER_SUBMIT_GATE_FILENAME),
         "submit_attempt_path": str(path / BROKER_SUBMIT_ATTEMPT_FILENAME),
         "submit_response_path": str(path / BROKER_SUBMIT_RESPONSE_FILENAME),
+        "order_status_path": str(path / BROKER_ORDER_STATUS_FILENAME),
     }
 
 
@@ -475,3 +544,12 @@ def _derive_reconciled_submit_state(reconciliation: dict[str, Any]) -> str:
     if "open" in sources:
         return "reconciled_open"
     return "reconciled_matched"
+
+
+def _derive_order_status_session_state(order_status: dict[str, Any]) -> str:
+    normalized_state = order_status.get("normalized_state")
+    if isinstance(normalized_state, str) and normalized_state.strip():
+        return f"order_{normalized_state}"
+    if bool(order_status.get("status_known")):
+        return "order_known"
+    return "order_unknown"
