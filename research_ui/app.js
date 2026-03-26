@@ -368,8 +368,8 @@ function updateDashboard() {
     elements.drawdownFloor.textContent = `Drawdown floor: ${Number.isFinite(minDrawdown) ? formatPercent(minDrawdown) : "-"}`;
     elements.generatedAt.textContent = `Artifact generated: ${formatDateTime(state.generatedAt)}`;
     elements.heroSummary.textContent = state.runs.length
-        ? `${state.filteredRuns.length} visible of ${state.nRuns} indexed runs, with paper ops, broker safety, Hyperliquid readiness, and Stepbit workspace state visible beside the registry.`
-        : "No indexed runs available yet. The surface still tracks paper ops, broker safety, Hyperliquid readiness, and the Stepbit boundary.";
+        ? `${state.filteredRuns.length} visible of ${state.nRuns} indexed runs, with paper ops, broker safety, Hyperliquid readiness, and Stepbit workspace state visible beside the registry of the QuantLab web3 app.`
+        : "No indexed runs available yet. The surface still tracks paper ops, broker safety, Hyperliquid readiness, and the Stepbit boundary for the QuantLab web3 app.";
     elements.heroBestRun.textContent = topRun ? topRun.run_id : "No best run yet";
     elements.heroBestMeta.textContent = topRun ? `${titleCase(topRun.mode)} · Sharpe ${formatNumber(topRun.sharpe_simple)} · Return ${formatPercent(topRun.total_return)}` : "Waiting for usable metrics";
     elements.heroRootPill.textContent = "Source: outputs/runs";

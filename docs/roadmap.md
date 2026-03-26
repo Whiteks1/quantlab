@@ -2,6 +2,12 @@
 
 This roadmap updates the original QuantLab plan to reflect the current repository state and the remaining stages needed to reach a broker-connected, automated, live-operating system without compromising QuantLab autonomy.
 
+Public product framing:
+
+- QuantLab should now be read as a `web3 app` in direction
+- but still as a supervised execution system in maturity
+- the roadmap therefore prioritizes execution safety, signer correctness, and operator control before broader onchain runtime power
+
 QuantLab should continue to evolve in this order:
 
 1. research reliability

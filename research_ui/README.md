@@ -1,6 +1,6 @@
-# QuantLab Control Surface - Local Preview
+# QuantLab web3 app - Control Surface
 
-This directory contains a strictly read-only, tangible UI layer for the QuantLab system as it is actually evolving.
+This directory contains a strictly read-only, tangible UI layer for the QuantLab web3 app as it is actually evolving.
 
 ## Current Surface
 This version supports:

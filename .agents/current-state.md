@@ -5,6 +5,7 @@
 - **Last Updated**: 2026-03-26
 - **Focus**: Stage D.2 is centered on closing ambiguity around supervised Kraken submit, especially idempotency, reconciliation, and post-submit operator safety.
 - **Authority Note**: Stepbit-facing integration remains a secondary boundary track. QuantLab stays autonomous and external consumer needs do not override QuantLab-owned priorities.
+- **Product Identity Note**: Publicly, QuantLab should now be described as a `web3 app` in direction, but still as a supervised and safety-first execution system in current maturity.
 
 ## Completed/Planned Stages
 
