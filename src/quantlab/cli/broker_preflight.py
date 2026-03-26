@@ -112,6 +112,8 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
             policy,
             context=context,
             timeout_seconds=float(getattr(args, "hyperliquid_preflight_timeout", 10.0)),
+            signing_private_key=getattr(args, "hyperliquid_private_key", None),
+            signing_private_key_env=getattr(args, "hyperliquid_private_key_env", "HYPERLIQUID_PRIVATE_KEY"),
         ).to_dict()
 
         artifact_path = outdir / "hyperliquid_signed_action.json"

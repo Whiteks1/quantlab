@@ -410,6 +410,16 @@ def main() -> None:
         help="Persist a local Hyperliquid action and signature-envelope artifact in a directory.",
     )
     parser.add_argument(
+        "--hyperliquid-private-key",
+        default=None,
+        help="Private key for local Hyperliquid action signing.",
+    )
+    parser.add_argument(
+        "--hyperliquid-private-key-env",
+        default="HYPERLIQUID_PRIVATE_KEY",
+        help="Environment variable name used to load the Hyperliquid signing private key.",
+    )
+    parser.add_argument(
         "--kraken-preflight-outdir",
         metavar="DIR",
         default=None,
