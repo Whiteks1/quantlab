@@ -392,6 +392,12 @@ def main() -> None:
         help="Persist a local Kraken dry-run audit artifact in a directory.",
     )
     parser.add_argument(
+        "--hyperliquid-preflight-outdir",
+        metavar="DIR",
+        default=None,
+        help="Persist a local Hyperliquid read-only venue preflight artifact in a directory.",
+    )
+    parser.add_argument(
         "--kraken-preflight-outdir",
         metavar="DIR",
         default=None,
@@ -426,10 +432,34 @@ def main() -> None:
         default=10.0,
         help="Timeout in seconds for Kraken public preflight probes.",
     )
+    parser.add_argument(
+        "--hyperliquid-preflight-timeout",
+        type=float,
+        default=10.0,
+        help="Timeout in seconds for Hyperliquid public preflight probes.",
+    )
     parser.add_argument("--kraken-api-key", default=None)
     parser.add_argument("--kraken-api-secret", default=None)
     parser.add_argument("--kraken-api-key-env", default="KRAKEN_API_KEY")
     parser.add_argument("--kraken-api-secret-env", default="KRAKEN_API_SECRET")
+    parser.add_argument("--execution-account-id", default=None)
+    parser.add_argument("--execution-signer-id", default=None)
+    parser.add_argument(
+        "--execution-signer-type",
+        choices=["direct", "api_wallet", "agent_wallet"],
+        default=None,
+    )
+    parser.add_argument(
+        "--execution-routing-target",
+        choices=["account", "subaccount", "vault"],
+        default=None,
+    )
+    parser.add_argument(
+        "--execution-transport-preference",
+        choices=["rest", "websocket", "either"],
+        default=None,
+    )
+    parser.add_argument("--execution-expires-after", type=int, default=None)
     parser.add_argument(
         "--kraken-dry-run-session",
         action="store_true",
@@ -708,7 +738,8 @@ def main() -> None:
         ):
             session_metadata["mode"] = "paper_sessions"
         elif (
-            args.kraken_preflight_outdir
+            args.hyperliquid_preflight_outdir
+            or args.kraken_preflight_outdir
             or args.kraken_auth_preflight_outdir
             or args.kraken_account_readiness_outdir
         ):
