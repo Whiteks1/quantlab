@@ -231,6 +231,8 @@ class HyperliquidSubmitReport:
     remote_submit_called: bool
     submitted: bool
     response_type: str | None
+    oid: int | None
+    cloid: str | None
     exchange_response: dict[str, object] | None
     reviewer: str
     note: str | None
@@ -250,9 +252,48 @@ class HyperliquidSubmitReport:
             "remote_submit_called": self.remote_submit_called,
             "submitted": self.submitted,
             "response_type": self.response_type,
+            "oid": self.oid,
+            "cloid": self.cloid,
             "exchange_response": self.exchange_response,
             "reviewer": self.reviewer,
             "note": self.note,
+            "errors": list(self.errors),
+        }
+
+
+@dataclass(frozen=True)
+class HyperliquidOrderStatusReport:
+    adapter_name: str
+    generated_at: str
+    source_session_id: str
+    execution_account_id: str | None
+    query_mode: str | None
+    query_identifier: str | None
+    query_attempted: bool
+    status_known: bool
+    normalized_state: str | None
+    raw_status: str | None
+    oid: int | None
+    cloid: str | None
+    order_status: dict[str, object] | None
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact_type": "quantlab.hyperliquid.order_status",
+            "adapter_name": self.adapter_name,
+            "generated_at": self.generated_at,
+            "source_session_id": self.source_session_id,
+            "execution_account_id": self.execution_account_id,
+            "query_mode": self.query_mode,
+            "query_identifier": self.query_identifier,
+            "query_attempted": self.query_attempted,
+            "status_known": self.status_known,
+            "normalized_state": self.normalized_state,
+            "raw_status": self.raw_status,
+            "oid": self.oid,
+            "cloid": self.cloid,
+            "order_status": self.order_status,
             "errors": list(self.errors),
         }
 
@@ -823,6 +864,8 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
                 remote_submit_called=False,
                 submitted=False,
                 response_type=None,
+                oid=None,
+                cloid=None,
                 exchange_response=None,
                 reviewer=reviewer,
                 note=note,
@@ -860,6 +903,8 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
                 remote_submit_called=False,
                 submitted=False,
                 response_type=None,
+                oid=None,
+                cloid=_extract_hyperliquid_submit_cloid(signed_action_artifact),
                 exchange_response=None,
                 reviewer=reviewer,
                 note=note,
@@ -879,6 +924,8 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
                 remote_submit_called=False,
                 submitted=False,
                 response_type=None,
+                oid=None,
+                cloid=_extract_hyperliquid_submit_cloid(signed_action_artifact),
                 exchange_response=None,
                 reviewer=reviewer,
                 note=note,
@@ -913,9 +960,111 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             remote_submit_called=remote_submit_called,
             submitted=submitted,
             response_type=response_type,
+            oid=_extract_hyperliquid_submit_oid(exchange_response),
+            cloid=_extract_hyperliquid_submit_cloid(signed_action_artifact),
             exchange_response=exchange_response,
             reviewer=reviewer,
             note=note,
+            errors=tuple(_unique_reasons(errors)),
+        )
+
+    def build_order_status_report(
+        self,
+        *,
+        source_session_id: str,
+        execution_account_id: str | None,
+        oid: int | None = None,
+        cloid: str | None = None,
+        timeout_seconds: float = 10.0,
+        fetch_json=None,
+    ) -> HyperliquidOrderStatusReport:
+        errors: list[str] = []
+        query_attempted = False
+        raw_status = None
+        normalized_state = None
+        order_status = None
+        status_known = False
+
+        resolved_execution_account = _safe_string(execution_account_id)
+        resolved_cloid = _safe_string(cloid)
+        resolved_oid = oid if isinstance(oid, int) and oid >= 0 else None
+
+        if not resolved_execution_account:
+            errors.append("missing_execution_account_id")
+        elif not _is_hex_address(resolved_execution_account):
+            errors.append("invalid_execution_account_id")
+
+        query_mode = None
+        query_identifier = None
+        query_value: int | str | None = None
+        if resolved_oid is not None:
+            query_mode = "oid"
+            query_identifier = str(resolved_oid)
+            query_value = resolved_oid
+        elif resolved_cloid:
+            query_mode = "cloid"
+            query_identifier = resolved_cloid
+            query_value = resolved_cloid
+        else:
+            errors.append("missing_order_identifier")
+
+        if errors:
+            return HyperliquidOrderStatusReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                source_session_id=source_session_id,
+                execution_account_id=resolved_execution_account,
+                query_mode=query_mode,
+                query_identifier=query_identifier,
+                query_attempted=False,
+                status_known=False,
+                normalized_state=None,
+                raw_status=None,
+                oid=resolved_oid,
+                cloid=resolved_cloid,
+                order_status=None,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        try:
+            order_status = fetch_hyperliquid_order_status(
+                resolved_execution_account,
+                query_value,
+                timeout_seconds=timeout_seconds,
+                fetch_json=fetch_json,
+            )
+            query_attempted = True
+            raw_status = _extract_hyperliquid_order_status(order_status)
+            if raw_status == "missing_order":
+                normalized_state = "unknown"
+                status_known = False
+                errors.append("missing_order")
+            elif raw_status is not None:
+                normalized_state = _normalize_hyperliquid_order_state(raw_status)
+                status_known = True
+            else:
+                normalized_state = "unknown"
+                status_known = False
+                errors.append("unknown_order_status_shape")
+        except Exception as exc:  # noqa: BLE001
+            query_attempted = True
+            normalized_state = "unknown"
+            errors.append(f"order_status_probe_failed:{exc.__class__.__name__}")
+
+        return HyperliquidOrderStatusReport(
+            adapter_name=self.adapter_name,
+            generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+            source_session_id=source_session_id,
+            execution_account_id=resolved_execution_account,
+            query_mode=query_mode,
+            query_identifier=query_identifier,
+            query_attempted=query_attempted,
+            status_known=status_known,
+            normalized_state=normalized_state,
+            raw_status=raw_status,
+            oid=resolved_oid,
+            cloid=resolved_cloid,
+            order_status=order_status,
             errors=tuple(_unique_reasons(errors)),
         )
 
@@ -978,6 +1127,21 @@ def fetch_hyperliquid_frontend_open_orders(
     if isinstance(payload, list):
         return [item for item in payload if isinstance(item, dict)]
     return []
+
+
+def fetch_hyperliquid_order_status(
+    user: str,
+    oid: int | str,
+    *,
+    timeout_seconds: float = 10.0,
+    fetch_json=None,
+) -> dict[str, object]:
+    payload = fetch_hyperliquid_info(
+        {"type": "orderStatus", "user": user, "oid": oid},
+        timeout_seconds=timeout_seconds,
+        fetch_json=fetch_json,
+    )
+    return payload if isinstance(payload, dict) else {"raw_response": payload}
 
 
 def fetch_hyperliquid_perp_market(
@@ -1164,6 +1328,40 @@ def _build_hyperliquid_submit_payload(
     return payload
 
 
+def _extract_hyperliquid_submit_oid(exchange_response: dict[str, object] | None) -> int | None:
+    if not isinstance(exchange_response, dict):
+        return None
+    response = exchange_response.get("response")
+    if not isinstance(response, dict):
+        return None
+    data = response.get("data")
+    if not isinstance(data, dict):
+        return None
+    statuses = data.get("statuses")
+    if not isinstance(statuses, list):
+        return None
+    for item in statuses:
+        if not isinstance(item, dict):
+            continue
+        for value in item.values():
+            if isinstance(value, dict) and isinstance(value.get("oid"), int):
+                return value.get("oid")
+    return None
+
+
+def _extract_hyperliquid_submit_cloid(signed_action_artifact: dict[str, object]) -> str | None:
+    action_payload = signed_action_artifact.get("action_payload")
+    if not isinstance(action_payload, dict):
+        return None
+    orders = action_payload.get("orders")
+    if not isinstance(orders, list) or not orders:
+        return None
+    first_order = orders[0]
+    if not isinstance(first_order, dict):
+        return None
+    return _safe_string(first_order.get("c"))
+
+
 def _extract_hyperliquid_response_type(exchange_response: dict[str, object] | None) -> str | None:
     if not isinstance(exchange_response, dict):
         return None
@@ -1202,6 +1400,81 @@ def _classify_hyperliquid_submit_response(
 
     submitted = not errors and status == "ok"
     return submitted, _unique_reasons(str(item) for item in errors)
+
+
+_HYPERLIQUID_CANCELED_STATES = {
+    "canceled",
+    "margincanceled",
+    "vaultwithdrawalcanceled",
+    "openinterestcapcanceled",
+    "selftradecanceled",
+    "reduceonlycanceled",
+    "siblingfilledcanceled",
+    "delistedcanceled",
+    "liquidatedcanceled",
+    "scheduledcancel",
+}
+
+_HYPERLIQUID_REJECTED_STATES = {
+    "rejected",
+    "tickrejected",
+    "mintradentlrejected",
+    "perpmarginrejected",
+    "reduceonlyrejected",
+    "badalopxrejected",
+    "ioccancelrejected",
+    "badtriggerpxrejected",
+    "marketordernoliquidityrejected",
+    "positionincreaseatopeninterestcaprejected",
+    "positionflipatopeninterestcaprejected",
+    "tooaggressiveatopeninterestcaprejected",
+    "openinterestincreaserejected",
+    "insufficientspotbalancerejected",
+    "oraclerejected",
+    "perpmaxpositionrejected",
+}
+
+
+def _extract_hyperliquid_order_status(order_status: dict[str, object] | None) -> str | None:
+    if not isinstance(order_status, dict):
+        return None
+    status = order_status.get("status")
+    if isinstance(status, str):
+        normalized = status.strip()
+        if normalized:
+            lower = normalized.lower()
+            if lower == "order":
+                order = order_status.get("order")
+                if isinstance(order, dict):
+                    nested_status = order.get("status")
+                    if isinstance(nested_status, str) and nested_status.strip():
+                        return nested_status.strip()
+            if lower in {"missing", "missingorder", "missing_order"}:
+                return "missing_order"
+            return normalized
+    order = order_status.get("order")
+    if isinstance(order, dict):
+        nested_status = order.get("status")
+        if isinstance(nested_status, str) and nested_status.strip():
+            return nested_status.strip()
+    return None
+
+
+def _normalize_hyperliquid_order_state(raw_status: str | None) -> str | None:
+    if raw_status is None:
+        return None
+    lowered = raw_status.strip().lower()
+    if lowered in {"open", "triggered"}:
+        return "open"
+    if lowered == "filled":
+        return "filled"
+    if lowered in _HYPERLIQUID_CANCELED_STATES:
+        return "canceled"
+    if lowered in _HYPERLIQUID_REJECTED_STATES:
+        return "rejected"
+    if lowered == "missing_order":
+        return "unknown"
+    return "unknown"
 
 
 def _safe_string(value: object) -> str | None:

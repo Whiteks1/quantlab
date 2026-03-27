@@ -17,6 +17,8 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "hyperliquid_submit_sessions_list": None,
         "hyperliquid_submit_sessions_show": None,
         "hyperliquid_submit_sessions_index": None,
+        "hyperliquid_submit_sessions_status": None,
+        "hyperliquid_preflight_timeout": 10.0,
     }
     defaults.update(kwargs)
     return types.SimpleNamespace(**defaults)
@@ -55,6 +57,12 @@ def _write_session(tmp_path, name="20260327_hyperliquid_submit_demo"):
         json.dumps(
             {
                 "artifact_type": "quantlab.hyperliquid.signed_action",
+                "account_readiness": {
+                    "execution_context": {
+                        "execution_account_id": "0x1111111111111111111111111111111111111111",
+                    }
+                },
+                "action_payload": {"orders": [{"c": "abc123cloid"}]},
                 "signature_envelope": {
                     "signer_id": "0x1111111111111111111111111111111111111111",
                     "signature_state": "signed",
@@ -71,6 +79,8 @@ def _write_session(tmp_path, name="20260327_hyperliquid_submit_demo"):
                 "remote_submit_called": True,
                 "submitted": True,
                 "response_type": "resting",
+                "oid": 12345,
+                "cloid": "abc123cloid",
                 "source_signer_id": "0x1111111111111111111111111111111111111111",
             }
         ),
@@ -118,6 +128,50 @@ def test_refresh_hyperliquid_submit_index(tmp_path):
     assert handle_hyperliquid_submit_sessions_commands(args) is True
     assert (tmp_path / "hyperliquid_submits_index.json").exists()
     assert (tmp_path / "hyperliquid_submits_index.csv").exists()
+
+
+def test_refresh_hyperliquid_submit_status(monkeypatch, tmp_path):
+    from quantlab.cli import hyperliquid_submit_sessions as module
+
+    session_dir = _write_session(tmp_path)
+
+    def fake_status(self, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.hyperliquid.order_status",
+                    "adapter_name": "hyperliquid",
+                    "generated_at": "2026-03-27T12:05:00",
+                    "source_session_id": "20260327_hyperliquid_submit_demo",
+                    "execution_account_id": "0x1111111111111111111111111111111111111111",
+                    "query_mode": "oid",
+                    "query_identifier": "12345",
+                    "query_attempted": True,
+                    "status_known": True,
+                    "normalized_state": "open",
+                    "raw_status": "open",
+                    "oid": 12345,
+                    "cloid": "abc123cloid",
+                    "order_status": {"status": "order", "order": {"status": "open"}},
+                    "errors": [],
+                }
+
+        return _Fake()
+
+    monkeypatch.setattr(module.HyperliquidBrokerAdapter, "build_order_status_report", fake_status)
+
+    args = _make_args(hyperliquid_submit_sessions_status=str(session_dir))
+    assert handle_hyperliquid_submit_sessions_commands(args) is True
+
+    status_artifact = session_dir / "hyperliquid_order_status.json"
+    assert status_artifact.exists()
+    status_payload = json.loads(status_artifact.read_text(encoding="utf-8"))
+    assert status_payload["normalized_state"] == "open"
+
+    session_status = json.loads((session_dir / "session_status.json").read_text(encoding="utf-8"))
+    assert session_status["status"] == "open"
+    assert session_status["order_status_known"] is True
+    assert session_status["order_status_state"] == "open"
 
 
 def test_invalid_hyperliquid_submit_session_raises(tmp_path):

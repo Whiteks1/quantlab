@@ -24,6 +24,8 @@ _INDEX_FIELDS = [
     "remote_submit_called",
     "submitted",
     "response_type",
+    "order_status_known",
+    "latest_order_state",
     "path",
 ]
 

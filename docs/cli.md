@@ -345,7 +345,7 @@ Important safety notes:
 - this path only accepts `hyperliquid_signed_action.json`
 - the source artifact must already be `signature_state = signed`
 - this is a narrow supervised submit surface, not yet a full session/reconciliation framework
-- no websocket execution, cancel flow, or Hyperliquid post-submit tracking exists yet
+- no websocket execution or cancel flow exists yet
 
 ### `--hyperliquid-submit-session`
 
@@ -397,6 +397,30 @@ Refresh the shared Hyperliquid submit index:
 ```bash
 python main.py --hyperliquid-submit-sessions-index outputs/hyperliquid_submits
 ```
+
+### `--hyperliquid-submit-sessions-status`
+
+Refresh normalized post-submit order status for one canonical Hyperliquid submit session:
+
+```bash
+python main.py --hyperliquid-submit-sessions-status outputs/hyperliquid_submits/<session_id>
+```
+
+This writes:
+
+- `outputs/hyperliquid_submits/<session_id>/hyperliquid_order_status.json`
+
+The status surface currently:
+
+- queries Hyperliquid `orderStatus` using session-derived `oid` or `cloid`
+- persists the raw order-status snapshot
+- normalizes local state into `open`, `filled`, `canceled`, `rejected`, or `unknown`
+- updates `session_status.json` so session inspection reflects the latest known order state
+
+Current limitation:
+
+- no Hyperliquid reconciliation flow exists yet beyond the direct `orderStatus` query
+- no websocket supervision or cancel path exists yet
 
 ### `--kraken-preflight-outdir`
 
