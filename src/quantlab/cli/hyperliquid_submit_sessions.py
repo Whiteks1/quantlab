@@ -13,6 +13,7 @@ from typing import Any, Iterator
 from quantlab.brokers import HyperliquidBrokerAdapter
 from quantlab.brokers.session_store import (
     HYPERLIQUID_ORDER_STATUS_FILENAME,
+    HYPERLIQUID_RECONCILIATION_FILENAME,
     HYPERLIQUID_SIGNED_ACTION_FILENAME,
     HYPERLIQUID_SUBMIT_METADATA_FILENAME,
     HYPERLIQUID_SUBMIT_RESPONSE_FILENAME,
@@ -24,6 +25,58 @@ from quantlab.runs.artifacts import load_json_with_fallback
 
 
 def handle_hyperliquid_submit_sessions_commands(args) -> bool:
+    if getattr(args, "hyperliquid_submit_sessions_reconcile", None):
+        session_dir = _require_directory(
+            args.hyperliquid_submit_sessions_reconcile,
+            "Hyperliquid submit session directory",
+        )
+        summary = load_hyperliquid_submit_summary(session_dir)
+
+        signed_action, signed_action_path = load_json_with_fallback(session_dir, HYPERLIQUID_SIGNED_ACTION_FILENAME)
+        submit_response, _ = load_json_with_fallback(session_dir, HYPERLIQUID_SUBMIT_RESPONSE_FILENAME)
+        if not signed_action_path:
+            raise ConfigError("Hyperliquid submit session must have a signed-action artifact before reconciliation.")
+
+        execution_account_id = _extract_execution_account_id(signed_action)
+        oid = _extract_session_oid(submit_response)
+        cloid = _extract_session_cloid(signed_action, submit_response)
+
+        adapter = HyperliquidBrokerAdapter()
+        report = adapter.build_reconciliation_report(
+            source_session_id=summary["session_id"],
+            execution_account_id=execution_account_id,
+            oid=oid,
+            cloid=cloid,
+            timeout_seconds=float(getattr(args, "hyperliquid_preflight_timeout", 10.0)),
+        ).to_dict()
+
+        store = HyperliquidSubmitStore(summary["session_id"], base_dir=str(session_dir.parent))
+        store.write_reconciliation(report)
+        status = {
+            "status": _derive_hyperliquid_submit_session_status(report),
+            "updated_at": report["generated_at"],
+            "submit_state": summary.get("submit_state"),
+            "remote_submit_called": summary.get("remote_submit_called"),
+            "submitted": summary.get("submitted"),
+            "order_status_known": report["status_known"],
+            "order_status_state": report["normalized_state"],
+            "reconciliation_known": report["status_known"],
+            "reconciliation_state": report["normalized_state"],
+            "reconciliation_source": report["resolution_source"],
+        }
+        if report.get("errors"):
+            status["message"] = ", ".join(str(item) for item in report["errors"])
+        store.write_status(status)
+
+        reconciliation_path = session_dir / HYPERLIQUID_RECONCILIATION_FILENAME
+        print("\nHyperliquid submit reconciliation completed:\n")
+        print(f"  session_path          : {session_dir}")
+        print(f"  reconciliation_path   : {reconciliation_path}")
+        print(f"  resolution_source     : {report['resolution_source']}")
+        print(f"  state                 : {report['normalized_state']}")
+        print(f"  status_known          : {report['status_known']}")
+        return True
+
     if getattr(args, "hyperliquid_submit_sessions_health", None):
         root_dir = _require_directory(args.hyperliquid_submit_sessions_health, "Hyperliquid submit sessions root")
         health = build_hyperliquid_submission_health(root_dir)
@@ -33,9 +86,12 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  submit_response_sessions: {health['submit_response_sessions']}")
         print(f"  submitted_sessions      : {health['submitted_sessions']}")
         print(f"  order_status_known      : {health['order_status_known_sessions']}")
+        print(f"  reconciliation_sessions : {health['reconciliation_sessions']}")
+        print(f"  effective_order_known   : {health['effective_order_known_sessions']}")
         print(f"  latest_submit_id        : {health.get('latest_submit_session_id')}")
         print(f"  latest_submit_state     : {health.get('latest_submit_state')}")
         print(f"  latest_order_state      : {health.get('latest_order_state')}")
+        print(f"  latest_reconcile_state  : {health.get('latest_reconciliation_state')}")
         print(f"  latest_issue_id         : {health.get('latest_issue_session_id')}")
         print(f"  latest_issue_code       : {health.get('latest_issue_code')}")
         print(f"  latest_issue_at         : {health.get('latest_issue_at')}")
@@ -156,8 +212,13 @@ def load_hyperliquid_submit_summary(session_dir: str | Path) -> dict[str, Any]:
     signed_action, signed_action_path = load_json_with_fallback(path, HYPERLIQUID_SIGNED_ACTION_FILENAME)
     submit_response, response_path = load_json_with_fallback(path, HYPERLIQUID_SUBMIT_RESPONSE_FILENAME)
     order_status, order_status_path = load_json_with_fallback(path, HYPERLIQUID_ORDER_STATUS_FILENAME)
+    reconciliation, reconciliation_path = load_json_with_fallback(path, HYPERLIQUID_RECONCILIATION_FILENAME)
 
     envelope = signed_action.get("signature_envelope", {}) if isinstance(signed_action, dict) else {}
+    effective_order_known = bool(reconciliation.get("status_known")) if reconciliation_path else bool(order_status.get("status_known"))
+    effective_order_state = (
+        reconciliation.get("normalized_state") if reconciliation_path else order_status.get("normalized_state")
+    )
 
     return {
         "session_id": metadata.get("session_id") or status.get("session_id") or path.name,
@@ -180,6 +241,14 @@ def load_hyperliquid_submit_summary(session_dir: str | Path) -> dict[str, Any]:
         "latest_order_state": order_status.get("normalized_state"),
         "order_status_generated_at": order_status.get("generated_at"),
         "order_status_errors": order_status.get("errors"),
+        "reconciliation_known": reconciliation.get("status_known"),
+        "latest_reconciliation_state": reconciliation.get("normalized_state"),
+        "reconciliation_generated_at": reconciliation.get("generated_at"),
+        "reconciliation_source": reconciliation.get("resolution_source"),
+        "reconciliation_errors": reconciliation.get("errors"),
+        "reconciliation_present": bool(reconciliation_path),
+        "effective_order_known": effective_order_known,
+        "effective_order_state": effective_order_state,
         "order_status_present": bool(order_status_path),
         "signed_action_present": bool(signed_action_path),
         "submit_response_present": bool(response_path),
@@ -189,6 +258,7 @@ def load_hyperliquid_submit_summary(session_dir: str | Path) -> dict[str, Any]:
         "signed_action_path": str(path / HYPERLIQUID_SIGNED_ACTION_FILENAME) if signed_action_path else None,
         "submit_response_path": str(path / HYPERLIQUID_SUBMIT_RESPONSE_FILENAME) if response_path else None,
         "order_status_path": str(path / HYPERLIQUID_ORDER_STATUS_FILENAME) if order_status_path else None,
+        "reconciliation_path": str(path / HYPERLIQUID_RECONCILIATION_FILENAME) if reconciliation_path else None,
     }
 
 
@@ -201,6 +271,7 @@ def _is_valid_hyperliquid_submit_dir(path: Path) -> bool:
             HYPERLIQUID_SIGNED_ACTION_FILENAME,
             HYPERLIQUID_SUBMIT_RESPONSE_FILENAME,
             HYPERLIQUID_ORDER_STATUS_FILENAME,
+            HYPERLIQUID_RECONCILIATION_FILENAME,
         )
     )
 
@@ -213,7 +284,7 @@ def _require_directory(path_str: str | Path, label: str) -> Path:
 
 
 def _print_sessions_table(sessions: list[dict[str, Any]]) -> None:
-    fields = ["session_id", "status", "submit_state", "latest_order_state", "created_at"]
+    fields = ["session_id", "status", "submit_state", "effective_order_state", "created_at"]
     widths = {
         field: max(len(field), max((len(str(row.get(field) or "")) for row in sessions), default=0))
         for field in fields
@@ -287,20 +358,23 @@ def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
         "submit_response_sessions": sum(1 for session in sessions if session.get("submit_response_present")),
         "submitted_sessions": sum(1 for session in sessions if session.get("submitted")),
         "order_status_known_sessions": sum(1 for session in sessions if session.get("order_status_known")),
+        "reconciliation_sessions": sum(1 for session in sessions if session.get("reconciliation_present")),
+        "effective_order_known_sessions": sum(1 for session in sessions if session.get("effective_order_known")),
         "status_counts": dict(Counter((session.get("status") or "unknown") for session in sessions)),
         "submit_state_counts": dict(
             Counter((session.get("submit_state") or "no_submit_response") for session in sessions)
         ),
         "order_state_counts": dict(
             Counter(
-                (session.get("latest_order_state") or "unknown")
+                (session.get("effective_order_state") or "unknown")
                 for session in sessions
                 if session.get("submit_response_present")
             )
         ),
         "latest_submit_session_id": latest_submit.get("session_id") if latest_submit else None,
         "latest_submit_state": latest_submit.get("submit_state") if latest_submit else None,
-        "latest_order_state": latest_submit.get("latest_order_state") if latest_submit else None,
+        "latest_order_state": latest_submit.get("effective_order_state") if latest_submit else None,
+        "latest_reconciliation_state": latest_submit.get("latest_reconciliation_state") if latest_submit else None,
         "latest_submit_at": _activity_at(latest_submit) if latest_submit else None,
         "latest_issue_session_id": latest_issue.get("session_id") if latest_issue else None,
         "latest_issue_code": latest_issue.get("alert_code") if latest_issue else None,
@@ -330,7 +404,7 @@ def build_hyperliquid_submission_alerts(root_dir: str | Path) -> dict[str, Any]:
         "submitted_sessions": sum(1 for session in sessions if session.get("submitted")),
         "order_state_counts": dict(
             Counter(
-                (session.get("latest_order_state") or "unknown")
+                (session.get("effective_order_state") or "unknown")
                 for session in sessions
                 if session.get("submit_response_present")
             )
@@ -357,7 +431,7 @@ def _collect_hyperliquid_submission_alerts(sessions: list[dict[str, Any]]) -> li
         activity_at = _parse_activity_timestamp(session)
 
         if submitted:
-            if not session.get("order_status_present"):
+            if not session.get("order_status_present") and not session.get("reconciliation_present"):
                 alerts.append(
                     _build_hyperliquid_alert(
                         code="HYPERLIQUID_ORDER_STATUS_MISSING",
@@ -367,17 +441,17 @@ def _collect_hyperliquid_submission_alerts(sessions: list[dict[str, Any]]) -> li
                         message="Submitted Hyperliquid session has no persistent order-status artifact yet.",
                     )
                 )
-            elif not bool(session.get("order_status_known")):
+            elif not bool(session.get("effective_order_known")):
                 alerts.append(
                     _build_hyperliquid_alert(
                         code="HYPERLIQUID_ORDER_STATUS_UNKNOWN",
                         severity="critical",
                         session=session,
                         activity_at=activity_at,
-                        message=_join_reasons(session.get("order_status_errors")) or "Submitted Hyperliquid session has no known remote order state yet.",
+                        message=_join_reasons(session.get("reconciliation_errors") or session.get("order_status_errors")) or "Submitted Hyperliquid session has no known remote order state yet.",
                     )
                 )
-            elif session.get("latest_order_state") == "rejected":
+            elif session.get("effective_order_state") == "rejected":
                 alerts.append(
                     _build_hyperliquid_alert(
                         code="HYPERLIQUID_ORDER_REJECTED",
@@ -387,7 +461,7 @@ def _collect_hyperliquid_submission_alerts(sessions: list[dict[str, Any]]) -> li
                         message="Submitted Hyperliquid session reached remote order state 'rejected'.",
                     )
                 )
-            elif session.get("latest_order_state") == "canceled":
+            elif session.get("effective_order_state") == "canceled":
                 alerts.append(
                     _build_hyperliquid_alert(
                         code="HYPERLIQUID_ORDER_CANCELED",
@@ -435,7 +509,7 @@ def _build_hyperliquid_alert(
         "session_id": session.get("session_id"),
         "status": session.get("status"),
         "submit_state": session.get("submit_state"),
-        "order_status_state": session.get("latest_order_state"),
+        "order_status_state": session.get("effective_order_state"),
         "activity_at": activity_at.replace(microsecond=0).isoformat() if activity_at else None,
         "path": session.get("path"),
         "message": message,
@@ -459,6 +533,7 @@ def _parse_activity_timestamp(session: dict[str, Any] | None) -> dt.datetime | N
         return None
 
     for key in (
+        "reconciliation_generated_at",
         "order_status_generated_at",
         "submit_response_generated_at",
         "updated_at",

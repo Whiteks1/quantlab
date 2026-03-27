@@ -486,6 +486,12 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="Refresh normalized post-submit order status for a Hyperliquid submit session.",
     )
     parser.add_argument(
+        "--hyperliquid-submit-sessions-reconcile",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Reconcile a Hyperliquid submit session against direct order status and open-order surfaces.",
+    )
+    parser.add_argument(
         "--hyperliquid-submit-sessions-health",
         metavar="ROOT_DIR",
         default=None,
@@ -862,6 +868,7 @@ def _determine_session_mode(args: argparse.Namespace, json_command: str | None) 
         or args.hyperliquid_submit_sessions_show
         or args.hyperliquid_submit_sessions_index
         or args.hyperliquid_submit_sessions_status
+        or args.hyperliquid_submit_sessions_reconcile
         or args.hyperliquid_submit_sessions_health
         or args.hyperliquid_submit_sessions_alerts
     ):
