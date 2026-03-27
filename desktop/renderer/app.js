@@ -182,6 +182,7 @@ async function refreshSnapshot() {
     state.selectedRunIds = state.selectedRunIds.filter((runId) => validIds.has(runId));
     renderWorkspaceState();
     renderWorkflow();
+    refreshLiveJobTabs();
     rerenderContextualTabs();
   } catch (_error) {
     // Keep the shell usable even if optional surfaces are down.
@@ -651,6 +652,18 @@ async function openJobTab(requestId) {
     error: null,
   });
 
+  await refreshJobTab(requestId, job);
+}
+
+async function refreshJobTab(requestId, fallbackJob = null, options = {}) {
+  const { silent = false } = options;
+  const tabId = `job:${requestId}`;
+  const job = findJob(requestId) || fallbackJob;
+  if (!job) {
+    if (!silent) pushMessage("assistant", `Launch job ${requestId} is not present in the current snapshot.`);
+    return;
+  }
+
   try {
     const [stdoutText, stderrText] = await Promise.all([
       loadOptionalText(job.stdout_href),
@@ -668,7 +681,7 @@ async function openJobTab(requestId) {
       stderrText,
       error: null,
     });
-    pushMessage("assistant", `Opened launch job ${requestId}.`);
+    if (!silent) pushMessage("assistant", `Opened launch job ${requestId}.`);
   } catch (error) {
     upsertTab({
       id: tabId,
@@ -682,7 +695,7 @@ async function openJobTab(requestId) {
       stderrText: "",
       error: error.message || "Could not load job logs.",
     });
-    pushMessage("assistant", error.message || `Could not load job ${requestId}.`);
+    if (!silent) pushMessage("assistant", error.message || `Could not load job ${requestId}.`);
   }
 }
 
@@ -778,13 +791,14 @@ function buildLaunchPayloadFromForm() {
 
 function parseLaunchRunPrompt(prompt) {
   if (!prompt.trim().toLowerCase().startsWith("launch run")) return null;
-  const ticker = extractNamedValue(prompt, "ticker");
-  const start = extractNamedValue(prompt, "start");
-  const end = extractNamedValue(prompt, "end");
+  const keys = ["ticker", "start", "end", "interval", "cash", "paper"];
+  const ticker = extractNamedValue(prompt, "ticker", keys);
+  const start = extractNamedValue(prompt, "start", keys);
+  const end = extractNamedValue(prompt, "end", keys);
   if (!ticker || !start || !end) return null;
   const params = { ticker, start, end };
-  const interval = extractNamedValue(prompt, "interval");
-  const cash = extractNamedValue(prompt, "cash");
+  const interval = extractNamedValue(prompt, "interval", keys);
+  const cash = extractNamedValue(prompt, "cash", keys);
   if (interval) params.interval = interval;
   if (cash) params.initial_cash = cash;
   if (/\bpaper\b/i.test(prompt)) params.paper = true;
@@ -793,17 +807,20 @@ function parseLaunchRunPrompt(prompt) {
 
 function parseLaunchSweepPrompt(prompt) {
   if (!prompt.trim().toLowerCase().startsWith("launch sweep")) return null;
-  const configPath = extractNamedValue(prompt, "config");
+  const keys = ["config", "out"];
+  const configPath = extractNamedValue(prompt, "config", keys);
   if (!configPath) return null;
   const payload = { command: "sweep", params: { config_path: configPath } };
-  const outDir = extractNamedValue(prompt, "out");
+  const outDir = extractNamedValue(prompt, "out", keys);
   if (outDir) payload.params.out_dir = outDir;
   return payload;
 }
 
-function extractNamedValue(prompt, key) {
-  const match = String(prompt).match(new RegExp(`${key}\\s+([^\\s]+)`, "i"));
-  return match ? match[1].trim() : "";
+function extractNamedValue(prompt, key, knownKeys = []) {
+  const otherKeys = knownKeys.filter((candidate) => candidate !== key).map(escapeRegex);
+  const boundary = otherKeys.length ? `(?=\\s+(?:${otherKeys.join("|")})\\b|$)` : `(?=$)`;
+  const match = String(prompt).match(new RegExp(`${escapeRegex(key)}\\s+(.+?)${boundary}`, "i"));
+  return match ? stripWrappingQuotes(match[1].trim()) : "";
 }
 
 function extractRunIdAfterPrefix(prompt, prefix) {
@@ -977,6 +994,20 @@ function rerenderContextualTabs() {
   if (state.tabs.some((tab) => tab.kind === "compare" || tab.kind === "artifacts" || tab.kind === "job")) renderTabs();
 }
 
+function refreshLiveJobTabs() {
+  state.tabs
+    .filter((tab) => tab.kind === "job")
+    .forEach((tab) => {
+      const currentJob = findJob(tab.requestId);
+      if (!currentJob) return;
+      const statusChanged = tab.job?.status !== currentJob.status;
+      const needsLiveRefresh = currentJob.status === "running" || statusChanged;
+      if (needsLiveRefresh) {
+        refreshJobTab(tab.requestId, currentJob, { silent: true });
+      }
+    });
+}
+
 async function loadRunDetail(runId) {
   if (state.detailCache.has(runId)) return state.detailCache.get(runId);
   const run = findRun(runId);
@@ -992,7 +1023,9 @@ async function loadRunDetail(runId) {
       // Keep trying the remaining artifact names.
     }
   }
-  state.detailCache.set(runId, detail);
+  if (detail.report) {
+    state.detailCache.set(runId, detail);
+  }
   return detail;
 }
 
@@ -1154,6 +1187,14 @@ function toneClass(value, higherIsBetter) {
 
 function metricValue(value) {
   return typeof value === "number" && !Number.isNaN(value) ? value : Number.NEGATIVE_INFINITY;
+}
+
+function stripWrappingQuotes(value) {
+  return String(value || "").replace(/^["']|["']$/g, "");
+}
+
+function escapeRegex(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function escapeHtml(value) {
