@@ -16,6 +16,10 @@ from quantlab.cli.broker_order_validations import (
     build_broker_submission_alerts,
     build_broker_submission_health,
 )
+from quantlab.cli.hyperliquid_submit_sessions import (
+    build_hyperliquid_submission_alerts,
+    build_hyperliquid_submission_health,
+)
 from quantlab.cli.paper_sessions import build_paper_sessions_health
 
 
@@ -142,6 +146,7 @@ def build_broker_health_payload(project_root: Path | None = None) -> tuple[dict,
 
 def build_hyperliquid_surface_payload(project_root: Path | None = None) -> tuple[dict, int]:
     root = Path(project_root or PROJECT_ROOT)
+    submit_root = root / "outputs" / "hyperliquid_submits"
     search_roots = [
         root / "outputs",
         root / "tmp",
@@ -164,6 +169,16 @@ def build_hyperliquid_surface_payload(project_root: Path | None = None) -> tuple
             "artifact_name": "hyperliquid_signed_action.json",
             "summary_key": "readiness_allowed",
         },
+        "submit_response": {
+            "implemented": True,
+            "artifact_name": "hyperliquid_submit_response.json",
+            "summary_key": "submit_state",
+        },
+        "order_status": {
+            "implemented": True,
+            "artifact_name": "hyperliquid_order_status.json",
+            "summary_key": "normalized_state",
+        },
     }
 
     latest_artifacts: dict[str, dict[str, object] | None] = {}
@@ -177,6 +192,8 @@ def build_hyperliquid_surface_payload(project_root: Path | None = None) -> tuple
         (
             artifact
             for artifact in (
+                latest_artifacts["order_status"],
+                latest_artifacts["submit_response"],
                 latest_artifacts["signed_action"],
                 latest_artifacts["account_readiness"],
                 latest_artifacts["preflight"],
@@ -186,17 +203,94 @@ def build_hyperliquid_surface_payload(project_root: Path | None = None) -> tuple
         None,
     )
 
+    if submit_root.exists():
+        try:
+            submit_health = build_hyperliquid_submission_health(submit_root)
+            submit_alerts = build_hyperliquid_submission_alerts(submit_root)
+        except Exception as exc:  # noqa: BLE001
+            submit_health = {
+                "root_dir": str(submit_root),
+                "message": str(exc),
+                "total_sessions": 0,
+                "submit_response_sessions": 0,
+                "submitted_sessions": 0,
+                "order_status_known_sessions": 0,
+                "status_counts": {},
+                "submit_state_counts": {},
+                "order_state_counts": {},
+                "latest_submit_session_id": None,
+                "latest_submit_state": None,
+                "latest_order_state": None,
+                "latest_submit_at": None,
+                "latest_issue_session_id": None,
+                "latest_issue_code": None,
+                "latest_issue_at": None,
+            }
+            submit_alerts = {
+                "root_dir": str(submit_root),
+                "message": str(exc),
+                "generated_at": None,
+                "total_sessions": 0,
+                "submit_response_sessions": 0,
+                "submitted_sessions": 0,
+                "order_state_counts": {},
+                "alert_status": "error",
+                "has_alerts": False,
+                "alert_counts": {},
+                "latest_alert_session_id": None,
+                "latest_alert_code": None,
+                "latest_alert_at": None,
+                "alerts": [],
+            }
+    else:
+        submit_health = {
+            "root_dir": str(submit_root),
+            "message": "No Hyperliquid submit root found yet.",
+            "total_sessions": 0,
+            "submit_response_sessions": 0,
+            "submitted_sessions": 0,
+            "order_status_known_sessions": 0,
+            "status_counts": {},
+            "submit_state_counts": {},
+            "order_state_counts": {},
+            "latest_submit_session_id": None,
+            "latest_submit_state": None,
+            "latest_order_state": None,
+            "latest_submit_at": None,
+            "latest_issue_session_id": None,
+            "latest_issue_code": None,
+            "latest_issue_at": None,
+        }
+        submit_alerts = {
+            "root_dir": str(submit_root),
+            "generated_at": None,
+            "total_sessions": 0,
+            "submit_response_sessions": 0,
+            "submitted_sessions": 0,
+            "order_state_counts": {},
+            "alert_status": "ok",
+            "has_alerts": False,
+            "alert_counts": {},
+            "latest_alert_session_id": None,
+            "latest_alert_code": None,
+            "latest_alert_at": None,
+            "alerts": [],
+        }
+
     return {
         "status": "ok",
         "available": True,
-        "message": "Hyperliquid runtime remains read-only and pre-submit only.",
+        "message": "Hyperliquid now spans venue preflight, signer readiness, local signing, supervised submit, and post-submit session visibility.",
         "search_roots": [str(path) for path in search_roots if path.exists()],
         "implemented_surfaces": {
             "preflight": True,
             "account_readiness": True,
             "signed_action_build": True,
-            "cryptographic_signing": False,
-            "order_submit": False,
+            "cryptographic_signing": True,
+            "order_submit": True,
+            "submit_sessions": True,
+            "post_submit_status": True,
+            "submission_health": True,
         },
         "execution_context_pressure": {
             "signer_identity": True,
@@ -205,6 +299,13 @@ def build_hyperliquid_surface_payload(project_root: Path | None = None) -> tuple
             "nonce_hint": True,
             "expires_after": True,
         },
+        "submit_sessions_available": submit_root.exists(),
+        "submit_sessions_root": str(submit_root),
+        "submit_health": submit_health,
+        "submit_alert_status": submit_alerts.get("alert_status", "ok"),
+        "submit_has_alerts": submit_alerts.get("has_alerts", False),
+        "submit_alert_counts": submit_alerts.get("alert_counts", {}),
+        "submit_alerts": submit_alerts.get("alerts", []),
         "latest_artifacts": latest_artifacts,
         "latest_ready_artifact_type": latest_ready_artifact.get("artifact_type") if latest_ready_artifact else None,
         "latest_ready_generated_at": latest_ready_artifact.get("generated_at") if latest_ready_artifact else None,
@@ -327,6 +428,12 @@ def _find_latest_hyperliquid_artifact(search_roots: list[Path], filename: str) -
         "signature_state": payload.get("signature_envelope", {}).get("signature_state"),
         "resolved_transport": payload.get("execution_context", {}).get("resolved_transport"),
         "execution_account_role": payload.get("execution_account_role"),
+        "submit_state": payload.get("submit_state"),
+        "submitted": payload.get("submitted"),
+        "response_type": payload.get("response_type"),
+        "remote_submit_called": payload.get("remote_submit_called"),
+        "order_status_known": payload.get("status_known"),
+        "normalized_state": payload.get("normalized_state"),
     }
 
 
@@ -338,6 +445,10 @@ def _is_hyperliquid_payload(filename: str, payload: dict[str, object]) -> bool:
         return "execution_account_role" in payload
     if filename == "hyperliquid_signed_action.json":
         return "signature_envelope" in payload
+    if filename == "hyperliquid_submit_response.json":
+        return "submit_state" in payload
+    if filename == "hyperliquid_order_status.json":
+        return "normalized_state" in payload or "status_known" in payload
     return False
 
 def run_server():

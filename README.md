@@ -157,6 +157,8 @@ python main.py --help
 - `--hyperliquid-submit-sessions-show`: inspect one canonical Hyperliquid submit session
 - `--hyperliquid-submit-sessions-index`: refresh the shared Hyperliquid submit index under the submit root
 - `--hyperliquid-submit-sessions-status`: refresh normalized post-submit order status for a canonical Hyperliquid submit session
+- `--hyperliquid-submit-sessions-health`: summarize Hyperliquid submission health across canonical submit sessions
+- `--hyperliquid-submit-sessions-alerts`: emit a deterministic alert snapshot for notable Hyperliquid submit-session states
 - `--kraken-preflight-outdir`: persist a read-only Kraken public preflight artifact
 - `--kraken-auth-preflight-outdir`: persist a read-only Kraken authenticated preflight artifact
 - `--kraken-account-readiness-outdir`: persist a read-only Kraken account snapshot and intent readiness artifact

@@ -475,6 +475,18 @@ def main() -> None:
         help="Refresh normalized post-submit order status for a Hyperliquid submit session.",
     )
     parser.add_argument(
+        "--hyperliquid-submit-sessions-health",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Summarize Hyperliquid submission health across canonical submit sessions.",
+    )
+    parser.add_argument(
+        "--hyperliquid-submit-sessions-alerts",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Emit a deterministic alert snapshot for notable Hyperliquid submit-session states.",
+    )
+    parser.add_argument(
         "--hyperliquid-private-key",
         default=None,
         help="Private key for local Hyperliquid action signing.",
@@ -841,6 +853,8 @@ def main() -> None:
             or args.hyperliquid_submit_sessions_show
             or args.hyperliquid_submit_sessions_index
             or args.hyperliquid_submit_sessions_status
+            or args.hyperliquid_submit_sessions_health
+            or args.hyperliquid_submit_sessions_alerts
         ):
             session_metadata["mode"] = "hyperliquid_submit"
         elif (

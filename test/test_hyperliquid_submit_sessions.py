@@ -18,6 +18,8 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "hyperliquid_submit_sessions_show": None,
         "hyperliquid_submit_sessions_index": None,
         "hyperliquid_submit_sessions_status": None,
+        "hyperliquid_submit_sessions_health": None,
+        "hyperliquid_submit_sessions_alerts": None,
         "hyperliquid_preflight_timeout": 10.0,
     }
     defaults.update(kwargs)
@@ -128,6 +130,54 @@ def test_refresh_hyperliquid_submit_index(tmp_path):
     assert handle_hyperliquid_submit_sessions_commands(args) is True
     assert (tmp_path / "hyperliquid_submits_index.json").exists()
     assert (tmp_path / "hyperliquid_submits_index.csv").exists()
+
+
+def test_hyperliquid_submit_health_summary(tmp_path, capsys):
+    session_dir = _write_session(tmp_path)
+    (session_dir / "hyperliquid_order_status.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.order_status",
+                "generated_at": "2026-03-27T12:05:00",
+                "status_known": True,
+                "normalized_state": "open",
+                "errors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    args = _make_args(hyperliquid_submit_sessions_health=str(tmp_path))
+    assert handle_hyperliquid_submit_sessions_commands(args) is True
+
+    output = capsys.readouterr().out
+    assert "Hyperliquid submission health" in output
+    assert "total_sessions" in output
+    assert "latest_submit_id" in output
+
+
+def test_hyperliquid_submit_alerts_snapshot(tmp_path, capsys):
+    session_dir = _write_session(tmp_path)
+    (session_dir / "hyperliquid_order_status.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.order_status",
+                "generated_at": "2026-03-27T12:05:00",
+                "status_known": False,
+                "normalized_state": "unknown",
+                "errors": ["missing_order"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    args = _make_args(hyperliquid_submit_sessions_alerts=str(tmp_path))
+    assert handle_hyperliquid_submit_sessions_commands(args) is True
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["alert_status"] == "critical"
+    assert payload["has_alerts"] is True
+    assert payload["alerts"][0]["alert_code"] == "HYPERLIQUID_ORDER_STATUS_UNKNOWN"
 
 
 def test_refresh_hyperliquid_submit_status(monkeypatch, tmp_path):

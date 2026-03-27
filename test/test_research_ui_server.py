@@ -140,6 +140,76 @@ def _write_broker_validation_session(root: Path, session_id: str) -> None:
     )
 
 
+def _write_hyperliquid_submit_session(root: Path, session_id: str) -> None:
+    session_dir = root / session_id
+    session_dir.mkdir(parents=True)
+    (session_dir / "session_metadata.json").write_text(
+        json.dumps(
+            {
+                "session_id": session_id,
+                "status": "submitted",
+                "created_at": "2026-03-27T12:00:00",
+                "request_id": f"req_{session_id}",
+                "source_signer_id": "0x1111111111111111111111111111111111111111",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "session_status.json").write_text(
+        json.dumps(
+            {
+                "session_id": session_id,
+                "status": "open",
+                "updated_at": "2026-03-27T12:06:00",
+                "submit_state": "submitted_remote",
+                "remote_submit_called": True,
+                "submitted": True,
+                "order_status_known": True,
+                "order_status_state": "open",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "hyperliquid_signed_action.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.signed_action",
+                "adapter_name": "hyperliquid",
+                "generated_at": "2026-03-27T12:01:00",
+                "readiness_allowed": True,
+                "execution_context": {"resolved_transport": "websocket"},
+                "signature_envelope": {"signature_state": "signed"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "hyperliquid_submit_response.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.submit_response",
+                "adapter_name": "hyperliquid",
+                "generated_at": "2026-03-27T12:05:00",
+                "submit_state": "submitted_remote",
+                "remote_submit_called": True,
+                "submitted": True,
+                "response_type": "resting",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "hyperliquid_order_status.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.order_status",
+                "adapter_name": "hyperliquid",
+                "generated_at": "2026-03-27T12:06:00",
+                "status_known": True,
+                "normalized_state": "open",
+                "errors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
 def test_build_paper_health_payload_returns_zero_state_when_root_missing(tmp_path: Path):
     payload, status = research_ui_server.build_paper_health_payload(tmp_path)
 
@@ -217,14 +287,19 @@ def test_build_hyperliquid_surface_payload_detects_latest_artifacts(tmp_path: Pa
         ),
         encoding="utf-8",
     )
+    _write_hyperliquid_submit_session(tmp_path / "outputs" / "hyperliquid_submits", "hyper_001")
 
     payload, status = research_ui_server.build_hyperliquid_surface_payload(tmp_path)
 
     assert status == 200
     assert payload["status"] == "ok"
     assert payload["implemented_surfaces"]["signed_action_build"] is True
-    assert payload["latest_artifacts"]["signed_action"]["signature_state"] == "pending_signer_backend"
-    assert payload["signature_state"] == "pending_signer_backend"
+    assert payload["implemented_surfaces"]["order_submit"] is True
+    assert payload["submit_health"]["total_sessions"] == 1
+    assert payload["submit_has_alerts"] is False
+    assert payload["latest_artifacts"]["order_status"]["normalized_state"] == "open"
+    assert payload["latest_ready_artifact_type"] == "quantlab.hyperliquid.order_status"
+    assert payload["signature_state"] in {"pending_signer_backend", "signed"}
 
 
 def test_build_stepbit_workspace_payload_detects_local_repos(tmp_path: Path):
