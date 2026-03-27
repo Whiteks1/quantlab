@@ -130,6 +130,39 @@ Exit condition:
 
 - external orchestration can invoke QuantLab as a reliable local execution engine without guessing at output structure
 
+## Stage P.0 - Auxiliary Pre-Trade Risk Workbench
+
+Status: proposed auxiliary subsystem track
+
+Goal:
+
+- add a bounded pre-trade planning layer to QuantLab without folding it into the
+  backtest engine or venue execution adapters
+
+Scope:
+
+- new `src/quantlab/pretrade/` package
+- deterministic trade-plan artifacts under `outputs/pretrade_sessions/`
+- optional conversion into draft `ExecutionIntent`
+- policy-aware pre-trade validation before adapter interaction
+- bounded artifact-driven visualization in `research_ui`
+
+Architectural rule:
+
+- the workbench remains auxiliary
+- QuantLab CLI and safety boundary remain sovereign
+- the UI may visualize and compare plans, but must not own execution policy
+
+See also:
+
+- [docs/pretrade-risk-workbench-roadmap.md](./pretrade-risk-workbench-roadmap.md)
+
+Exit condition:
+
+- QuantLab can generate and inspect deterministic pre-trade plans that improve
+  operator discipline before paper or broker-facing actions without changing
+  core engine responsibilities
+
 ## Next Remaining Stages
 
 ## Stage C.1 - Paper Trading Operationalization
