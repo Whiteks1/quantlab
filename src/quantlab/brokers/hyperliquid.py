@@ -401,6 +401,57 @@ class HyperliquidReconciliationReport:
         }
 
 
+@dataclass(frozen=True)
+class HyperliquidFillSummaryReport:
+    adapter_name: str
+    generated_at: str
+    source_session_id: str
+    execution_account_id: str | None
+    fills_known: bool
+    query_attempted: bool
+    oid: int | None
+    cloid: str | None
+    fill_state: str | None
+    original_size: str | None
+    filled_size: str | None
+    remaining_size: str | None
+    fill_count: int
+    average_fill_price: str | None
+    total_fee: str | None
+    total_builder_fee: str | None
+    total_closed_pnl: str | None
+    first_fill_time: int | None
+    last_fill_time: int | None
+    matched_fill_sample: tuple[dict[str, object], ...]
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact_type": "quantlab.hyperliquid.fill_summary",
+            "adapter_name": self.adapter_name,
+            "generated_at": self.generated_at,
+            "source_session_id": self.source_session_id,
+            "execution_account_id": self.execution_account_id,
+            "fills_known": self.fills_known,
+            "query_attempted": self.query_attempted,
+            "oid": self.oid,
+            "cloid": self.cloid,
+            "fill_state": self.fill_state,
+            "original_size": self.original_size,
+            "filled_size": self.filled_size,
+            "remaining_size": self.remaining_size,
+            "fill_count": self.fill_count,
+            "average_fill_price": self.average_fill_price,
+            "total_fee": self.total_fee,
+            "total_builder_fee": self.total_builder_fee,
+            "total_closed_pnl": self.total_closed_pnl,
+            "first_fill_time": self.first_fill_time,
+            "last_fill_time": self.last_fill_time,
+            "matched_fill_sample": list(self.matched_fill_sample),
+            "errors": list(self.errors),
+        }
+
+
 class HyperliquidBrokerAdapter(BrokerAdapter):
     """
     Read-only Hyperliquid venue adapter for preflight and context resolution.
@@ -1597,6 +1648,86 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             errors=tuple(_unique_reasons(errors)),
         )
 
+    def build_fill_summary_report(
+        self,
+        *,
+        source_session_id: str,
+        execution_account_id: str | None,
+        oid: int | None = None,
+        cloid: str | None = None,
+        signed_action_artifact: dict[str, object] | None = None,
+        timeout_seconds: float = 10.0,
+        fetch_json=None,
+    ) -> HyperliquidFillSummaryReport:
+        errors: list[str] = []
+        query_attempted = False
+        matched_fills: list[dict[str, object]] = []
+
+        resolved_execution_account = _safe_string(execution_account_id)
+        resolved_cloid = _safe_string(cloid)
+        resolved_oid = oid if isinstance(oid, int) and oid >= 0 else None
+        original_size = _extract_hyperliquid_signed_action_size(signed_action_artifact)
+
+        if not resolved_execution_account:
+            errors.append("missing_execution_account_id")
+        elif not _is_hex_address(resolved_execution_account):
+            errors.append("invalid_execution_account_id")
+
+        if resolved_oid is None and not resolved_cloid:
+            errors.append("missing_order_identifier")
+
+        if not errors:
+            try:
+                all_fills = fetch_hyperliquid_user_fills(
+                    resolved_execution_account,
+                    timeout_seconds=timeout_seconds,
+                    fetch_json=fetch_json,
+                )
+                query_attempted = True
+                matched_fills = _sort_hyperliquid_fills(
+                    _find_matching_hyperliquid_fills(
+                        all_fills,
+                        oid=resolved_oid,
+                        cloid=resolved_cloid,
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"user_fills_summary_failed:{exc.__class__.__name__}")
+
+        fill_metrics = _summarize_hyperliquid_fills(matched_fills)
+        filled_size = fill_metrics["filled_size"]
+        remaining_size = _subtract_decimals(original_size, filled_size)
+        fill_state = _derive_hyperliquid_fill_summary_state(
+            original_size=original_size,
+            filled_size=filled_size,
+            fill_count=fill_metrics["fill_count"],
+        )
+        fills_known = query_attempted and not errors
+
+        return HyperliquidFillSummaryReport(
+            adapter_name=self.adapter_name,
+            generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+            source_session_id=source_session_id,
+            execution_account_id=resolved_execution_account,
+            fills_known=fills_known,
+            query_attempted=query_attempted,
+            oid=resolved_oid,
+            cloid=resolved_cloid,
+            fill_state=fill_state,
+            original_size=_format_decimal_string(original_size),
+            filled_size=_format_decimal_string(filled_size),
+            remaining_size=_format_decimal_string(remaining_size),
+            fill_count=fill_metrics["fill_count"],
+            average_fill_price=_format_decimal_string(fill_metrics["average_fill_price"]),
+            total_fee=_format_decimal_string(fill_metrics["total_fee"]),
+            total_builder_fee=_format_decimal_string(fill_metrics["total_builder_fee"]),
+            total_closed_pnl=_format_decimal_string(fill_metrics["total_closed_pnl"]),
+            first_fill_time=fill_metrics["first_fill_time"],
+            last_fill_time=fill_metrics["last_fill_time"],
+            matched_fill_sample=tuple(matched_fills[:10]),
+            errors=tuple(_unique_reasons(errors)),
+        )
+
 
 def fetch_hyperliquid_all_mids(
     *,
@@ -2199,19 +2330,34 @@ def _sort_hyperliquid_fills(fills: list[dict[str, object]]) -> list[dict[str, ob
 def _summarize_hyperliquid_fills(fills: list[dict[str, object]]) -> dict[str, object]:
     total_size = Decimal("0")
     weighted_notional = Decimal("0")
+    total_fee = Decimal("0")
+    total_builder_fee = Decimal("0")
+    total_closed_pnl = Decimal("0")
+    first_fill_time: int | None = None
     last_fill_time: int | None = None
 
     for item in fills:
         size = _parse_decimal(item.get("sz"))
         price = _parse_decimal(item.get("px"))
+        fee = _parse_decimal(item.get("fee"))
+        builder_fee = _parse_decimal(item.get("builderFee"))
+        closed_pnl = _parse_decimal(item.get("closedPnl"))
         fill_time = _extract_hyperliquid_fill_time(item)
+        if fill_time is not None and (first_fill_time is None or fill_time < first_fill_time):
+            first_fill_time = fill_time
         if fill_time is not None and (last_fill_time is None or fill_time > last_fill_time):
             last_fill_time = fill_time
         if size is None:
-            continue
+            size = Decimal("0")
         total_size += size
-        if price is not None:
+        if price is not None and size > 0:
             weighted_notional += size * price
+        if fee is not None:
+            total_fee += fee
+        if builder_fee is not None:
+            total_builder_fee += builder_fee
+        if closed_pnl is not None:
+            total_closed_pnl += closed_pnl
 
     average_fill_price = None
     if total_size > 0 and weighted_notional > 0:
@@ -2221,6 +2367,10 @@ def _summarize_hyperliquid_fills(fills: list[dict[str, object]]) -> dict[str, ob
         "fill_count": len(fills),
         "filled_size": total_size if total_size > 0 else None,
         "average_fill_price": average_fill_price,
+        "total_fee": total_fee if total_fee != 0 else None,
+        "total_builder_fee": total_builder_fee if total_builder_fee != 0 else None,
+        "total_closed_pnl": total_closed_pnl if total_closed_pnl != 0 else None,
+        "first_fill_time": first_fill_time,
         "last_fill_time": last_fill_time,
     }
 
@@ -2293,8 +2443,32 @@ def _derive_hyperliquid_fill_state(
     return None
 
 
+def _derive_hyperliquid_fill_summary_state(
+    *,
+    original_size: Decimal | None,
+    filled_size: Decimal | None,
+    fill_count: int,
+) -> str | None:
+    if fill_count <= 0:
+        return "none"
+    if original_size is not None and filled_size is not None and _decimal_at_least(filled_size, original_size):
+        return "filled"
+    return "partial"
+
+
 def _decimal_at_least(left: Decimal, right: Decimal, tolerance: str = "0.000000000001") -> bool:
     return left + Decimal(tolerance) >= right
+
+
+def _subtract_decimals(left: Decimal | None, right: Decimal | None) -> Decimal | None:
+    if left is None:
+        return None
+    if right is None:
+        return left
+    result = left - right
+    if result < 0:
+        return Decimal("0")
+    return result
 
 
 def _parse_decimal(value: object) -> Decimal | None:

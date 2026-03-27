@@ -547,6 +547,89 @@ def test_hyperliquid_reconciliation_report_uses_historical_orders_for_closed_par
     assert report["resolution_source"] == "historical_orders"
 
 
+def test_hyperliquid_fill_summary_report_aggregates_fee_and_pnl():
+    adapter = HyperliquidBrokerAdapter()
+    signed_action = {
+        "action_payload": {
+            "orders": [{"s": "0.25", "c": "abc123cloid"}],
+        }
+    }
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "userFills":
+            return [
+                {
+                    "oid": 12345,
+                    "sz": "0.10",
+                    "px": "2450.0",
+                    "fee": "0.2",
+                    "builderFee": "0.05",
+                    "closedPnl": "1.0",
+                    "time": 1764000000000,
+                },
+                {
+                    "oid": 12345,
+                    "sz": "0.15",
+                    "px": "2460.0",
+                    "fee": "0.3",
+                    "builderFee": "0.00",
+                    "closedPnl": "2.0",
+                    "time": 1764000001000,
+                },
+            ]
+        raise AssertionError(payload)
+
+    report = adapter.build_fill_summary_report(
+        source_session_id="hl_submit_demo_004",
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        oid=12345,
+        cloid="abc123cloid",
+        signed_action_artifact=signed_action,
+        fetch_json=fake_fetch_json,
+    ).to_dict()
+
+    assert report["fills_known"] is True
+    assert report["fill_state"] == "filled"
+    assert report["fill_count"] == 2
+    assert report["filled_size"] == "0.25"
+    assert report["remaining_size"] == "0"
+    assert report["average_fill_price"] == "2456"
+    assert report["total_fee"] == "0.5"
+    assert report["total_builder_fee"] == "0.05"
+    assert report["total_closed_pnl"] == "3"
+    assert report["first_fill_time"] == 1764000000000
+    assert report["last_fill_time"] == 1764000001000
+
+
+def test_hyperliquid_fill_summary_report_handles_no_fills():
+    adapter = HyperliquidBrokerAdapter()
+    signed_action = {
+        "action_payload": {
+            "orders": [{"s": "0.25", "c": "abc123cloid"}],
+        }
+    }
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "userFills":
+            return []
+        raise AssertionError(payload)
+
+    report = adapter.build_fill_summary_report(
+        source_session_id="hl_submit_demo_005",
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        oid=12345,
+        cloid="abc123cloid",
+        signed_action_artifact=signed_action,
+        fetch_json=fake_fetch_json,
+    ).to_dict()
+
+    assert report["fills_known"] is True
+    assert report["fill_state"] == "none"
+    assert report["fill_count"] == 0
+    assert report["filled_size"] is None
+    assert report["remaining_size"] == "0.25"
+
+
 def test_hyperliquid_submit_report_submits_signed_action():
     adapter = HyperliquidBrokerAdapter()
     policy = ExecutionPolicy(max_notional_per_order=1000.0)

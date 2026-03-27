@@ -19,6 +19,7 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "hyperliquid_submit_sessions_index": None,
         "hyperliquid_submit_sessions_status": None,
         "hyperliquid_submit_sessions_reconcile": None,
+        "hyperliquid_submit_sessions_fills": None,
         "hyperliquid_submit_sessions_cancel": None,
         "hyperliquid_submit_sessions_health": None,
         "hyperliquid_submit_sessions_alerts": None,
@@ -365,6 +366,58 @@ def test_refresh_hyperliquid_submit_cancel(monkeypatch, tmp_path):
     assert session_status["cancel_accepted"] is True
 
 
+def test_refresh_hyperliquid_submit_fill_summary(monkeypatch, tmp_path):
+    from quantlab.cli import hyperliquid_submit_sessions as module
+
+    session_dir = _write_session(tmp_path)
+
+    def fake_fill_summary(self, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.hyperliquid.fill_summary",
+                    "adapter_name": "hyperliquid",
+                    "generated_at": "2026-03-27T12:08:00",
+                    "source_session_id": "20260327_hyperliquid_submit_demo",
+                    "execution_account_id": "0x1111111111111111111111111111111111111111",
+                    "fills_known": True,
+                    "query_attempted": True,
+                    "oid": 12345,
+                    "cloid": "abc123cloid",
+                    "fill_state": "partial",
+                    "original_size": "0.25",
+                    "filled_size": "0.15",
+                    "remaining_size": "0.1",
+                    "fill_count": 1,
+                    "average_fill_price": "2451",
+                    "total_fee": "0.2",
+                    "total_builder_fee": "0.05",
+                    "total_closed_pnl": None,
+                    "first_fill_time": 1764000000000,
+                    "last_fill_time": 1764000000000,
+                    "matched_fill_sample": [{"oid": 12345}],
+                    "errors": [],
+                }
+
+        return _Fake()
+
+    monkeypatch.setattr(module.HyperliquidBrokerAdapter, "build_fill_summary_report", fake_fill_summary)
+
+    args = _make_args(hyperliquid_submit_sessions_fills=str(session_dir))
+    assert handle_hyperliquid_submit_sessions_commands(args) is True
+
+    fill_artifact = session_dir / "hyperliquid_fill_summary.json"
+    assert fill_artifact.exists()
+    fill_payload = json.loads(fill_artifact.read_text(encoding="utf-8"))
+    assert fill_payload["fill_state"] == "partial"
+    assert fill_payload["filled_size"] == "0.15"
+
+    session_status = json.loads((session_dir / "session_status.json").read_text(encoding="utf-8"))
+    assert session_status["fill_summary_known"] is True
+    assert session_status["fill_summary_state"] == "partial"
+    assert session_status["fill_summary_filled_size"] == "0.15"
+
+
 def test_hyperliquid_submit_alerts_include_cancel_failures(tmp_path, capsys):
     session_dir = _write_session(tmp_path)
     (session_dir / "hyperliquid_cancel_response.json").write_text(
@@ -455,6 +508,37 @@ def test_hyperliquid_submit_health_includes_fill_and_close_state_counts(tmp_path
     assert payload["fill_state_counts"]["filled"] == 1
     assert payload["latest_close_state"] == "closed"
     assert payload["latest_fill_state"] == "filled"
+
+
+def test_load_hyperliquid_submit_summary_includes_fill_summary_fields(tmp_path):
+    session_dir = _write_session(tmp_path, name="20260327_hyperliquid_fill_demo")
+    (session_dir / "hyperliquid_fill_summary.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.fill_summary",
+                "generated_at": "2026-03-27T12:08:00",
+                "fills_known": True,
+                "fill_state": "partial",
+                "fill_count": 1,
+                "filled_size": "0.15",
+                "remaining_size": "0.10",
+                "average_fill_price": "2451",
+                "total_fee": "0.2",
+                "total_builder_fee": "0.05",
+                "total_closed_pnl": None,
+                "first_fill_time": 1764000000000,
+                "last_fill_time": 1764000000000,
+                "errors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = load_hyperliquid_submit_summary(session_dir)
+    assert summary["fill_summary_present"] is True
+    assert summary["fill_summary_state"] == "partial"
+    assert summary["fill_summary_count"] == 1
+    assert summary["fill_summary_total_fee"] == "0.2"
 
 
 def test_invalid_hyperliquid_submit_session_raises(tmp_path):
