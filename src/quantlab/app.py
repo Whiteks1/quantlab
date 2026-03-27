@@ -35,6 +35,7 @@ handle_broker_dry_run_commands = None
 handle_broker_dry_runs_commands = None
 handle_broker_order_validations_commands = None
 handle_hyperliquid_submit_sessions_commands = None
+handle_pretrade_handoff_commands = None
 run_sweep = None
 write_run_report = None
 write_advanced_report = None
@@ -146,6 +147,7 @@ def _load_runtime_dependencies() -> None:
     global handle_broker_dry_runs_commands
     global handle_broker_order_validations_commands
     global handle_hyperliquid_submit_sessions_commands
+    global handle_pretrade_handoff_commands
     global run_sweep
     global write_run_report
     global write_advanced_report
@@ -221,6 +223,12 @@ def _load_runtime_dependencies() -> None:
         )
 
         handle_hyperliquid_submit_sessions_commands = _handle_hyperliquid_submit_sessions_commands
+    if handle_pretrade_handoff_commands is None:
+        from quantlab.cli.pretrade_handoff import (
+            handle_pretrade_handoff_commands as _handle_pretrade_handoff_commands,
+        )
+
+        handle_pretrade_handoff_commands = _handle_pretrade_handoff_commands
     if run_sweep is None:
         from quantlab.experiments import run_sweep as _run_sweep
 
@@ -488,6 +496,18 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         metavar="ROOT_DIR",
         default=None,
         help="Emit a deterministic alert snapshot for notable Hyperliquid submit-session states.",
+    )
+    parser.add_argument(
+        "--pretrade-handoff-validate",
+        metavar="FILE",
+        default=None,
+        help="Validate a bounded calculadora_riego_trading QuantLab handoff artifact.",
+    )
+    parser.add_argument(
+        "--pretrade-handoff-validation-outdir",
+        metavar="DIR",
+        default=None,
+        help="Directory where QuantLab should write the local pre-trade handoff validation artifact.",
     )
     parser.add_argument(
         "--hyperliquid-private-key",
@@ -846,6 +866,8 @@ def _determine_session_mode(args: argparse.Namespace, json_command: str | None) 
         or args.hyperliquid_submit_sessions_alerts
     ):
         return "hyperliquid_submit"
+    if args.pretrade_handoff_validate or args.pretrade_handoff_validation_outdir:
+        return "pretrade_handoff"
     if (
         args.kraken_order_validate_outdir
         or args.kraken_order_validate_session
@@ -910,6 +932,8 @@ def _dispatch_standard_commands(args: argparse.Namespace, initial_result: object
         result_ctx = handle_broker_order_validations_commands(args)
     if result_ctx in (None, False):
         result_ctx = handle_hyperliquid_submit_sessions_commands(args)
+    if result_ctx in (None, False):
+        result_ctx = handle_pretrade_handoff_commands(args)
     if result_ctx in (None, False):
         result_ctx = handle_paper_session_commands(args)
     if result_ctx in (None, False):
