@@ -12,6 +12,7 @@ PRETRADE_INPUT_FILENAME = "input.json"
 PRETRADE_PLAN_FILENAME = "plan.json"
 PRETRADE_SUMMARY_FILENAME = "summary.json"
 PRETRADE_PLAN_MARKDOWN_FILENAME = "plan.md"
+PRETRADE_EXECUTION_BRIDGE_FILENAME = "execution_bridge.json"
 
 
 def default_pretrade_root(project_root: str | Path) -> Path:
@@ -57,6 +58,19 @@ def write_pretrade_artifacts(
         "summary_path": str(session_dir / PRETRADE_SUMMARY_FILENAME),
         "plan_markdown_path": str(session_dir / PRETRADE_PLAN_MARKDOWN_FILENAME),
     }
+
+
+def write_pretrade_execution_bridge(
+    bridge_payload: dict[str, object],
+    *,
+    session_dir: str | Path,
+) -> str:
+    root = Path(session_dir)
+    if not root.exists():
+        raise ConfigError(f"Pre-trade session directory does not exist: {root}")
+    path = root / PRETRADE_EXECUTION_BRIDGE_FILENAME
+    _write_json(path, bridge_payload)
+    return str(path)
 
 
 def _request_to_dict(request: PretradeRequest, *, generated_at: str) -> dict[str, object]:

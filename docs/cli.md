@@ -240,6 +240,24 @@ Current scope:
 
 This surface is intentionally pre-trade only and does not submit any order.
 
+Optional execution bridge:
+
+```bash
+python main.py --pretrade-plan --pretrade-symbol ETH-USD --pretrade-venue kraken --pretrade-side buy --pretrade-capital 1000 --pretrade-risk-percent 1 --pretrade-entry-price 2000 --pretrade-stop-price 1950 --pretrade-target-price 2100 --pretrade-account-id account_demo_001 --pretrade-bridge-to-execution --pretrade-broker-target kraken --pretrade-policy-max-notional 5000 --pretrade-policy-allowed-symbols ETH-USD,BTC-USD
+```
+
+When enabled, QuantLab writes:
+
+- `outputs/pretrade_sessions/<session_id>/execution_bridge.json`
+
+This bridge artifact includes:
+
+- a draft `ExecutionIntent`
+- the local `ExecutionPolicy` used for validation
+- deterministic `ExecutionPreflight` rejection or approval reasons
+
+The bridge remains supervised and does not talk to any adapter.
+
 ## 6. Broker Dry-Run
 
 ### `--hyperliquid-preflight-outdir`
