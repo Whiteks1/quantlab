@@ -355,7 +355,9 @@ function updateDashboard() {
     const hyperliquidSurface = state.hyperliquidSurface || { implemented_surfaces: {}, latest_artifacts: {} };
     const stepbitWorkspace = state.stepbitWorkspace || { repos: {} };
     const stepbitRepos = Object.values(stepbitWorkspace.repos || {}).filter((repo) => repo && repo.present);
-    const latestHyperArtifact = hyperliquidSurface.latest_artifacts?.signed_action
+    const latestHyperArtifact = hyperliquidSurface.latest_artifacts?.order_status
+        || hyperliquidSurface.latest_artifacts?.submit_response
+        || hyperliquidSurface.latest_artifacts?.signed_action
         || hyperliquidSurface.latest_artifacts?.account_readiness
         || hyperliquidSurface.latest_artifacts?.preflight
         || null;
@@ -392,10 +394,12 @@ function updateDashboard() {
     elements.brokerLatestSessionMeta.textContent = brokerHealth.latest_submit_session_id
         ? [titleCase(brokerHealth.latest_submit_state || "unknown"), titleCase(brokerHealth.latest_order_state || "unknown"), formatDateTime(brokerHealth.latest_submit_at)].filter(Boolean).join(" · ")
         : "No broker submit activity yet";
-    elements.hyperliquidState.textContent = hyperliquidSurface.implemented_surfaces?.signed_action_build ? "Read-only ready" : "Not available";
+    elements.hyperliquidState.textContent = !hyperliquidSurface.available
+        ? "Not available"
+        : (hyperliquidSurface.submit_has_alerts ? "Needs attention" : (hyperliquidSurface.implemented_surfaces?.order_submit ? "Submit path ready" : "Read-only ready"));
     elements.hyperliquidMeta.textContent = latestHyperArtifact
         ? [titleCase(latestHyperArtifact.artifact_type || "artifact"), formatDateTime(latestHyperArtifact.generated_at), latestHyperArtifact.resolved_transport ? `Transport ${titleCase(latestHyperArtifact.resolved_transport)}` : null].filter(Boolean).join(" · ")
-        : (hyperliquidSurface.message || "Preflight, readiness, and signed-action build are available when local artifacts exist");
+        : (hyperliquidSurface.message || "Preflight through supervised submit are available when local artifacts exist");
     elements.hyperliquidSignatureState.textContent = titleCase(hyperliquidSurface.signature_state || "pending_local_artifact");
     elements.hyperliquidSignatureMeta.textContent = buildHyperliquidMeta(hyperliquidSurface);
     elements.stepbitState.textContent = stepbitWorkspace.available ? "Workspace attached" : "Boundary only";
@@ -783,7 +787,14 @@ function buildHyperliquidMeta(surface) {
         .filter(([, value]) => Boolean(value))
         .map(([key]) => titleCase(key.replace(/_/g, " ")));
     const latest = surface.latest_ready_generated_at ? `Latest artifact ${formatDateTime(surface.latest_ready_generated_at)}` : "No local Hyperliquid artifact captured yet";
-    return `${implemented.slice(0, 3).join(" · ")}${implemented.length ? " · " : ""}${latest}`;
+    const submitHealth = surface.submit_health || {};
+    const healthMeta = submitHealth.latest_submit_session_id
+        ? `Latest submit ${submitHealth.latest_submit_session_id} · ${titleCase(submitHealth.latest_submit_state || "unknown")}`
+        : "No Hyperliquid submit sessions yet";
+    const alertMeta = surface.submit_has_alerts
+        ? `Alerts ${titleCase(surface.submit_alert_status || "warning")}`
+        : "No submit alerts";
+    return `${implemented.slice(0, 3).join(" · ")}${implemented.length ? " · " : ""}${latest} · ${healthMeta} · ${alertMeta}`;
 }
 
 function buildStepbitMeta(workspace) {

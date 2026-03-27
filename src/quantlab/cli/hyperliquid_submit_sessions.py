@@ -4,6 +4,9 @@ CLI handler for Hyperliquid submit session inspection.
 
 from __future__ import annotations
 
+import datetime as dt
+import json
+from collections import Counter
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -21,6 +24,29 @@ from quantlab.runs.artifacts import load_json_with_fallback
 
 
 def handle_hyperliquid_submit_sessions_commands(args) -> bool:
+    if getattr(args, "hyperliquid_submit_sessions_health", None):
+        root_dir = _require_directory(args.hyperliquid_submit_sessions_health, "Hyperliquid submit sessions root")
+        health = build_hyperliquid_submission_health(root_dir)
+
+        print(f"\nHyperliquid submission health: {root_dir}\n")
+        print(f"  total_sessions          : {health['total_sessions']}")
+        print(f"  submit_response_sessions: {health['submit_response_sessions']}")
+        print(f"  submitted_sessions      : {health['submitted_sessions']}")
+        print(f"  order_status_known      : {health['order_status_known_sessions']}")
+        print(f"  latest_submit_id        : {health.get('latest_submit_session_id')}")
+        print(f"  latest_submit_state     : {health.get('latest_submit_state')}")
+        print(f"  latest_order_state      : {health.get('latest_order_state')}")
+        print(f"  latest_issue_id         : {health.get('latest_issue_session_id')}")
+        print(f"  latest_issue_code       : {health.get('latest_issue_code')}")
+        print(f"  latest_issue_at         : {health.get('latest_issue_at')}")
+        return True
+
+    if getattr(args, "hyperliquid_submit_sessions_alerts", None):
+        root_dir = _require_directory(args.hyperliquid_submit_sessions_alerts, "Hyperliquid submit sessions root")
+        alerts = build_hyperliquid_submission_alerts(root_dir)
+        print(json.dumps(alerts, indent=2, sort_keys=True))
+        return True
+
     if getattr(args, "hyperliquid_submit_sessions_status", None):
         session_dir = _require_directory(
             args.hyperliquid_submit_sessions_status,
@@ -146,10 +172,14 @@ def load_hyperliquid_submit_summary(session_dir: str | Path) -> dict[str, Any]:
         "remote_submit_called": submit_response.get("remote_submit_called"),
         "submitted": submit_response.get("submitted"),
         "response_type": submit_response.get("response_type"),
+        "submit_response_generated_at": submit_response.get("generated_at"),
+        "submit_errors": submit_response.get("errors"),
         "oid": submit_response.get("oid"),
         "cloid": submit_response.get("cloid") or _extract_session_cloid(signed_action, submit_response),
         "order_status_known": order_status.get("status_known"),
         "latest_order_state": order_status.get("normalized_state"),
+        "order_status_generated_at": order_status.get("generated_at"),
+        "order_status_errors": order_status.get("errors"),
         "order_status_present": bool(order_status_path),
         "signed_action_present": bool(signed_action_path),
         "submit_response_present": bool(response_path),
@@ -240,3 +270,223 @@ def _derive_hyperliquid_submit_session_status(order_status: dict[str, Any]) -> s
     if bool(order_status.get("status_known")):
         return str(order_status.get("normalized_state") or "submitted")
     return str(order_status.get("normalized_state") or "unknown")
+
+
+def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
+    root = _require_directory(root_dir, "Hyperliquid submit sessions root")
+    sessions = [load_hyperliquid_submit_summary(path) for path in scan_hyperliquid_submit_sessions(root)]
+    alerts = _collect_hyperliquid_submission_alerts(sessions)
+    latest_submit = _latest_by_activity(
+        [session for session in sessions if session.get("submit_response_present")]
+    )
+    latest_issue = max(alerts, key=_hyperliquid_alert_sort_key) if alerts else None
+
+    return {
+        "root_dir": str(root),
+        "total_sessions": len(sessions),
+        "submit_response_sessions": sum(1 for session in sessions if session.get("submit_response_present")),
+        "submitted_sessions": sum(1 for session in sessions if session.get("submitted")),
+        "order_status_known_sessions": sum(1 for session in sessions if session.get("order_status_known")),
+        "status_counts": dict(Counter((session.get("status") or "unknown") for session in sessions)),
+        "submit_state_counts": dict(
+            Counter((session.get("submit_state") or "no_submit_response") for session in sessions)
+        ),
+        "order_state_counts": dict(
+            Counter(
+                (session.get("latest_order_state") or "unknown")
+                for session in sessions
+                if session.get("submit_response_present")
+            )
+        ),
+        "latest_submit_session_id": latest_submit.get("session_id") if latest_submit else None,
+        "latest_submit_state": latest_submit.get("submit_state") if latest_submit else None,
+        "latest_order_state": latest_submit.get("latest_order_state") if latest_submit else None,
+        "latest_submit_at": _activity_at(latest_submit) if latest_submit else None,
+        "latest_issue_session_id": latest_issue.get("session_id") if latest_issue else None,
+        "latest_issue_code": latest_issue.get("alert_code") if latest_issue else None,
+        "latest_issue_at": latest_issue.get("activity_at") if latest_issue else None,
+    }
+
+
+def build_hyperliquid_submission_alerts(root_dir: str | Path) -> dict[str, Any]:
+    root = _require_directory(root_dir, "Hyperliquid submit sessions root")
+    sessions = [load_hyperliquid_submit_summary(path) for path in scan_hyperliquid_submit_sessions(root)]
+    alerts = _collect_hyperliquid_submission_alerts(sessions)
+    latest_alert = max(alerts, key=_hyperliquid_alert_sort_key) if alerts else None
+    alert_counts = Counter(alert["severity"] for alert in alerts)
+
+    if alert_counts.get("critical", 0):
+        alert_status = "critical"
+    elif alerts:
+        alert_status = "warning"
+    else:
+        alert_status = "ok"
+
+    return {
+        "root_dir": str(root),
+        "generated_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+        "total_sessions": len(sessions),
+        "submit_response_sessions": sum(1 for session in sessions if session.get("submit_response_present")),
+        "submitted_sessions": sum(1 for session in sessions if session.get("submitted")),
+        "order_state_counts": dict(
+            Counter(
+                (session.get("latest_order_state") or "unknown")
+                for session in sessions
+                if session.get("submit_response_present")
+            )
+        ),
+        "alert_status": alert_status,
+        "has_alerts": bool(alerts),
+        "alert_counts": dict(alert_counts),
+        "latest_alert_session_id": latest_alert.get("session_id") if latest_alert else None,
+        "latest_alert_code": latest_alert.get("alert_code") if latest_alert else None,
+        "latest_alert_at": latest_alert.get("activity_at") if latest_alert else None,
+        "alerts": alerts,
+    }
+
+
+def _collect_hyperliquid_submission_alerts(sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    alerts: list[dict[str, Any]] = []
+
+    for session in sessions:
+        if not session.get("submit_response_present"):
+            continue
+
+        submitted = bool(session.get("submitted"))
+        submit_state = str(session.get("submit_state") or session.get("status") or "unknown")
+        activity_at = _parse_activity_timestamp(session)
+
+        if submitted:
+            if not session.get("order_status_present"):
+                alerts.append(
+                    _build_hyperliquid_alert(
+                        code="HYPERLIQUID_ORDER_STATUS_MISSING",
+                        severity="warning",
+                        session=session,
+                        activity_at=activity_at,
+                        message="Submitted Hyperliquid session has no persistent order-status artifact yet.",
+                    )
+                )
+            elif not bool(session.get("order_status_known")):
+                alerts.append(
+                    _build_hyperliquid_alert(
+                        code="HYPERLIQUID_ORDER_STATUS_UNKNOWN",
+                        severity="critical",
+                        session=session,
+                        activity_at=activity_at,
+                        message=_join_reasons(session.get("order_status_errors")) or "Submitted Hyperliquid session has no known remote order state yet.",
+                    )
+                )
+            elif session.get("latest_order_state") == "rejected":
+                alerts.append(
+                    _build_hyperliquid_alert(
+                        code="HYPERLIQUID_ORDER_REJECTED",
+                        severity="critical",
+                        session=session,
+                        activity_at=activity_at,
+                        message="Submitted Hyperliquid session reached remote order state 'rejected'.",
+                    )
+                )
+            elif session.get("latest_order_state") == "canceled":
+                alerts.append(
+                    _build_hyperliquid_alert(
+                        code="HYPERLIQUID_ORDER_CANCELED",
+                        severity="warning",
+                        session=session,
+                        activity_at=activity_at,
+                        message="Submitted Hyperliquid session reached remote order state 'canceled'.",
+                    )
+                )
+            continue
+
+        code_map = {
+            "submit_request_failed": "HYPERLIQUID_SUBMIT_REQUEST_FAILED",
+            "submit_rejected": "HYPERLIQUID_SUBMIT_REJECTED",
+            "signed_action_not_ready": "HYPERLIQUID_SIGNED_ACTION_NOT_READY",
+            "signed_action_not_signed": "HYPERLIQUID_SIGNED_ACTION_UNSIGNED",
+            "signature_missing": "HYPERLIQUID_SIGNATURE_MISSING",
+            "submit_payload_unavailable": "HYPERLIQUID_SUBMIT_PAYLOAD_MISSING",
+        }
+        severity = "critical" if submit_state in {"submit_request_failed", "submit_rejected"} else "warning"
+        alerts.append(
+            _build_hyperliquid_alert(
+                code=code_map.get(submit_state, "HYPERLIQUID_SUBMIT_ATTENTION"),
+                severity=severity,
+                session=session,
+                activity_at=activity_at,
+                message=_join_reasons(session.get("submit_errors")) or f"Hyperliquid submit session is in state '{submit_state}'.",
+            )
+        )
+
+    return alerts
+
+
+def _build_hyperliquid_alert(
+    *,
+    code: str,
+    severity: str,
+    session: dict[str, Any],
+    activity_at: dt.datetime | None,
+    message: str,
+) -> dict[str, Any]:
+    return {
+        "alert_code": code,
+        "severity": severity,
+        "session_id": session.get("session_id"),
+        "status": session.get("status"),
+        "submit_state": session.get("submit_state"),
+        "order_status_state": session.get("latest_order_state"),
+        "activity_at": activity_at.replace(microsecond=0).isoformat() if activity_at else None,
+        "path": session.get("path"),
+        "message": message,
+    }
+
+
+def _join_reasons(values: Any) -> str | None:
+    if not isinstance(values, list):
+        return None
+    parts = [str(value) for value in values if str(value).strip()]
+    return ", ".join(parts) if parts else None
+
+
+def _activity_at(session: dict[str, Any] | None) -> str | None:
+    activity_at = _parse_activity_timestamp(session) if session else None
+    return activity_at.replace(microsecond=0).isoformat() if activity_at else None
+
+
+def _parse_activity_timestamp(session: dict[str, Any] | None) -> dt.datetime | None:
+    if not session:
+        return None
+
+    for key in (
+        "order_status_generated_at",
+        "submit_response_generated_at",
+        "updated_at",
+        "created_at",
+    ):
+        value = session.get(key)
+        if not value:
+            continue
+        try:
+            return dt.datetime.fromisoformat(str(value))
+        except ValueError:
+            continue
+    return None
+
+
+def _latest_by_activity(sessions: list[dict[str, Any]]) -> dict[str, Any] | None:
+    dated = [(session, _parse_activity_timestamp(session)) for session in sessions]
+    dated = [(session, stamp) for session, stamp in dated if stamp is not None]
+    if not dated:
+        return None
+    dated.sort(key=lambda item: item[1])
+    return dated[-1][0]
+
+
+def _hyperliquid_alert_sort_key(alert: dict[str, Any]) -> tuple[dt.datetime, str]:
+    activity_at = alert.get("activity_at")
+    try:
+        parsed = dt.datetime.fromisoformat(str(activity_at)) if activity_at else dt.datetime.min
+    except ValueError:
+        parsed = dt.datetime.min
+    return parsed, str(alert.get("session_id") or "")
