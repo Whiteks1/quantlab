@@ -90,13 +90,6 @@
                             <span>External control-plane and runtime connection without surrendering QuantLab authority</span>
                         </div>
                     </div>
-                    <div class="stage-item">
-                        <span class="stage-dot"></span>
-                        <div>
-                            <strong>Stage P.0</strong>
-                            <span>Auxiliary pre-trade planning and risk workbench artifacts visible without moving policy into the UI</span>
-                        </div>
-                    </div>
                 </div>
             </section>
 
@@ -119,7 +112,7 @@
             <header class="content-header">
                 <div>
                     <div class="eyebrow">QuantLab Web3 App</div>
-                    <div class="breadcrumb" id="breadcrumb">Research, Paper Ops, Pre-Trade, Broker Safety, Stepbit Boundary</div>
+                    <div class="breadcrumb" id="breadcrumb">Research, Paper Ops, Broker Safety, Stepbit Boundary</div>
                 </div>
 
                 <div class="header-actions">
@@ -154,7 +147,7 @@
                                 <span class="pill pill-static" id="hero-root-pill">Source: outputs/runs</span>
                                 <span class="pill pill-stage">Stage D.2 active</span>
                             </div>
-                            <h1>A control surface for the QuantLab web3 app we are actually building: research, pre-trade planning, supervised execution, Hyperliquid readiness, and Stepbit at the edge.</h1>
+                            <h1>A control surface for the QuantLab web3 app we are actually building: research, supervised execution, Hyperliquid readiness, and Stepbit at the edge.</h1>
                             <p id="hero-summary">Loading registry snapshot...</p>
                         </div>
 
@@ -236,12 +229,6 @@
 
                     <div class="ops-overview">
                         <div class="ops-card glass">
-                            <div class="stat-label">Pre-Trade Plans</div>
-                            <div class="stat-value" id="pretrade-total-sessions">-</div>
-                            <div class="stat-foot" id="pretrade-availability">Waiting for pre-trade root</div>
-                        </div>
-
-                        <div class="ops-card glass">
                             <div class="stat-label">Paper Latest</div>
                             <div class="stat-value" id="paper-latest-session">-</div>
                             <div class="stat-foot" id="paper-latest-session-meta">No paper activity yet</div>
@@ -263,63 +250,6 @@
                             <div class="stat-label">Stepbit Repos</div>
                             <div class="stat-value" id="stepbit-repos">-</div>
                             <div class="stat-foot" id="stepbit-repos-meta">Looking for app/core repos</div>
-                        </div>
-                    </div>
-
-                    <div class="card glass table-shell">
-                        <div class="card-header">
-                            <div>
-                                <h2>Pre-Trade Workbench</h2>
-                                <p class="card-subtitle" id="pretrade-summary">Waiting for bounded pre-trade artifacts.</p>
-                            </div>
-
-                            <div class="toolbar">
-                                <div class="toolbar-meta" id="pretrade-meta">Read-only scenario comparison and boundary preflight visibility</div>
-                            </div>
-                        </div>
-
-                        <div class="pretrade-insights">
-                            <article class="insight-card">
-                                <div class="insight-label">Latest Plan</div>
-                                <div class="insight-value" id="pretrade-latest-session">-</div>
-                                <div class="insight-meta" id="pretrade-latest-meta">No pre-trade artifacts yet</div>
-                            </article>
-                            <article class="insight-card">
-                                <div class="insight-label">Execution Gate</div>
-                                <div class="paper-strip" id="pretrade-strip"></div>
-                                <div class="insight-meta" id="pretrade-health-meta">Awaiting bridge artifacts</div>
-                            </article>
-                            <article class="insight-card">
-                                <div class="insight-label">Boundary Note</div>
-                                <div class="insight-meta pretrade-note">The UI can inspect pre-trade plans and execution preflight, but cannot own policy or submit.</div>
-                            </article>
-                        </div>
-
-                        <div class="table-responsive">
-                            <table id="pretrade-table">
-                                <thead>
-                                    <tr>
-                                        <th>Session</th>
-                                        <th>Symbol</th>
-                                        <th>Venue</th>
-                                        <th>Side</th>
-                                        <th>Risk</th>
-                                        <th>Notional</th>
-                                        <th>R/R</th>
-                                        <th>Execution</th>
-                                        <th>Date</th>
-                                        <th class="no-sort">Artifacts</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="pretrade-body">
-                                    <tr>
-                                        <td colspan="10" class="loading-state">
-                                            <div class="spinner"></div>
-                                            Accessing pre-trade artifacts...
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
                         </div>
                     </div>
 
