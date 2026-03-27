@@ -168,15 +168,63 @@ async function fetchAll(showNotice = false, silent = false) {
     setRegistryStatus("syncing");
 
     try {
-        const [registryResponse, launchControl, paperHealth, brokerHealth, hyperliquidSurface, pretradeIntake, stepbitWorkspace, metaTradeWorkspace] = await Promise.all([
-            fetchJson(CONFIG.registryPath),
-            fetchJson(CONFIG.launchControlPath),
-            fetchJson(CONFIG.paperHealthPath),
-            fetchJson(CONFIG.brokerHealthPath),
-            fetchJson(CONFIG.hyperliquidSurfacePath),
-            fetchJson(CONFIG.pretradeHandoffPath),
-            fetchJson(CONFIG.stepbitWorkspacePath),
-            fetchJson(CONFIG.metaTradeWorkspacePath),
+        const registryResponse = await fetchJson(CONFIG.registryPath);
+        const [launchControl, paperHealth, brokerHealth, hyperliquidSurface, pretradeIntake, stepbitWorkspace, metaTradeWorkspace] = await Promise.all([
+            fetchJsonSafe(CONFIG.launchControlPath, {
+                status: "error",
+                available: false,
+                supported_commands: ["run", "sweep"],
+                jobs: [],
+                message: "Launch control unavailable.",
+            }),
+            fetchJsonSafe(CONFIG.paperHealthPath, {
+                status: "error",
+                available: false,
+                total_sessions: 0,
+                status_counts: {},
+                message: "Paper health unavailable.",
+            }),
+            fetchJsonSafe(CONFIG.brokerHealthPath, {
+                status: "error",
+                available: false,
+                total_sessions: 0,
+                status_counts: {},
+                alert_counts: {},
+                alerts: [],
+                message: "Broker health unavailable.",
+            }),
+            fetchJsonSafe(CONFIG.hyperliquidSurfacePath, {
+                status: "error",
+                available: false,
+                implemented_surfaces: {},
+                latest_artifacts: {},
+                message: "Hyperliquid surface unavailable.",
+            }),
+            fetchJsonSafe(CONFIG.pretradeHandoffPath, {
+                status: "error",
+                available: false,
+                has_validation: false,
+                validation_state: "error",
+                reasons: [],
+                message: "Pre-trade intake unavailable.",
+            }),
+            fetchJsonSafe(CONFIG.stepbitWorkspacePath, {
+                status: "error",
+                available: false,
+                live_urls: {},
+                start_support: {},
+                start_state: { status: "idle", actions: [] },
+                repos: {},
+                workspace_summary: {},
+                boundary_note: "Stepbit workspace unavailable.",
+            }),
+            fetchJsonSafe(CONFIG.metaTradeWorkspacePath, {
+                status: "error",
+                available: false,
+                repo: { present: false },
+                workspace_summary: {},
+                boundary_note: "meta_trade workspace unavailable.",
+            }),
         ]);
 
         state.runs = (registryResponse.runs || []).map(normalizeRun);
@@ -188,6 +236,7 @@ async function fetchAll(showNotice = false, silent = false) {
         state.pretradeIntake = pretradeIntake;
         state.stepbitWorkspace = stepbitWorkspace;
         state.metaTradeWorkspace = metaTradeWorkspace;
+        state.detailCache.clear();
         state.selectedRunIds = state.selectedRunIds.filter((runId) => state.runs.some((run) => run.run_id === runId));
         state.lastSyncAt = Date.now();
         state.nextSyncAt = Date.now() + CONFIG.refreshIntervalMs;
@@ -225,6 +274,17 @@ async function fetchJson(path) {
         throw new Error(`${path} returned ${response.status}`);
     }
     return response.json();
+}
+
+async function fetchJsonSafe(path, fallback) {
+    try {
+        return await fetchJson(path);
+    } catch (error) {
+        return {
+            ...fallback,
+            message: error.message || fallback.message || `${path} unavailable`,
+        };
+    }
 }
 
 function normalizeRun(run) {
