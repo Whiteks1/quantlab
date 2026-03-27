@@ -17,6 +17,9 @@ dependencies = [
   "tabulate",
 ]
 
+[project.scripts]
+quantlab = "quantlab.app:main"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
