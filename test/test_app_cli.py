@@ -51,3 +51,12 @@ def test_determine_session_mode_prefers_json_command():
     mode = app._determine_session_mode(args, json_command="portfolio")
 
     assert mode == "portfolio"
+
+
+def test_determine_session_mode_for_pretrade_handoff():
+    parser = app._build_argument_parser()
+    args = parser.parse_args(["--pretrade-handoff-validate", "outputs/pretrade/handoff.json"])
+
+    mode = app._determine_session_mode(args, json_command=None)
+
+    assert mode == "pretrade_handoff"
