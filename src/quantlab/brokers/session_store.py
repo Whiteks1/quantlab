@@ -22,6 +22,7 @@ HYPERLIQUID_SIGNED_ACTION_FILENAME = "hyperliquid_signed_action.json"
 HYPERLIQUID_SUBMIT_RESPONSE_FILENAME = "hyperliquid_submit_response.json"
 HYPERLIQUID_SUBMIT_METADATA_FILENAME = "session_metadata.json"
 HYPERLIQUID_SUBMIT_STATUS_FILENAME = "session_status.json"
+HYPERLIQUID_ORDER_STATUS_FILENAME = "hyperliquid_order_status.json"
 
 
 class BrokerDryRunStore:
@@ -158,6 +159,10 @@ class HyperliquidSubmitStore:
     def write_submit_response(self, response: dict[str, Any]) -> None:
         self._ensure_initialized()
         save_json(response, self.session_path / HYPERLIQUID_SUBMIT_RESPONSE_FILENAME)
+
+    def write_order_status(self, order_status: dict[str, Any]) -> None:
+        self._ensure_initialized()
+        save_json(order_status, self.session_path / HYPERLIQUID_ORDER_STATUS_FILENAME)
 
     def get_session_path(self) -> Path:
         return self.session_path.resolve()

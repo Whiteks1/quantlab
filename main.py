@@ -469,6 +469,12 @@ def main() -> None:
         help="Refresh the shared Hyperliquid submit index artifacts in a directory.",
     )
     parser.add_argument(
+        "--hyperliquid-submit-sessions-status",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Refresh normalized post-submit order status for a Hyperliquid submit session.",
+    )
+    parser.add_argument(
         "--hyperliquid-private-key",
         default=None,
         help="Private key for local Hyperliquid action signing.",
@@ -834,6 +840,7 @@ def main() -> None:
             args.hyperliquid_submit_sessions_list
             or args.hyperliquid_submit_sessions_show
             or args.hyperliquid_submit_sessions_index
+            or args.hyperliquid_submit_sessions_status
         ):
             session_metadata["mode"] = "hyperliquid_submit"
         elif (
