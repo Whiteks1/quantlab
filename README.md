@@ -177,6 +177,7 @@ python main.py --help
 - `--hyperliquid-submit-sessions-status`: refresh normalized post-submit order status for a canonical Hyperliquid submit session
 - `--hyperliquid-submit-sessions-health`: summarize Hyperliquid submission health across canonical submit sessions
 - `--hyperliquid-submit-sessions-alerts`: emit a deterministic alert snapshot for notable Hyperliquid submit-session states
+- `--pretrade-handoff-validate`: validate a bounded `calculadora_riego_trading` handoff artifact without reintroducing broad pretrade runtime ownership
 - `--kraken-preflight-outdir`: persist a read-only Kraken public preflight artifact
 - `--kraken-auth-preflight-outdir`: persist a read-only Kraken authenticated preflight artifact
 - `--kraken-account-readiness-outdir`: persist a read-only Kraken account snapshot and intent readiness artifact
@@ -213,6 +214,7 @@ See also:
 - [docs/paper-session-runbook.md](./docs/paper-session-runbook.md)
 - [docs/pretrade-risk-workbench-roadmap.md](./docs/pretrade-risk-workbench-roadmap.md)
 - [docs/pretrade-calculator-boundary.md](./docs/pretrade-calculator-boundary.md)
+- [docs/pretrade-handoff-intake.md](./docs/pretrade-handoff-intake.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/workflow-operativo-codex.md](./docs/workflow-operativo-codex.md)
 - [docs/run-artifact-contract.md](./docs/run-artifact-contract.md)

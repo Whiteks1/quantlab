@@ -209,6 +209,47 @@ The index is intentionally separate from `outputs/runs/runs_index.*` and is mean
 
 ## 5. Broker Dry-Run
 
+## 5.5. Pre-Trade Handoff Intake
+
+### `--pretrade-handoff-validate`
+
+Validate a bounded `calculadora_riego_trading` handoff artifact:
+
+```bash
+python main.py --pretrade-handoff-validate path/to/quantlab_handoff.json
+```
+
+Optional output directory:
+
+```bash
+python main.py \
+  --pretrade-handoff-validate path/to/quantlab_handoff.json \
+  --pretrade-handoff-validation-outdir outputs/pretrade_handoff/demo
+```
+
+This writes:
+
+- `pretrade_handoff_validation.json`
+
+The artifact is intentionally local and bounded. It validates:
+
+- handoff contract type/version
+- source trade-plan lineage metadata
+- `symbol`
+- `venue`
+- `side`
+- trade-plan contract consistency
+
+If the handoff is incomplete, QuantLab still writes the validation artifact but exits with explicit rejection reasons.
+
+This surface does not yet:
+
+- create pretrade sessions
+- bridge into draft `ExecutionIntent`
+- approve or submit anything
+
+## 6. Broker Dry-Run
+
 ### `--hyperliquid-preflight-outdir`
 
 Persist a read-only Hyperliquid venue preflight artifact:
