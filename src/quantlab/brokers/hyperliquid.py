@@ -38,6 +38,7 @@ from .boundary import (
 )
 
 HYPERLIQUID_INFO_API_URL = "https://api.hyperliquid.xyz/info"
+HYPERLIQUID_EXCHANGE_API_URL = "https://api.hyperliquid.xyz/exchange"
 HYPERLIQUID_MAINNET_WS_URL = "wss://api.hyperliquid.xyz/ws"
 _SPOT_SYMBOL_ALIASES = {
     "BTC/USDC": "UBTC/USDC",
@@ -213,6 +214,45 @@ class HyperliquidSignedActionReport:
             "readiness_allowed": self.readiness_allowed,
             "readiness_reasons": list(self.readiness_reasons),
             "signer_backend": self.signer_backend,
+            "errors": list(self.errors),
+        }
+
+
+@dataclass(frozen=True)
+class HyperliquidSubmitReport:
+    adapter_name: str
+    generated_at: str
+    source_artifact_path: str
+    source_action_hash: str | None
+    source_signer_id: str | None
+    source_signing_payload_sha256: str | None
+    submit_payload: dict[str, object] | None
+    submit_state: str
+    remote_submit_called: bool
+    submitted: bool
+    response_type: str | None
+    exchange_response: dict[str, object] | None
+    reviewer: str
+    note: str | None
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact_type": "quantlab.hyperliquid.submit_response",
+            "adapter_name": self.adapter_name,
+            "generated_at": self.generated_at,
+            "source_artifact_path": self.source_artifact_path,
+            "source_action_hash": self.source_action_hash,
+            "source_signer_id": self.source_signer_id,
+            "source_signing_payload_sha256": self.source_signing_payload_sha256,
+            "submit_payload": self.submit_payload,
+            "submit_state": self.submit_state,
+            "remote_submit_called": self.remote_submit_called,
+            "submitted": self.submitted,
+            "response_type": self.response_type,
+            "exchange_response": self.exchange_response,
+            "reviewer": self.reviewer,
+            "note": self.note,
             "errors": list(self.errors),
         }
 
@@ -750,6 +790,135 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             errors=tuple(_unique_reasons(errors)),
         )
 
+    def build_submit_report(
+        self,
+        *,
+        source_artifact_path: str,
+        signed_action_artifact: dict[str, object],
+        reviewer: str,
+        note: str | None = None,
+        timeout_seconds: float = 10.0,
+        post_json=None,
+        remote_submit: bool = True,
+    ) -> HyperliquidSubmitReport:
+        errors: list[str] = []
+        submit_payload = None
+        exchange_response: dict[str, object] | None = None
+        response_type = None
+        remote_submit_called = False
+        submitted = False
+        submit_state = "submit_not_ready"
+
+        if not isinstance(signed_action_artifact, dict):
+            errors.append("invalid_signed_action_artifact")
+            return HyperliquidSubmitReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                source_artifact_path=source_artifact_path,
+                source_action_hash=None,
+                source_signer_id=None,
+                source_signing_payload_sha256=None,
+                submit_payload=None,
+                submit_state="invalid_signed_action_artifact",
+                remote_submit_called=False,
+                submitted=False,
+                response_type=None,
+                exchange_response=None,
+                reviewer=reviewer,
+                note=note,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        submit_payload = _build_hyperliquid_submit_payload(signed_action_artifact)
+        source_envelope = signed_action_artifact.get("signature_envelope", {})
+
+        if signed_action_artifact.get("artifact_type") != "quantlab.hyperliquid.signed_action":
+            errors.append("unexpected_signed_action_artifact_type")
+        if not bool(signed_action_artifact.get("readiness_allowed")):
+            errors.append("signed_action_not_ready")
+        if not isinstance(source_envelope, dict):
+            errors.append("missing_signature_envelope")
+        else:
+            if source_envelope.get("signature_state") != "signed":
+                errors.append("signed_action_not_signed")
+            if not bool(source_envelope.get("signature_present")):
+                errors.append("signature_missing")
+        if not isinstance(submit_payload, dict):
+            errors.append("submit_payload_unavailable")
+
+        if errors:
+            submit_state = errors[0]
+            return HyperliquidSubmitReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                source_artifact_path=source_artifact_path,
+                source_action_hash=_safe_string(source_envelope.get("action_hash")),
+                source_signer_id=_safe_string(source_envelope.get("signer_id")),
+                source_signing_payload_sha256=_safe_string(source_envelope.get("signing_payload_sha256")),
+                submit_payload=submit_payload,
+                submit_state=submit_state,
+                remote_submit_called=False,
+                submitted=False,
+                response_type=None,
+                exchange_response=None,
+                reviewer=reviewer,
+                note=note,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        if not remote_submit:
+            return HyperliquidSubmitReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                source_artifact_path=source_artifact_path,
+                source_action_hash=_safe_string(source_envelope.get("action_hash")),
+                source_signer_id=_safe_string(source_envelope.get("signer_id")),
+                source_signing_payload_sha256=_safe_string(source_envelope.get("signing_payload_sha256")),
+                submit_payload=submit_payload,
+                submit_state="pending_remote_submit",
+                remote_submit_called=False,
+                submitted=False,
+                response_type=None,
+                exchange_response=None,
+                reviewer=reviewer,
+                note=note,
+                errors=(),
+            )
+
+        try:
+            exchange_response = fetch_hyperliquid_exchange(
+                submit_payload,
+                timeout_seconds=timeout_seconds,
+                post_json=post_json,
+            )
+            remote_submit_called = True
+            response_type = _extract_hyperliquid_response_type(exchange_response)
+            submitted, response_errors = _classify_hyperliquid_submit_response(exchange_response)
+            errors.extend(response_errors)
+            submit_state = "submitted_remote" if submitted else "submit_rejected"
+        except Exception as exc:  # noqa: BLE001
+            remote_submit_called = True
+            submit_state = "submit_request_failed"
+            errors.append(f"submit_request_failed:{exc.__class__.__name__}")
+
+        return HyperliquidSubmitReport(
+            adapter_name=self.adapter_name,
+            generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+            source_artifact_path=source_artifact_path,
+            source_action_hash=_safe_string(source_envelope.get("action_hash")),
+            source_signer_id=_safe_string(source_envelope.get("signer_id")),
+            source_signing_payload_sha256=_safe_string(source_envelope.get("signing_payload_sha256")),
+            submit_payload=submit_payload,
+            submit_state=submit_state,
+            remote_submit_called=remote_submit_called,
+            submitted=submitted,
+            response_type=response_type,
+            exchange_response=exchange_response,
+            reviewer=reviewer,
+            note=note,
+            errors=tuple(_unique_reasons(errors)),
+        )
+
 
 def fetch_hyperliquid_all_mids(
     *,
@@ -868,6 +1037,17 @@ def fetch_hyperliquid_info(
     return fetcher(payload, timeout_seconds=timeout_seconds)
 
 
+def fetch_hyperliquid_exchange(
+    payload: dict[str, object],
+    *,
+    timeout_seconds: float = 10.0,
+    post_json=None,
+) -> dict[str, object]:
+    poster = post_json or _post_exchange_json
+    response = poster(payload, timeout_seconds=timeout_seconds)
+    return response if isinstance(response, dict) else {"raw_response": response}
+
+
 def _post_info_json(
     payload: dict[str, object],
     *,
@@ -875,6 +1055,21 @@ def _post_info_json(
 ) -> object:
     request = Request(
         HYPERLIQUID_INFO_API_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(request, timeout=timeout_seconds) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _post_exchange_json(
+    payload: dict[str, object],
+    *,
+    timeout_seconds: float = 10.0,
+) -> object:
+    request = Request(
+        HYPERLIQUID_EXCHANGE_API_URL,
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -933,6 +1128,87 @@ def _format_hyperliquid_size(quantity: float) -> str:
 def _build_hyperliquid_cloid(request_id: str) -> str:
     digest = hashlib.sha256(request_id.encode("utf-8")).hexdigest()
     return digest[:32]
+
+
+def _build_hyperliquid_submit_payload(
+    signed_action_artifact: dict[str, object],
+) -> dict[str, object] | None:
+    action_payload = signed_action_artifact.get("action_payload")
+    signature_envelope = signed_action_artifact.get("signature_envelope")
+    nonce = signed_action_artifact.get("nonce")
+    expires_after = signed_action_artifact.get("expires_after")
+
+    if not isinstance(action_payload, dict):
+        return None
+    if not isinstance(signature_envelope, dict):
+        return None
+    if not isinstance(signature_envelope.get("signature"), dict):
+        return None
+    if nonce is None:
+        return None
+
+    signing_payload = signature_envelope.get("signing_payload", {})
+    payload = {
+        "action": action_payload,
+        "nonce": nonce,
+        "signature": signature_envelope.get("signature"),
+    }
+
+    vault_address = None
+    if isinstance(signing_payload, dict):
+        vault_address = signing_payload.get("vaultAddress")
+    if isinstance(vault_address, str) and vault_address.strip():
+        payload["vaultAddress"] = vault_address
+    if expires_after is not None:
+        payload["expiresAfter"] = expires_after
+    return payload
+
+
+def _extract_hyperliquid_response_type(exchange_response: dict[str, object] | None) -> str | None:
+    if not isinstance(exchange_response, dict):
+        return None
+    response = exchange_response.get("response")
+    if isinstance(response, dict):
+        response_type = response.get("type")
+        if response_type is not None:
+            return str(response_type)
+    status = exchange_response.get("status")
+    return str(status) if status is not None else None
+
+
+def _classify_hyperliquid_submit_response(
+    exchange_response: dict[str, object] | None,
+) -> tuple[bool, list[str]]:
+    if not isinstance(exchange_response, dict):
+        return False, ["invalid_exchange_response"]
+
+    errors: list[str] = []
+    status = str(exchange_response.get("status") or "").strip().lower()
+    if status and status != "ok":
+        errors.append(f"exchange_status:{status}")
+
+    response = exchange_response.get("response")
+    if isinstance(response, dict):
+        response_type = str(response.get("type") or "").strip().lower()
+        if response_type == "error":
+            errors.append("exchange_response_error")
+        data = response.get("data")
+        if isinstance(data, dict):
+            statuses = data.get("statuses")
+            if isinstance(statuses, list):
+                for item in statuses:
+                    if isinstance(item, dict) and "error" in item:
+                        errors.append(f"status_error:{item.get('error')}")
+
+    submitted = not errors and status == "ok"
+    return submitted, _unique_reasons(str(item) for item in errors)
+
+
+def _safe_string(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def _hyperliquid_signing_dependencies_available() -> bool:
