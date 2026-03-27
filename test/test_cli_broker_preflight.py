@@ -15,9 +15,14 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "hyperliquid_account_readiness_outdir": None,
         "hyperliquid_signed_action_outdir": None,
         "hyperliquid_submit_signed_action": None,
+        "hyperliquid_submit_session": None,
         "hyperliquid_submit_reviewer": None,
         "hyperliquid_submit_note": None,
         "hyperliquid_submit_confirm": False,
+        "hyperliquid_submit_sessions_root": None,
+        "hyperliquid_submit_sessions_list": None,
+        "hyperliquid_submit_sessions_show": None,
+        "hyperliquid_submit_sessions_index": None,
         "hyperliquid_private_key": None,
         "hyperliquid_private_key_env": "HYPERLIQUID_PRIVATE_KEY",
         "kraken_preflight_outdir": None,
@@ -464,6 +469,86 @@ def test_hyperliquid_submit_requires_confirmation(tmp_path):
 
     with pytest.raises(ConfigError):
         handle_broker_preflight_commands(args)
+
+
+def test_writes_hyperliquid_submit_session(monkeypatch, tmp_path):
+    from quantlab.cli import broker_preflight as module
+
+    signed_action_path = tmp_path / "hyperliquid_signed_action.json"
+    signed_action_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.signed_action",
+                "readiness_allowed": True,
+                "intent": {"symbol": "ETH", "side": "buy"},
+                "nonce": 1700000000000,
+                "signature_envelope": {
+                    "signature_state": "signed",
+                    "signature_present": True,
+                    "signature": {"r": "0x1", "s": "0x2", "v": 27},
+                    "signer_id": "0x2222222222222222222222222222222222222222",
+                    "signing_payload_sha256": "abc123",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_submit(self, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.hyperliquid.submit_response",
+                    "adapter_name": "hyperliquid",
+                    "generated_at": "2026-03-27T12:00:00",
+                    "source_artifact_path": str(signed_action_path),
+                    "source_action_hash": "0xabc",
+                    "source_signer_id": "0x2222222222222222222222222222222222222222",
+                    "source_signing_payload_sha256": "abc123",
+                    "submit_payload": {
+                        "action": {"type": "order"},
+                        "nonce": 1700000000000,
+                        "signature": {"r": "0x1", "s": "0x2", "v": 27},
+                    },
+                    "submit_state": "submitted_remote",
+                    "remote_submit_called": True,
+                    "submitted": True,
+                    "response_type": "resting",
+                    "exchange_response": {"status": "ok"},
+                    "reviewer": "marce",
+                    "note": "go",
+                    "errors": [],
+                }
+
+        return _Fake()
+
+    monkeypatch.setattr(module.HyperliquidBrokerAdapter, "build_submit_report", fake_submit)
+
+    root_dir = tmp_path / "hyperliquid_submits"
+    args = _make_args(
+        hyperliquid_submit_session=str(signed_action_path),
+        hyperliquid_submit_reviewer="marce",
+        hyperliquid_submit_note="go",
+        hyperliquid_submit_confirm=True,
+        hyperliquid_submit_sessions_root=str(root_dir),
+        _request_id="req_hl_submit_001",
+    )
+    result = handle_broker_preflight_commands(args)
+
+    assert isinstance(result, dict)
+    assert result["status"] == "success"
+    assert result["submitted"] is True
+    assert result["submit_state"] == "submitted_remote"
+
+    session_dirs = [child for child in root_dir.iterdir() if child.is_dir()]
+    assert len(session_dirs) == 1
+    session_dir = session_dirs[0]
+    assert (session_dir / "hyperliquid_signed_action.json").exists()
+    assert (session_dir / "hyperliquid_submit_response.json").exists()
+    assert (session_dir / "session_metadata.json").exists()
+    assert (session_dir / "session_status.json").exists()
+    assert (root_dir / "hyperliquid_submits_index.json").exists()
+    assert (root_dir / "hyperliquid_submits_index.csv").exists()
 
 
 def test_missing_symbol_raises_config_error(tmp_path):

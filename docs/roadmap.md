@@ -253,6 +253,7 @@ Initial slice already present:
 - local Hyperliquid action/signature-envelope build surface backed by the shared `ExecutionContext` layer
 - local Hyperliquid signer backend integration for real L1 action signing without submit
 - first supervised Hyperliquid submit response artifacts generated from previously signed Hyperliquid action artifacts with explicit reviewer confirmation
+- canonical Hyperliquid submit sessions and shared registry under `outputs/hyperliquid_submits/`
 - read-only Kraken public preflight probes
 - read-only Kraken authenticated preflight probes
 - read-only Kraken account snapshot and balance-aware intent readiness

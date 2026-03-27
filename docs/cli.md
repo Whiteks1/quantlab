@@ -347,6 +347,57 @@ Important safety notes:
 - this is a narrow supervised submit surface, not yet a full session/reconciliation framework
 - no websocket execution, cancel flow, or Hyperliquid post-submit tracking exists yet
 
+### `--hyperliquid-submit-session`
+
+Submit a previously signed Hyperliquid artifact into a canonical local session:
+
+```bash
+python main.py --hyperliquid-submit-session outputs/broker_preflight/hyperliquid_signed_action_demo/hyperliquid_signed_action.json --hyperliquid-submit-reviewer marce --hyperliquid-submit-confirm --hyperliquid-submit-sessions-root outputs/hyperliquid_submits
+```
+
+Optional root override:
+
+- `--hyperliquid-submit-sessions-root <ROOT_DIR>`
+
+This writes a canonical session under:
+
+```text
+outputs/hyperliquid_submits/<session_id>/
+  session_metadata.json
+  session_status.json
+  hyperliquid_signed_action.json
+  hyperliquid_submit_response.json
+```
+
+It also refreshes:
+
+- `outputs/hyperliquid_submits/hyperliquid_submits_index.csv`
+- `outputs/hyperliquid_submits/hyperliquid_submits_index.json`
+
+### `--hyperliquid-submit-sessions-list`
+
+List canonical Hyperliquid submit sessions:
+
+```bash
+python main.py --hyperliquid-submit-sessions-list outputs/hyperliquid_submits
+```
+
+### `--hyperliquid-submit-sessions-show`
+
+Show one canonical Hyperliquid submit session:
+
+```bash
+python main.py --hyperliquid-submit-sessions-show outputs/hyperliquid_submits/<session_id>
+```
+
+### `--hyperliquid-submit-sessions-index`
+
+Refresh the shared Hyperliquid submit index:
+
+```bash
+python main.py --hyperliquid-submit-sessions-index outputs/hyperliquid_submits
+```
+
 ### `--kraken-preflight-outdir`
 
 Persist a read-only Kraken public preflight artifact:

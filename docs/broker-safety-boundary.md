@@ -80,6 +80,7 @@ Current Stage D.1 scope covered:
 - local Hyperliquid action and signature-envelope artifacts with resolved nonce and `expiresAfter`
 - local Hyperliquid signer backend integration for real L1 action signing, still without submit
 - first supervised Hyperliquid submit response artifacts generated only from previously signed Hyperliquid action artifacts with explicit reviewer confirmation
+- canonical Hyperliquid submit sessions and shared registry under `outputs/hyperliquid_submits/`
 - deterministic Kraken-style payload translation
 - read-only Kraken public preflight probes for pair support and basic readiness
 - read-only Kraken authenticated preflight probes for private boundary readiness

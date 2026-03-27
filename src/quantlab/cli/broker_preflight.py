@@ -9,13 +9,14 @@ import json
 from pathlib import Path
 
 from quantlab.brokers import ExecutionContext, HyperliquidBrokerAdapter, KrakenBrokerAdapter
-from quantlab.brokers.session_store import BrokerOrderValidationStore
+from quantlab.brokers.session_store import BrokerOrderValidationStore, HyperliquidSubmitStore
 from quantlab.cli.broker_dry_run import (
     _build_execution_intent_from_args,
     _build_execution_policy_from_args,
 )
 from quantlab.errors import ConfigError
 from quantlab.reporting.broker_order_validation_index import write_broker_order_validations_index
+from quantlab.reporting.hyperliquid_submit_index import write_hyperliquid_submits_index
 from quantlab.runs.run_id import generate_run_id
 
 
@@ -27,6 +28,8 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
     - ``--hyperliquid-preflight-outdir <DIR>`` : run read-only Hyperliquid venue preflight and persist artifact
     - ``--hyperliquid-account-readiness-outdir <DIR>`` : run read-only Hyperliquid account/signer readiness and persist artifact
     - ``--hyperliquid-signed-action-outdir <DIR>`` : build a local Hyperliquid action+signature envelope artifact without submitting it
+    - ``--hyperliquid-submit-signed-action <FILE>`` : submit a previously signed Hyperliquid artifact and persist a sibling response artifact
+    - ``--hyperliquid-submit-session <FILE>`` : submit a previously signed Hyperliquid artifact into a canonical session root
     - ``--kraken-preflight-outdir <DIR>`` : run read-only Kraken readiness probes and persist artifact
     - ``--kraken-auth-preflight-outdir <DIR>`` : run authenticated Kraken read-only preflight and persist artifact
     - ``--kraken-account-readiness-outdir <DIR>`` : run authenticated account snapshot and intent readiness check
@@ -175,6 +178,92 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
             "mode": "broker_submit",
             "adapter_name": report["adapter_name"],
             "artifact_path": str(artifact_path),
+            "submit_state": report["submit_state"],
+            "remote_submit_called": report["remote_submit_called"],
+            "submitted": report["submitted"],
+        }
+
+    if getattr(args, "hyperliquid_submit_session", None):
+        signed_action_path = Path(args.hyperliquid_submit_session).resolve()
+        if not signed_action_path.exists() or not signed_action_path.is_file():
+            raise ConfigError("Hyperliquid signed action artifact must exist as a file.")
+        if signed_action_path.name != "hyperliquid_signed_action.json":
+            raise ConfigError("Expected a hyperliquid_signed_action.json artifact path.")
+        if not bool(getattr(args, "hyperliquid_submit_confirm", False)):
+            raise ConfigError("hyperliquid_submit_confirm is required for supervised Hyperliquid submit.")
+
+        reviewer = getattr(args, "hyperliquid_submit_reviewer", None)
+        if not isinstance(reviewer, str) or not reviewer.strip():
+            raise ConfigError("hyperliquid_submit_reviewer is required for supervised Hyperliquid submit.")
+
+        with open(signed_action_path, "r", encoding="utf-8") as fh:
+            signed_action_artifact = json.load(fh)
+
+        adapter = HyperliquidBrokerAdapter()
+        submit_note = getattr(args, "hyperliquid_submit_note", None)
+        report = adapter.build_submit_report(
+            source_artifact_path=str(signed_action_path),
+            signed_action_artifact=signed_action_artifact,
+            reviewer=reviewer.strip(),
+            note=submit_note.strip() if isinstance(submit_note, str) and submit_note.strip() else None,
+            timeout_seconds=float(getattr(args, "hyperliquid_preflight_timeout", 10.0)),
+        ).to_dict()
+
+        request_id = getattr(args, "_request_id", None)
+        source_envelope = signed_action_artifact.get("signature_envelope", {})
+        session_id = generate_run_id(
+            "hyperliquid_submit",
+            {
+                "symbol": signed_action_artifact.get("intent", {}).get("symbol"),
+                "side": signed_action_artifact.get("intent", {}).get("side"),
+                "nonce": signed_action_artifact.get("nonce"),
+                "signer_id": source_envelope.get("signer_id"),
+                "request_id": request_id,
+            },
+        )
+        root_dir = Path(getattr(args, "hyperliquid_submit_sessions_root", None) or "outputs/hyperliquid_submits").resolve()
+        store = HyperliquidSubmitStore(session_id, base_dir=str(root_dir))
+        session_path = store.initialize().resolve()
+
+        status_value = _derive_hyperliquid_submit_status(report)
+        metadata = {
+            "session_id": session_id,
+            "status": status_value,
+            "created_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+            "request_id": request_id,
+            "source_artifact_path": str(signed_action_path),
+            "source_signer_id": report.get("source_signer_id"),
+        }
+        status = {
+            "session_id": session_id,
+            "status": status_value,
+            "updated_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+            "submit_state": report["submit_state"],
+            "remote_submit_called": report["remote_submit_called"],
+            "submitted": report["submitted"],
+        }
+        if report.get("errors"):
+            status["message"] = ", ".join(str(item) for item in report["errors"])
+
+        store.write_metadata(metadata)
+        store.write_status(status)
+        store.write_signed_action(signed_action_artifact)
+        store.write_submit_response(report)
+        csv_path, json_path = write_hyperliquid_submits_index(root_dir)
+
+        print("\nHyperliquid submit session generated:\n")
+        print(f"  session_path         : {session_path}")
+        print(f"  submit_state         : {report['submit_state']}")
+        print(f"  remote_submit_called : {report['remote_submit_called']}")
+        print(f"  index_csv            : {csv_path}")
+        print(f"  index_json           : {json_path}")
+
+        return {
+            "status": "success",
+            "mode": "hyperliquid_submit",
+            "adapter_name": report["adapter_name"],
+            "artifacts_path": str(session_path),
+            "session_id": session_id,
             "submit_state": report["submit_state"],
             "remote_submit_called": report["remote_submit_called"],
             "submitted": report["submitted"],
@@ -378,6 +467,14 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
         }
 
     return False
+
+
+def _derive_hyperliquid_submit_status(report: dict[str, object]) -> str:
+    if bool(report.get("submitted")):
+        return "submitted"
+    if bool(report.get("remote_submit_called")):
+        return "submit_rejected"
+    return str(report.get("submit_state") or "submit_not_ready")
 
 
 def _build_execution_context_from_args(args) -> ExecutionContext | None:

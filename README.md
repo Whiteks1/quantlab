@@ -36,7 +36,7 @@ Execution venue strategy note:
 - this is why `QuantLab web3 app` is now the right public direction, even though the product is still earlier in runtime maturity than that label's end-state implies
 - `BrokerAdapter` remains the current code name, but the architecture should now be read as an execution-venue boundary, not only a CEX-style broker boundary
 - a minimal `ExecutionContext` layer now exists in code so future venue work can model signer and routing semantics without overloading `ExecutionIntent`
-- local signer-backed Hyperliquid action signing and a first supervised Hyperliquid submit artifact path now exist, but richer Hyperliquid session, status, and reconciliation flows still remain future work
+- local signer-backed Hyperliquid action signing, supervised submit artifacts, and canonical submit sessions now exist, but richer Hyperliquid post-submit status and reconciliation flows still remain future work
 
 A secondary boundary track remains active:
 
@@ -152,6 +152,10 @@ python main.py --help
 - `--hyperliquid-signed-action-outdir`: persist a local Hyperliquid action and signature-envelope artifact without submitting it
 - `--hyperliquid-private-key` / `--hyperliquid-private-key-env`: optionally sign the Hyperliquid action artifact with a real local signer backend
 - `--hyperliquid-submit-signed-action`: submit a previously signed Hyperliquid action artifact through a tightly gated supervised path
+- `--hyperliquid-submit-session`: persist a canonical Hyperliquid submit session under `outputs/hyperliquid_submits/`
+- `--hyperliquid-submit-sessions-list`: inspect canonical Hyperliquid submit sessions under a root
+- `--hyperliquid-submit-sessions-show`: inspect one canonical Hyperliquid submit session
+- `--hyperliquid-submit-sessions-index`: refresh the shared Hyperliquid submit index under the submit root
 - `--kraken-preflight-outdir`: persist a read-only Kraken public preflight artifact
 - `--kraken-auth-preflight-outdir`: persist a read-only Kraken authenticated preflight artifact
 - `--kraken-account-readiness-outdir`: persist a read-only Kraken account snapshot and intent readiness artifact
