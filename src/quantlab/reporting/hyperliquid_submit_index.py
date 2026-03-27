@@ -39,6 +39,10 @@ _INDEX_FIELDS = [
     "fill_summary_filled_size",
     "fill_summary_total_fee",
     "fill_summary_total_closed_pnl",
+    "supervision_state",
+    "supervision_attention_required",
+    "supervision_poll_count",
+    "supervision_monitoring_mode",
     "effective_order_state",
     "path",
 ]

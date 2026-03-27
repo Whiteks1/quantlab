@@ -396,7 +396,13 @@ function updateDashboard() {
         : "No broker submit activity yet";
     elements.hyperliquidState.textContent = !hyperliquidSurface.available
         ? "Not available"
-        : (hyperliquidSurface.submit_has_alerts ? "Needs attention" : (hyperliquidSurface.implemented_surfaces?.order_submit ? "Submit path ready" : "Read-only ready"));
+        : (
+            hyperliquidSurface.submit_has_alerts
+                ? "Needs attention"
+                : (hyperliquidSurface.implemented_surfaces?.continuous_supervision
+                    ? "Lifecycle supervised"
+                    : (hyperliquidSurface.implemented_surfaces?.order_submit ? "Submit path ready" : "Read-only ready"))
+        );
     elements.hyperliquidMeta.textContent = latestHyperArtifact
         ? [titleCase(latestHyperArtifact.artifact_type || "artifact"), formatDateTime(latestHyperArtifact.generated_at), latestHyperArtifact.resolved_transport ? `Transport ${titleCase(latestHyperArtifact.resolved_transport)}` : null].filter(Boolean).join(" · ")
         : (hyperliquidSurface.message || "Preflight through supervised submit are available when local artifacts exist");

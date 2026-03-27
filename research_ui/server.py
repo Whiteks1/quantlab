@@ -179,6 +179,11 @@ def build_hyperliquid_surface_payload(project_root: Path | None = None) -> tuple
             "artifact_name": "hyperliquid_order_status.json",
             "summary_key": "normalized_state",
         },
+        "continuous_supervision": {
+            "implemented": True,
+            "artifact_name": "hyperliquid_supervision.json",
+            "summary_key": "supervision_state",
+        },
     }
 
     latest_artifacts: dict[str, dict[str, object] | None] = {}
@@ -192,6 +197,7 @@ def build_hyperliquid_surface_payload(project_root: Path | None = None) -> tuple
         (
             artifact
             for artifact in (
+                latest_artifacts["continuous_supervision"],
                 latest_artifacts["order_status"],
                 latest_artifacts["submit_response"],
                 latest_artifacts["signed_action"],
@@ -213,6 +219,7 @@ def build_hyperliquid_surface_payload(project_root: Path | None = None) -> tuple
                 "message": str(exc),
                 "total_sessions": 0,
                 "submit_response_sessions": 0,
+                "supervision_sessions": 0,
                 "submitted_sessions": 0,
                 "order_status_known_sessions": 0,
                 "status_counts": {},
@@ -232,6 +239,7 @@ def build_hyperliquid_surface_payload(project_root: Path | None = None) -> tuple
                 "generated_at": None,
                 "total_sessions": 0,
                 "submit_response_sessions": 0,
+                "supervision_sessions": 0,
                 "submitted_sessions": 0,
                 "order_state_counts": {},
                 "alert_status": "error",
@@ -248,6 +256,7 @@ def build_hyperliquid_surface_payload(project_root: Path | None = None) -> tuple
             "message": "No Hyperliquid submit root found yet.",
             "total_sessions": 0,
             "submit_response_sessions": 0,
+            "supervision_sessions": 0,
             "submitted_sessions": 0,
             "order_status_known_sessions": 0,
             "status_counts": {},
@@ -266,6 +275,7 @@ def build_hyperliquid_surface_payload(project_root: Path | None = None) -> tuple
             "generated_at": None,
             "total_sessions": 0,
             "submit_response_sessions": 0,
+            "supervision_sessions": 0,
             "submitted_sessions": 0,
             "order_state_counts": {},
             "alert_status": "ok",
@@ -280,7 +290,7 @@ def build_hyperliquid_surface_payload(project_root: Path | None = None) -> tuple
     return {
         "status": "ok",
         "available": True,
-        "message": "Hyperliquid now spans venue preflight, signer readiness, local signing, supervised submit, and post-submit session visibility.",
+        "message": "Hyperliquid now spans venue preflight, signer readiness, local signing, supervised submit, and bounded post-submit supervision.",
         "search_roots": [str(path) for path in search_roots if path.exists()],
         "implemented_surfaces": {
             "preflight": True,
@@ -290,6 +300,7 @@ def build_hyperliquid_surface_payload(project_root: Path | None = None) -> tuple
             "order_submit": True,
             "submit_sessions": True,
             "post_submit_status": True,
+            "continuous_supervision": True,
             "submission_health": True,
         },
         "execution_context_pressure": {
@@ -449,6 +460,8 @@ def _is_hyperliquid_payload(filename: str, payload: dict[str, object]) -> bool:
         return "submit_state" in payload
     if filename == "hyperliquid_order_status.json":
         return "normalized_state" in payload or "status_known" in payload
+    if filename == "hyperliquid_supervision.json":
+        return "supervision_state" in payload or "polls_completed" in payload
     return False
 
 def run_server():

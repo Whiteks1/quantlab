@@ -480,6 +480,12 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="Refresh the shared Hyperliquid submit index artifacts in a directory.",
     )
     parser.add_argument(
+        "--hyperliquid-submit-sessions-supervise",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Run bounded continuous supervision over a Hyperliquid submit session.",
+    )
+    parser.add_argument(
         "--hyperliquid-submit-sessions-status",
         metavar="SESSION_DIR",
         default=None,
@@ -517,6 +523,18 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         "--hyperliquid-cancel-confirm",
         action="store_true",
         help="Explicit confirmation required for supervised Hyperliquid cancel.",
+    )
+    parser.add_argument(
+        "--hyperliquid-supervision-polls",
+        type=int,
+        default=3,
+        help="Number of supervision polling snapshots to take for Hyperliquid monitoring.",
+    )
+    parser.add_argument(
+        "--hyperliquid-supervision-interval-seconds",
+        type=float,
+        default=2.0,
+        help="Sleep interval between Hyperliquid supervision polling snapshots.",
     )
     parser.add_argument(
         "--hyperliquid-submit-sessions-health",
@@ -894,6 +912,7 @@ def _determine_session_mode(args: argparse.Namespace, json_command: str | None) 
         args.hyperliquid_submit_sessions_list
         or args.hyperliquid_submit_sessions_show
         or args.hyperliquid_submit_sessions_index
+        or args.hyperliquid_submit_sessions_supervise
         or args.hyperliquid_submit_sessions_status
         or args.hyperliquid_submit_sessions_reconcile
         or args.hyperliquid_submit_sessions_fills
