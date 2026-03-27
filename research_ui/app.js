@@ -2,6 +2,7 @@ const CONFIG = {
     registryPath: "/outputs/runs/runs_index.json",
     launchControlPath: "/api/launch-control",
     paperHealthPath: "/api/paper-sessions-health",
+    paperAlertsPath: "/api/paper-sessions-alerts",
     brokerHealthPath: "/api/broker-submissions-health",
     hyperliquidSurfacePath: "/api/hyperliquid-surface",
     pretradeHandoffPath: "/api/pretrade-handoff-intake",
@@ -24,6 +25,7 @@ const state = {
     detailCache: new Map(),
     isLoading: false,
     paperHealth: null,
+    paperAlerts: null,
     brokerHealth: null,
     hyperliquidSurface: null,
     pretradeIntake: null,
@@ -81,6 +83,8 @@ const elements = {
     compareSummaryLong: document.getElementById("compare-summary-long"),
     compareBody: document.getElementById("compare-body"),
     opsSummary: document.getElementById("ops-summary"),
+    paperSummary: document.getElementById("paper-summary"),
+    paperPanelBody: document.getElementById("paper-panel-body"),
     pretradeSummary: document.getElementById("pretrade-summary"),
     pretradePanelBody: document.getElementById("pretrade-panel-body"),
     paperTotalSessions: document.getElementById("paper-total-sessions"),
@@ -169,7 +173,7 @@ async function fetchAll(showNotice = false, silent = false) {
 
     try {
         const registryResponse = await fetchJson(CONFIG.registryPath);
-        const [launchControl, paperHealth, brokerHealth, hyperliquidSurface, pretradeIntake, stepbitWorkspace, metaTradeWorkspace] = await Promise.all([
+        const [launchControl, paperHealth, paperAlerts, brokerHealth, hyperliquidSurface, pretradeIntake, stepbitWorkspace, metaTradeWorkspace] = await Promise.all([
             fetchJsonSafe(CONFIG.launchControlPath, {
                 status: "error",
                 available: false,
@@ -183,6 +187,15 @@ async function fetchAll(showNotice = false, silent = false) {
                 total_sessions: 0,
                 status_counts: {},
                 message: "Paper health unavailable.",
+            }),
+            fetchJsonSafe(CONFIG.paperAlertsPath, {
+                status: "error",
+                available: false,
+                total_sessions: 0,
+                status_counts: {},
+                alert_counts: {},
+                alerts: [],
+                message: "Paper alerts unavailable.",
             }),
             fetchJsonSafe(CONFIG.brokerHealthPath, {
                 status: "error",
@@ -231,6 +244,7 @@ async function fetchAll(showNotice = false, silent = false) {
         state.generatedAt = registryResponse.generated_at || null;
         state.launchControl = launchControl;
         state.paperHealth = paperHealth;
+        state.paperAlerts = paperAlerts;
         state.brokerHealth = brokerHealth;
         state.hyperliquidSurface = hyperliquidSurface;
         state.pretradeIntake = pretradeIntake;
@@ -688,6 +702,7 @@ function renderRuntimeChip(label, value, tone) {
 
 function renderOps() {
     const paperHealth = state.paperHealth || {};
+    const paperAlerts = state.paperAlerts || {};
     const brokerHealth = state.brokerHealth || {};
     const hyperliquidSurface = state.hyperliquidSurface || {};
     const pretradeIntake = state.pretradeIntake || {};
@@ -695,7 +710,9 @@ function renderOps() {
     const metaTradeWorkspace = state.metaTradeWorkspace || {};
 
     elements.paperTotalSessions.textContent = String(paperHealth.total_sessions || 0);
-    elements.paperHealthMeta.textContent = buildPaperMeta(paperHealth);
+    elements.paperHealthMeta.textContent = buildPaperMeta(paperHealth, paperAlerts);
+    elements.paperSummary.textContent = buildPaperSummary(paperHealth, paperAlerts);
+    elements.paperPanelBody.innerHTML = buildPaperPanel(paperHealth, paperAlerts);
     elements.brokerTotalSessions.textContent = String(brokerHealth.total_sessions || 0);
     elements.brokerHealthMeta.textContent = buildBrokerMeta(brokerHealth);
     elements.hyperliquidState.textContent = buildHyperliquidState(hyperliquidSurface);
@@ -706,7 +723,7 @@ function renderOps() {
     elements.stepbitMeta.textContent = buildStepbitMeta(stepbitWorkspace);
     elements.metaTradeState.textContent = metaTradeWorkspace.available ? "Ready" : "Boundary";
     elements.metaTradeMeta.textContent = buildMetaTradeMeta(metaTradeWorkspace);
-    elements.opsSummary.textContent = buildOpsSummary(paperHealth, brokerHealth, hyperliquidSurface, pretradeIntake);
+    elements.opsSummary.textContent = buildOpsSummary(paperHealth, paperAlerts, brokerHealth, hyperliquidSurface, pretradeIntake);
     elements.sidebarBoundaryMeta.textContent = [
         stepbitWorkspace.available ? "Stepbit connected" : "Stepbit boundary",
         metaTradeWorkspace.available ? "Meta Trade connected" : "Meta Trade boundary",
@@ -773,16 +790,151 @@ function keyValue(label, value) {
     `;
 }
 
-function buildPaperMeta(health) {
+function buildPaperMeta(health, alerts) {
     if (health.status === "error") {
         return health.message || "Paper health unavailable";
     }
     if (!health.available) {
         return "No paper session root yet.";
     }
+    if (alerts?.available && alerts.has_alerts) {
+        const latestAlert = alerts.latest_alert_code ? titleCase(alerts.latest_alert_code) : "Alert active";
+        return `${latestAlert} · threshold ${alerts.stale_after_minutes || "-"}m`;
+    }
     return health.latest_session_id
         ? `${health.latest_session_id} · ${titleCase(health.latest_session_status || "unknown")}`
         : "No paper sessions yet.";
+}
+
+function buildPaperSummary(health, alerts) {
+    if (health.status === "error" || alerts.status === "error") {
+        return "Paper operations unavailable.";
+    }
+    if (!health.available) {
+        return "Waiting for the first paper session root.";
+    }
+    if (alerts.has_alerts) {
+        return `${alerts.alerts?.length || 0} active alert(s) across ${health.total_sessions || 0} session(s)`;
+    }
+    if ((alerts.running_sessions || []).length) {
+        return `${alerts.running_sessions.length} running session(s) below stale threshold`;
+    }
+    return health.latest_session_id
+        ? `Latest session ${health.latest_session_id} looks healthy`
+        : "No paper sessions recorded yet.";
+}
+
+function buildPaperPanel(health, alerts) {
+    if (health.status === "error" || alerts.status === "error") {
+        const message = alerts.message || health.message || "The paper operations surface could not be loaded.";
+        return `
+            <div class="panel-empty">
+                <strong>Paper operations unavailable</strong>
+                <span>${escapeHtml(message)}</span>
+            </div>
+        `;
+    }
+
+    if (!health.available) {
+        return `
+            <div class="panel-empty">
+                <strong>No paper session root yet</strong>
+                <span>${escapeHtml(health.message || "QuantLab will surface paper-session operations here once canonical sessions exist.")}</span>
+            </div>
+        `;
+    }
+
+    const statusCounts = health.status_counts || {};
+    const alertEntries = Array.isArray(alerts.alerts) ? alerts.alerts.slice(0, 3) : [];
+    const signalRow = [
+        `<span class="inline-chip ${paperToneClass(alerts.alert_status)}">${escapeHtml(titleCase(alerts.alert_status || "ok"))}</span>`,
+        `<span class="inline-chip chip-running">${escapeHtml(`${alerts.running_sessions?.length || 0} running`)}</span>`,
+        `<span class="inline-chip chip-calm">${escapeHtml(`stale ${alerts.stale_after_minutes || "-"}m`)}</span>`,
+    ].join("");
+
+    const latestSession = health.latest_session_id
+        ? `${health.latest_session_id} · ${titleCase(health.latest_session_status || "unknown")}`
+        : "No recent session";
+    const latestIssue = health.latest_issue_session_id
+        ? `${health.latest_issue_session_id} · ${titleCase(health.latest_issue_status || "unknown")}`
+        : "No active issues";
+    const latestSuccess = alerts.latest_success_session_id
+        ? `${alerts.latest_success_session_id} · ${relativeTimeText(alerts.latest_success_at)}`
+        : "No successful session yet";
+
+    const alertList = alertEntries.length
+        ? `
+            <div class="ops-signal-list">
+                ${alertEntries.map((alert) => `
+                    <article class="signal-row ${alert.severity === "critical" ? "signal-row-attention" : ""}">
+                        <strong>${escapeHtml(titleCase(alert.code || "alert"))}</strong>
+                        <span>${escapeHtml(alert.message || "Paper session needs attention.")}</span>
+                        <div class="signal-meta">${escapeHtml(alert.session_id || "-")} · ${escapeHtml(relativeTimeText(alert.activity_at))}</div>
+                    </article>
+                `).join("")}
+            </div>
+        `
+        : `
+            <div class="panel-empty compact-empty">
+                <strong>No active paper alerts</strong>
+                <span>Latest paper sessions are either successful or still within the bounded running window.</span>
+            </div>
+        `;
+
+    return `
+        <div class="ops-signal-strip">${signalRow}</div>
+        <div class="ops-stat-grid">
+            ${opsStat("Latest session", latestSession, relativeTimeText(health.latest_session_at))}
+            ${opsStat("Latest issue", latestIssue, health.latest_issue_error_type || relativeTimeText(health.latest_issue_at))}
+            ${opsStat("Latest success", latestSuccess, `${statusCounts.success || 0} success`)}
+            ${opsStat("Session mix", `${health.total_sessions || 0} total`, `${statusCounts.failed || 0} failed · ${statusCounts.running || 0} running`)}
+        </div>
+        ${alertList}
+    `;
+}
+
+function opsStat(label, value, meta) {
+    return `
+        <article class="ops-stat-card">
+            <span>${escapeHtml(label)}</span>
+            <strong>${escapeHtml(value || "-")}</strong>
+            <div class="signal-meta">${escapeHtml(meta || "-")}</div>
+        </article>
+    `;
+}
+
+function paperToneClass(status) {
+    if (status === "critical") {
+        return "chip-attention";
+    }
+    if (status === "warning") {
+        return "chip-running";
+    }
+    return "chip-calm";
+}
+
+function relativeTimeText(value) {
+    if (!value) {
+        return "No recent activity";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return String(value);
+    }
+    const diffMs = Date.now() - date.getTime();
+    const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
+    if (diffMinutes < 1) {
+        return "Moments ago";
+    }
+    if (diffMinutes < 60) {
+        return `${diffMinutes}m ago`;
+    }
+    const diffHours = Math.round(diffMinutes / 60);
+    if (diffHours < 24) {
+        return `${diffHours}h ago`;
+    }
+    const diffDays = Math.round(diffHours / 24);
+    return `${diffDays}d ago`;
 }
 
 function buildBrokerMeta(health) {
@@ -840,9 +992,11 @@ function buildMetaTradeMeta(workspace) {
     return `${summary.product_surfaces_present || 0} workbench surfaces · ${summary.engine_modules_present || 0} engine modules`;
 }
 
-function buildOpsSummary(paperHealth, brokerHealth, hyperliquidSurface, pretradeIntake) {
+function buildOpsSummary(paperHealth, paperAlerts, brokerHealth, hyperliquidSurface, pretradeIntake) {
     const parts = [
-        `Paper ${paperHealth.total_sessions || 0}`,
+        paperAlerts?.has_alerts
+            ? `Paper attention ${paperAlerts.alerts?.length || 0}`
+            : `Paper ${paperHealth.total_sessions || 0}`,
         `Broker ${brokerHealth.total_sessions || 0}`,
         `Hyperliquid ${buildHyperliquidState(hyperliquidSurface)}`,
     ];
@@ -1053,7 +1207,9 @@ function updateSyncMeta() {
 
 function updateSurfaceSummary() {
     const runsPart = state.runs.length ? `${state.runs.length} indexed runs` : "no indexed runs yet";
-    const paperPart = state.paperHealth?.available ? `paper ${state.paperHealth.total_sessions || 0}` : "paper pending";
+    const paperPart = state.paperAlerts?.has_alerts
+        ? `paper attention ${state.paperAlerts.alerts?.length || 0}`
+        : (state.paperHealth?.available ? `paper ${state.paperHealth.total_sessions || 0}` : "paper pending");
     const brokerPart = state.brokerHealth?.available ? `broker ${state.brokerHealth.total_sessions || 0}` : "broker pending";
     const pretradePart = state.pretradeIntake?.has_validation
         ? (state.pretradeIntake.accepted ? "pre-trade accepted" : "pre-trade rejected")
