@@ -210,8 +210,6 @@ def _write_hyperliquid_submit_session(root: Path, session_id: str) -> None:
         ),
         encoding="utf-8",
     )
-
-
 def test_build_paper_health_payload_returns_zero_state_when_root_missing(tmp_path: Path):
     payload, status = research_ui_server.build_paper_health_payload(tmp_path)
 

@@ -194,6 +194,7 @@ See also:
 - [docs/native-acceleration-strategy.md](./docs/native-acceleration-strategy.md)
 - [docs/paper-session-runbook.md](./docs/paper-session-runbook.md)
 - [docs/pretrade-risk-workbench-roadmap.md](./docs/pretrade-risk-workbench-roadmap.md)
+- [docs/pretrade-calculator-boundary.md](./docs/pretrade-calculator-boundary.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/workflow-operativo-codex.md](./docs/workflow-operativo-codex.md)
 - [docs/run-artifact-contract.md](./docs/run-artifact-contract.md)
