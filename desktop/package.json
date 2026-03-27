@@ -1,0 +1,14 @@
+{
+  "name": "quantlab-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "QuantLab Desktop shell for research, runtime visibility, and bounded AI assistance.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^37.2.0"
+  }
+}
