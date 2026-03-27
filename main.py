@@ -32,6 +32,7 @@ handle_broker_preflight_commands = None
 handle_broker_dry_run_commands = None
 handle_broker_dry_runs_commands = None
 handle_broker_order_validations_commands = None
+handle_hyperliquid_submit_sessions_commands = None
 run_sweep = None
 write_run_report = None
 write_advanced_report = None
@@ -139,6 +140,7 @@ def _load_runtime_dependencies() -> None:
     global handle_broker_dry_run_commands
     global handle_broker_dry_runs_commands
     global handle_broker_order_validations_commands
+    global handle_hyperliquid_submit_sessions_commands
     global run_sweep
     global write_run_report
     global write_advanced_report
@@ -208,6 +210,12 @@ def _load_runtime_dependencies() -> None:
         )
 
         handle_broker_order_validations_commands = _handle_broker_order_validations_commands
+    if handle_hyperliquid_submit_sessions_commands is None:
+        from quantlab.cli.hyperliquid_submit_sessions import (
+            handle_hyperliquid_submit_sessions_commands as _handle_hyperliquid_submit_sessions_commands,
+        )
+
+        handle_hyperliquid_submit_sessions_commands = _handle_hyperliquid_submit_sessions_commands
     if run_sweep is None:
         from quantlab.experiments import run_sweep as _run_sweep
 
@@ -416,6 +424,12 @@ def main() -> None:
         help="Submit a previously generated hyperliquid_signed_action.json artifact through the supervised Hyperliquid path.",
     )
     parser.add_argument(
+        "--hyperliquid-submit-session",
+        metavar="FILE",
+        default=None,
+        help="Submit a previously generated hyperliquid_signed_action.json artifact into a canonical Hyperliquid submit session.",
+    )
+    parser.add_argument(
         "--hyperliquid-submit-reviewer",
         default=None,
         help="Reviewer name required for supervised Hyperliquid submit.",
@@ -429,6 +443,30 @@ def main() -> None:
         "--hyperliquid-submit-confirm",
         action="store_true",
         help="Explicit confirmation required for supervised Hyperliquid submit.",
+    )
+    parser.add_argument(
+        "--hyperliquid-submit-sessions-root",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Root directory for canonical Hyperliquid submit sessions.",
+    )
+    parser.add_argument(
+        "--hyperliquid-submit-sessions-list",
+        metavar="ROOT_DIR",
+        default=None,
+        help="List Hyperliquid submit sessions in a directory.",
+    )
+    parser.add_argument(
+        "--hyperliquid-submit-sessions-show",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Show details for a single Hyperliquid submit session.",
+    )
+    parser.add_argument(
+        "--hyperliquid-submit-sessions-index",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Refresh the shared Hyperliquid submit index artifacts in a directory.",
     )
     parser.add_argument(
         "--hyperliquid-private-key",
@@ -786,11 +824,18 @@ def main() -> None:
             or args.hyperliquid_account_readiness_outdir
             or args.hyperliquid_signed_action_outdir
             or args.hyperliquid_submit_signed_action
+            or args.hyperliquid_submit_session
             or args.kraken_preflight_outdir
             or args.kraken_auth_preflight_outdir
             or args.kraken_account_readiness_outdir
         ):
             session_metadata["mode"] = "broker_preflight"
+        elif (
+            args.hyperliquid_submit_sessions_list
+            or args.hyperliquid_submit_sessions_show
+            or args.hyperliquid_submit_sessions_index
+        ):
+            session_metadata["mode"] = "hyperliquid_submit"
         elif (
             args.kraken_order_validate_outdir
             or args.kraken_order_validate_session
@@ -858,6 +903,9 @@ def main() -> None:
 
         if result_ctx in (None, False):
             result_ctx = handle_broker_order_validations_commands(args)
+
+        if result_ctx in (None, False):
+            result_ctx = handle_hyperliquid_submit_sessions_commands(args)
 
         if result_ctx in (None, False):
             result_ctx = handle_paper_session_commands(args)

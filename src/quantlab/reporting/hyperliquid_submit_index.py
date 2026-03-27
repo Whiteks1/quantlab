@@ -1,0 +1,70 @@
+"""
+Shared registry/export surface for Hyperliquid submit sessions.
+"""
+
+from __future__ import annotations
+
+import csv
+import datetime
+import json
+from pathlib import Path
+from typing import Any
+
+HYPERLIQUID_SUBMITS_INDEX_JSON_FILENAME = "hyperliquid_submits_index.json"
+HYPERLIQUID_SUBMITS_INDEX_CSV_FILENAME = "hyperliquid_submits_index.csv"
+
+_INDEX_FIELDS = [
+    "session_id",
+    "status",
+    "created_at",
+    "updated_at",
+    "request_id",
+    "source_signer_id",
+    "submit_state",
+    "remote_submit_called",
+    "submitted",
+    "response_type",
+    "path",
+]
+
+
+def build_hyperliquid_submits_index(root_dir: str | Path) -> dict[str, Any]:
+    from quantlab.cli.hyperliquid_submit_sessions import (
+        load_hyperliquid_submit_summary,
+        scan_hyperliquid_submit_sessions,
+    )
+
+    root = Path(root_dir)
+    sessions: list[dict[str, Any]] = []
+    for session_dir in scan_hyperliquid_submit_sessions(root):
+        summary = load_hyperliquid_submit_summary(session_dir)
+        sessions.append({field: summary.get(field) for field in _INDEX_FIELDS})
+
+    return {
+        "generated_at": datetime.datetime.now().isoformat(),
+        "root_dir": str(root),
+        "n_sessions": len(sessions),
+        "sessions": sessions,
+    }
+
+
+def write_hyperliquid_submits_index(root_dir: str | Path) -> tuple[str, str]:
+    root = Path(root_dir)
+    root.mkdir(parents=True, exist_ok=True)
+
+    payload = build_hyperliquid_submits_index(root)
+    sessions = payload.get("sessions", [])
+
+    csv_path = root / HYPERLIQUID_SUBMITS_INDEX_CSV_FILENAME
+    json_path = root / HYPERLIQUID_SUBMITS_INDEX_JSON_FILENAME
+
+    with open(csv_path, "w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=_INDEX_FIELDS)
+        writer.writeheader()
+        for row in sessions:
+            writer.writerow(row)
+
+    with open(json_path, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2, ensure_ascii=False)
+
+    return str(csv_path), str(json_path)
