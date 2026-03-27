@@ -1176,12 +1176,12 @@ def start_stepbit_workspace(project_root: Path | None = None, request_body: dict
 
     logs_root = root / "outputs" / "research_ui" / "stepbit"
     logs_root.mkdir(parents=True, exist_ok=True)
-    with STEPBIT_START_LOCK:
-        live_urls = _detect_stepbit_live_urls()
-        start_support = _build_stepbit_start_support(app_repo, live_urls)
-        actions: list[str] = []
-        current_start_state = _get_stepbit_start_state_unlocked(live_urls)
+    live_urls = _detect_stepbit_live_urls()
+    start_support = _build_stepbit_start_support(app_repo, live_urls)
+    actions: list[str] = []
 
+    with STEPBIT_START_LOCK:
+        current_start_state = _get_stepbit_start_state_unlocked(live_urls)
         if current_start_state["status"] == "starting":
             return {
                 "status": "accepted",
@@ -1190,110 +1190,109 @@ def start_stepbit_workspace(project_root: Path | None = None, request_body: dict
                 "live_urls": live_urls,
                 "logs_root": str(logs_root),
             }, 202
-
         _set_stepbit_start_state_unlocked("starting", current_start_state.get("actions") or [])
 
-        if not live_urls["backend_reachable"]:
-            if not start_support["can_start_backend"]:
-                _set_stepbit_start_state_unlocked("idle", [])
-                return {
-                    "status": "error",
-                    "message": "Go is not available, so QuantLab cannot auto-start the Stepbit backend.",
-                }, 400
-            backend_binary = _stepbit_backend_binary_path(root)
+    if not live_urls["backend_reachable"]:
+        if not start_support["can_start_backend"]:
+            _set_stepbit_start_state("idle", [])
+            return {
+                "status": "error",
+                "message": "Go is not available, so QuantLab cannot auto-start the Stepbit backend.",
+            }, 400
+        backend_binary = _stepbit_backend_binary_path(root)
+        completed = _run_hidden_command(
+            _build_stepbit_backend_build_command(backend_binary),
+            cwd=app_repo,
+            stdout_path=logs_root / "backend.build.stdout.log",
+            stderr_path=logs_root / "backend.build.stderr.log",
+            timeout_seconds=900,
+        )
+        if completed.returncode != 0 or not backend_binary.exists():
+            _set_stepbit_start_state("idle", [])
+            return {
+                "status": "error",
+                "message": "Stepbit backend could not be built.",
+                "build_exit_code": completed.returncode,
+                "stderr_log": str(logs_root / "backend.build.stderr.log"),
+            }, 500
+        actions.append("backend build complete")
+        _set_stepbit_start_state("starting", actions)
+        backend_pid = _spawn_detached_process(
+            [str(backend_binary)],
+            cwd=app_repo,
+            stdout_path=logs_root / "backend.stdout.log",
+            stderr_path=logs_root / "backend.stderr.log",
+        )
+        actions.append(f"backend pid {backend_pid}")
+        _set_stepbit_start_state("starting", actions)
+        if not _wait_for_stepbit_backend():
+            _set_stepbit_start_state("idle", [])
+            return {
+                "status": "error",
+                "message": "Stepbit backend did not become healthy in time, so the frontend was not opened.",
+                "stderr_log": str(logs_root / "backend.stderr.log"),
+            }, 500
+        live_urls = _detect_stepbit_live_urls()
+        start_support = _build_stepbit_start_support(app_repo, live_urls)
+
+    if not live_urls["frontend_reachable"]:
+        if not start_support["can_start_frontend"]:
+            _set_stepbit_start_state("idle", actions)
+            return {
+                "status": "error",
+                "message": "corepack or pnpm is not available, so QuantLab cannot auto-start the Stepbit frontend.",
+            }, 400
+        if start_support["frontend_install_required"]:
+            install_command = _build_stepbit_frontend_install_command(web_repo)
             completed = _run_hidden_command(
-                _build_stepbit_backend_build_command(backend_binary),
-                cwd=app_repo,
-                stdout_path=logs_root / "backend.build.stdout.log",
-                stderr_path=logs_root / "backend.build.stderr.log",
+                install_command,
+                cwd=web_repo,
+                stdout_path=logs_root / "frontend.install.stdout.log",
+                stderr_path=logs_root / "frontend.install.stderr.log",
                 timeout_seconds=900,
             )
-            if completed.returncode != 0 or not backend_binary.exists():
-                _set_stepbit_start_state_unlocked("idle", [])
+            if completed.returncode != 0:
+                _set_stepbit_start_state("idle", actions)
                 return {
                     "status": "error",
-                    "message": "Stepbit backend could not be built.",
-                    "build_exit_code": completed.returncode,
-                    "stderr_log": str(logs_root / "backend.build.stderr.log"),
+                    "message": "Stepbit frontend dependencies could not be installed.",
+                    "install_exit_code": completed.returncode,
+                    "stderr_log": str(logs_root / "frontend.install.stderr.log"),
                 }, 500
-            actions.append("backend build complete")
-            _set_stepbit_start_state_unlocked("starting", actions)
-            backend_pid = _spawn_detached_process(
-                [str(backend_binary)],
-                cwd=app_repo,
-                stdout_path=logs_root / "backend.stdout.log",
-                stderr_path=logs_root / "backend.stderr.log",
-            )
-            actions.append(f"backend pid {backend_pid}")
-            _set_stepbit_start_state_unlocked("starting", actions)
-            if not _wait_for_stepbit_backend():
-                _set_stepbit_start_state_unlocked("idle", [])
-                return {
-                    "status": "error",
-                    "message": "Stepbit backend did not become healthy in time, so the frontend was not opened.",
-                    "stderr_log": str(logs_root / "backend.stderr.log"),
-                }, 500
-            live_urls = _detect_stepbit_live_urls()
-            start_support = _build_stepbit_start_support(app_repo, live_urls)
+            actions.append("frontend install complete")
+            _set_stepbit_start_state("starting", actions)
 
-        if not live_urls["frontend_reachable"]:
-            if not start_support["can_start_frontend"]:
-                _set_stepbit_start_state_unlocked("idle", actions)
-                return {
-                    "status": "error",
-                    "message": "corepack or pnpm is not available, so QuantLab cannot auto-start the Stepbit frontend.",
-                }, 400
-            if start_support["frontend_install_required"]:
-                install_command = _build_stepbit_frontend_install_command(web_repo)
-                completed = _run_hidden_command(
-                    install_command,
-                    cwd=web_repo,
-                    stdout_path=logs_root / "frontend.install.stdout.log",
-                    stderr_path=logs_root / "frontend.install.stderr.log",
-                    timeout_seconds=900,
-                )
-                if completed.returncode != 0:
-                    _set_stepbit_start_state_unlocked("idle", actions)
-                    return {
-                        "status": "error",
-                        "message": "Stepbit frontend dependencies could not be installed.",
-                        "install_exit_code": completed.returncode,
-                        "stderr_log": str(logs_root / "frontend.install.stderr.log"),
-                    }, 500
-                actions.append("frontend install complete")
-                _set_stepbit_start_state_unlocked("starting", actions)
+        frontend_command = _build_stepbit_frontend_start_command(web_repo)
+        frontend_pid = _spawn_detached_process(
+            frontend_command,
+            cwd=web_repo,
+            stdout_path=logs_root / "frontend.stdout.log",
+            stderr_path=logs_root / "frontend.stderr.log",
+            env_overrides={
+                "VITE_API_BASE_URL": "http://127.0.0.1:8080/api",
+                "VITE_WS_BASE_URL": "ws://127.0.0.1:8080",
+            },
+        )
+        actions.append(f"frontend pid {frontend_pid}")
 
-            frontend_command = _build_stepbit_frontend_start_command(web_repo)
-            frontend_pid = _spawn_detached_process(
-                frontend_command,
-                cwd=web_repo,
-                stdout_path=logs_root / "frontend.stdout.log",
-                stderr_path=logs_root / "frontend.stderr.log",
-                env_overrides={
-                    "VITE_API_BASE_URL": "http://127.0.0.1:8080/api",
-                    "VITE_WS_BASE_URL": "ws://127.0.0.1:8080",
-                },
-            )
-            actions.append(f"frontend pid {frontend_pid}")
-
-        refreshed = _detect_stepbit_live_urls()
-        if not actions:
-            _set_stepbit_start_state_unlocked("running", [])
-            return {
-                "status": "ok",
-                "message": "Stepbit AI is already running.",
-                "live_urls": refreshed,
-            }, 200
-
-        _set_stepbit_start_state_unlocked("starting", actions)
-
+    refreshed = _detect_stepbit_live_urls()
+    if not actions:
+        _set_stepbit_start_state("running", [])
         return {
-            "status": "accepted",
-            "message": "Stepbit AI launch requested. The workspace may need a few seconds to become reachable.",
-            "actions": actions,
+            "status": "ok",
+            "message": "Stepbit AI is already running.",
             "live_urls": refreshed,
-            "logs_root": str(logs_root),
-        }, 202
+        }, 200
+
+    _set_stepbit_start_state("starting", actions)
+
+    return {
+        "status": "accepted",
+        "message": "Stepbit AI launch requested. The workspace may need a few seconds to become reachable.",
+        "actions": actions,
+        "live_urls": refreshed,
+        "logs_root": str(logs_root),
+    }, 202
 
 
 def launch_quantlab_job(project_root: Path, request_body: dict[str, object]) -> tuple[dict, int]:

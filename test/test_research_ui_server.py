@@ -629,3 +629,63 @@ def test_start_stepbit_workspace_starts_missing_services(tmp_path: Path, monkeyp
     assert any(isinstance(call[0], list) and "install" in " ".join(call[0]) for call in calls)
     assert any(isinstance(call[0], list) and "build" in " ".join(call[0]) for call in calls)
     assert any(isinstance(call[4], dict) and call[4].get("VITE_API_BASE_URL") == "http://127.0.0.1:8080/api" for call in calls)
+
+
+def test_start_stepbit_workspace_releases_lock_before_long_running_steps(tmp_path: Path, monkeypatch):
+    project_root = tmp_path / "quant_lab"
+    project_root.mkdir()
+    stepbit_app = tmp_path / "stepbit-app"
+    (stepbit_app / "web").mkdir(parents=True)
+
+    monkeypatch.setattr(
+        research_ui_server,
+        "_detect_stepbit_live_urls",
+        lambda: {
+            "preferred_url": "http://127.0.0.1:5173/",
+            "frontend_url": "http://127.0.0.1:5173/",
+            "backend_url": "http://127.0.0.1:8080/",
+            "frontend_reachable": False,
+            "backend_reachable": False,
+            "reachable": False,
+        },
+    )
+    monkeypatch.setattr(
+        research_ui_server,
+        "_build_stepbit_start_support",
+        lambda repo, live: {
+            "can_start_backend": True,
+            "can_start_frontend": True,
+            "frontend_install_required": False,
+            "frontend_command": "pnpm",
+            "backend_command": "go build ./cmd/stepbit-app + run built binary",
+            "frontend_running": False,
+            "backend_running": False,
+        },
+    )
+    monkeypatch.setattr(research_ui_server, "_wait_for_stepbit_backend", lambda timeout_seconds=12: True)
+    monkeypatch.setattr(
+        research_ui_server,
+        "_stepbit_backend_binary_path",
+        lambda root: root / "outputs" / "research_ui" / "stepbit" / "stepbit-app-runtime.exe",
+    )
+
+    class _Completed:
+        returncode = 0
+
+    def _fake_run(command, cwd, stdout_path, stderr_path, timeout_seconds=600):  # noqa: ANN001
+        acquired = research_ui_server.STEPBIT_START_LOCK.acquire(blocking=False)
+        assert acquired, "_run_hidden_command should not execute while STEPBIT_START_LOCK is held"
+        research_ui_server.STEPBIT_START_LOCK.release()
+        if "backend.build" in stdout_path.name:
+            binary_path = project_root / "outputs" / "research_ui" / "stepbit" / "stepbit-app-runtime.exe"
+            binary_path.parent.mkdir(parents=True, exist_ok=True)
+            binary_path.write_text("binary", encoding="utf-8")
+        return _Completed()
+
+    monkeypatch.setattr(research_ui_server, "_run_hidden_command", _fake_run)
+    monkeypatch.setattr(research_ui_server, "_spawn_detached_process", lambda *args, **kwargs: 777)
+
+    payload, status = research_ui_server.start_stepbit_workspace(project_root, {})
+
+    assert status == 202
+    assert payload["status"] == "accepted"
