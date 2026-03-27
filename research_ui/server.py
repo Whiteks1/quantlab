@@ -50,7 +50,11 @@ from quantlab.cli.hyperliquid_submit_sessions import (
     build_hyperliquid_submission_alerts,
     build_hyperliquid_submission_health,
 )
-from quantlab.cli.paper_sessions import build_paper_sessions_health
+from quantlab.cli.paper_sessions import (
+    DEFAULT_PAPER_STALE_MINUTES,
+    build_paper_sessions_alerts,
+    build_paper_sessions_health,
+)
 from quantlab.pretrade.handoff import (
     PRETRADE_HANDOFF_VALIDATION_CONTRACT_TYPE,
     PRETRADE_HANDOFF_VALIDATION_FILENAME,
@@ -531,6 +535,9 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         if request_path.startswith('/api/paper-sessions-health'):
             payload, status = build_paper_health_payload(PROJECT_ROOT)
             return self._send_json(payload, status=status)
+        if request_path.startswith('/api/paper-sessions-alerts'):
+            payload, status = build_paper_alerts_payload(PROJECT_ROOT)
+            return self._send_json(payload, status=status)
         if request_path.startswith('/api/broker-submissions-health'):
             payload, status = build_broker_health_payload(PROJECT_ROOT)
             return self._send_json(payload, status=status)
@@ -648,6 +655,46 @@ def build_paper_health_payload(project_root: Path | None = None) -> tuple[dict, 
 
     try:
         payload = build_paper_sessions_health(paper_root)
+        payload["status"] = "ok"
+        payload["available"] = True
+        return payload, 200
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "status": "error",
+            "available": False,
+            "root_dir": str(paper_root),
+            "message": str(exc),
+        }, 500
+
+
+def build_paper_alerts_payload(project_root: Path | None = None) -> tuple[dict, int]:
+    root = Path(project_root or PROJECT_ROOT)
+    paper_root = root / "outputs" / "paper_sessions"
+
+    if not paper_root.exists():
+        return {
+            "status": "ok",
+            "available": False,
+            "root_dir": str(paper_root),
+            "message": "No paper session root found yet.",
+            "generated_at": None,
+            "stale_after_minutes": DEFAULT_PAPER_STALE_MINUTES,
+            "total_sessions": 0,
+            "status_counts": {},
+            "running_sessions": [],
+            "alert_status": "ok",
+            "has_alerts": False,
+            "alert_counts": {},
+            "latest_success_session_id": None,
+            "latest_success_at": None,
+            "latest_alert_session_id": None,
+            "latest_alert_code": None,
+            "latest_alert_at": None,
+            "alerts": [],
+        }, 200
+
+    try:
+        payload = build_paper_sessions_alerts(paper_root)
         payload["status"] = "ok"
         payload["available"] = True
         return payload, 200

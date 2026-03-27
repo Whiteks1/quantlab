@@ -305,6 +305,36 @@ def test_build_paper_health_payload_summarizes_existing_sessions(tmp_path: Path)
     assert payload["status_counts"]["failed"] == 1
 
 
+def test_build_paper_alerts_payload_returns_zero_state_when_root_missing(tmp_path: Path):
+    payload, status = research_ui_server.build_paper_alerts_payload(tmp_path)
+
+    assert status == 200
+    assert payload["status"] == "ok"
+    assert payload["available"] is False
+    assert payload["total_sessions"] == 0
+    assert payload["has_alerts"] is False
+    assert payload["alerts"] == []
+
+
+def test_build_paper_alerts_payload_summarizes_existing_alerts(tmp_path: Path):
+    paper_root = tmp_path / "outputs" / "paper_sessions"
+    _write_session(paper_root, "paper_001", "success")
+    _write_session(paper_root, "paper_002", "failed")
+
+    payload, status = research_ui_server.build_paper_alerts_payload(tmp_path)
+
+    assert status == 200
+    assert payload["status"] == "ok"
+    assert payload["available"] is True
+    assert payload["total_sessions"] == 2
+    assert payload["has_alerts"] is True
+    assert payload["alert_status"] == "critical"
+    assert payload["latest_success_session_id"] == "paper_001"
+    assert payload["latest_alert_session_id"] == "paper_002"
+    assert payload["latest_alert_code"] == "PAPER_SESSION_FAILED"
+    assert payload["alert_counts"]["critical"] == 1
+
+
 def test_build_broker_health_payload_returns_zero_state_when_root_missing(tmp_path: Path):
     payload, status = research_ui_server.build_broker_health_payload(tmp_path)
 
