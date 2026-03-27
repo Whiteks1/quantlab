@@ -261,9 +261,7 @@ def _load_runtime_dependencies() -> None:
         write_mode_comparison_report = _write_mode_comparison_report
 
 
-def main() -> None:
-    load_dotenv()
-
+def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="QuantLab MVP: research-first trading experiment engine."
     )
@@ -756,14 +754,199 @@ def main() -> None:
     parser.add_argument("--portfolio-exclude-strategies", default=None)
     parser.add_argument("--portfolio-latest-per-source-run", action="store_true")
     parser.add_argument("--portfolio-compare", metavar="ROOT_DIR", default=None)
+    return parser
 
-    args = parser.parse_args()
 
-    # --- Backward-compat aliases: map deprecated flags to new ones ---
+def _normalize_cli_aliases(args: argparse.Namespace) -> None:
     if getattr(args, "list_runs", None) and not getattr(args, "runs_list", None):
         args.runs_list = args.list_runs
     if getattr(args, "best_from", None) and not getattr(args, "runs_best", None):
         args.runs_best = args.best_from
+
+
+def _apply_json_request_overlay(args: argparse.Namespace, session_metadata: dict[str, object]) -> str | None:
+    json_command: str | None = None
+    if not args.json_request:
+        return json_command
+
+    try:
+        req = json.loads(args.json_request)
+
+        schema_version = req.get("schema_version")
+        if schema_version != "1.0":
+            raise ConfigError(
+                f"Unsupported or missing schema_version '{schema_version}'. Expected '1.0'."
+            )
+
+        json_command = req.get("command")
+        if not json_command:
+            raise ConfigError("Missing 'command' in JSON request.")
+
+        args._request_id = req.get("request_id")
+        session_metadata["request_id"] = args._request_id
+
+        params = req.get("params", {})
+        _validate_json_request_contract(json_command, params)
+        for k, v in params.items():
+            if hasattr(args, k):
+                setattr(args, k, v)
+
+        if json_command == "sweep":
+            args.sweep = params.get("config_path") or params.get("sweep")
+            if "out_dir" in params:
+                args.sweep_outdir = params["out_dir"]
+            elif "sweep_outdir" in params:
+                args.sweep_outdir = params["sweep_outdir"]
+        elif json_command == "forward" and "run_dir" in params:
+            args.forward_eval = params["run_dir"]
+
+    except (json.JSONDecodeError, TypeError) as e:
+        raise ConfigError(f"Invalid --json-request payload: {e}")
+
+    return json_command
+
+
+def _determine_session_mode(args: argparse.Namespace, json_command: str | None) -> str:
+    if json_command:
+        return json_command
+    if args.sweep:
+        return "sweep"
+    if args.forward_eval or args.resume_forward:
+        return "forward"
+    if args.portfolio_report or args.portfolio_compare:
+        return "portfolio"
+    if args.paper:
+        return "paper"
+    if args.report:
+        return "report"
+    if (
+        args.paper_sessions_list
+        or args.paper_sessions_show
+        or args.paper_sessions_health
+        or args.paper_sessions_alerts
+        or args.paper_sessions_index
+    ):
+        return "paper_sessions"
+    if (
+        args.hyperliquid_preflight_outdir
+        or args.hyperliquid_account_readiness_outdir
+        or args.hyperliquid_signed_action_outdir
+        or args.hyperliquid_submit_signed_action
+        or args.hyperliquid_submit_session
+        or args.kraken_preflight_outdir
+        or args.kraken_auth_preflight_outdir
+        or args.kraken_account_readiness_outdir
+    ):
+        return "broker_preflight"
+    if (
+        args.hyperliquid_submit_sessions_list
+        or args.hyperliquid_submit_sessions_show
+        or args.hyperliquid_submit_sessions_index
+        or args.hyperliquid_submit_sessions_status
+        or args.hyperliquid_submit_sessions_health
+        or args.hyperliquid_submit_sessions_alerts
+    ):
+        return "hyperliquid_submit"
+    if (
+        args.kraken_order_validate_outdir
+        or args.kraken_order_validate_session
+        or args.broker_order_validations_list
+        or args.broker_order_validations_show
+        or args.broker_order_validations_health
+        or args.broker_order_validations_alerts
+        or args.broker_order_validations_index
+        or args.broker_order_validations_approve
+        or args.broker_order_validations_bundle
+        or args.broker_order_validations_submit_gate
+        or args.broker_order_validations_submit_stub
+        or args.broker_order_validations_submit_real
+        or args.broker_order_validations_reconcile
+        or args.broker_order_validations_status
+    ):
+        return "broker_validate"
+    if (
+        args.kraken_dry_run_outdir
+        or args.kraken_dry_run_session
+        or args.broker_dry_runs_list
+        or args.broker_dry_runs_show
+        or args.broker_dry_runs_index
+    ):
+        return "broker_dry_run"
+    if args.runs_list or args.runs_show or args.runs_best:
+        return "runs"
+    return "run"
+
+
+def _dispatch_json_request_command(args: argparse.Namespace, json_command: str | None):
+    if not json_command:
+        return None
+    if json_command == "run":
+        return handle_run_command(args)
+    if json_command == "sweep":
+        return handle_sweep_command(args, run_sweep=run_sweep)
+    if json_command == "forward":
+        return handle_forward_commands(args)
+    if json_command == "portfolio":
+        return handle_portfolio_commands(
+            args,
+            write_portfolio_report=write_portfolio_report,
+            write_mode_comparison_report=write_mode_comparison_report,
+        )
+    raise ConfigError(
+        f"Unknown command '{json_command}'. "
+        "Valid commands: run, sweep, forward, portfolio."
+    )
+
+
+def _dispatch_standard_commands(args: argparse.Namespace, initial_result: object = None):
+    result_ctx = initial_result
+
+    if result_ctx in (None, False):
+        result_ctx = handle_broker_preflight_commands(args)
+    if result_ctx in (None, False):
+        result_ctx = handle_broker_dry_run_commands(args)
+    if result_ctx in (None, False):
+        result_ctx = handle_broker_dry_runs_commands(args)
+    if result_ctx in (None, False):
+        result_ctx = handle_broker_order_validations_commands(args)
+    if result_ctx in (None, False):
+        result_ctx = handle_hyperliquid_submit_sessions_commands(args)
+    if result_ctx in (None, False):
+        result_ctx = handle_paper_session_commands(args)
+    if result_ctx in (None, False):
+        result_ctx = handle_runs_commands(args)
+    if result_ctx in (None, False):
+        result_ctx = handle_report_commands(
+            args,
+            write_run_report=write_run_report,
+            write_advanced_report=write_advanced_report,
+            write_runs_index=write_runs_index,
+            build_runs_index=build_runs_index,
+            write_comparison=write_comparison,
+        )
+    if result_ctx in (None, False):
+        result_ctx = handle_forward_commands(args)
+    if result_ctx in (None, False):
+        result_ctx = handle_portfolio_commands(
+            args,
+            write_portfolio_report=write_portfolio_report,
+            write_mode_comparison_report=write_mode_comparison_report,
+        )
+    if result_ctx in (None, False):
+        result_ctx = handle_sweep_command(
+            args,
+            run_sweep=run_sweep,
+        )
+    if result_ctx in (None, False):
+        result_ctx = handle_run_command(args)
+    return result_ctx
+
+
+def main() -> None:
+    load_dotenv()
+    parser = _build_argument_parser()
+    args = parser.parse_args()
+    _normalize_cli_aliases(args)
 
     if args.version:
         _emit_version()
@@ -778,196 +961,13 @@ def main() -> None:
     session_metadata = {"mode": "unknown", "request_id": None}
 
     try:
-        # --- JSON Request Overlay ---
-        _json_command: str | None = None  # tracks command for explicit dispatch below
-
-        if args.json_request:
-            try:
-                req = json.loads(args.json_request)
-
-                # 1) Validate schema version
-                schema_version = req.get("schema_version")
-                if schema_version != "1.0":
-                    raise ConfigError(
-                        f"Unsupported or missing schema_version '{schema_version}'. Expected '1.0'."
-                    )
-
-                # 2) Require command
-                _json_command = req.get("command")
-                if not _json_command:
-                    raise ConfigError("Missing 'command' in JSON request.")
-
-                # 3) Propagate request_id
-                args._request_id = req.get("request_id")
-                session_metadata["request_id"] = args._request_id
-
-                # 4) Map params
-                params = req.get("params", {})
-                _validate_json_request_contract(_json_command, params)
-                for k, v in params.items():
-                    if hasattr(args, k):
-                        setattr(args, k, v)
-
-                # 5) Explicit param routing for nested/non-obvious flags
-                if _json_command == "sweep":
-                    args.sweep = params.get("config_path") or params.get("sweep")
-                    if "out_dir" in params:
-                        args.sweep_outdir = params["out_dir"]
-                    elif "sweep_outdir" in params:
-                        args.sweep_outdir = params["sweep_outdir"]
-                elif _json_command == "forward" and "run_dir" in params:
-                    args.forward_eval = params["run_dir"]
-
-            except (json.JSONDecodeError, TypeError) as e:
-                raise ConfigError(f"Invalid --json-request payload: {e}")
-
-        # Determine mode for signalling after validation and just before execution
-        if _json_command:
-            session_metadata["mode"] = _json_command
-        elif args.sweep:
-            session_metadata["mode"] = "sweep"
-        elif args.forward_eval or args.resume_forward:
-            session_metadata["mode"] = "forward"
-        elif args.portfolio_report or args.portfolio_compare:
-            session_metadata["mode"] = "portfolio"
-        elif args.paper:
-            session_metadata["mode"] = "paper"
-        elif args.report:
-            session_metadata["mode"] = "report"
-        elif (
-            args.paper_sessions_list
-            or args.paper_sessions_show
-            or args.paper_sessions_health
-            or args.paper_sessions_alerts
-            or args.paper_sessions_index
-        ):
-            session_metadata["mode"] = "paper_sessions"
-        elif (
-            args.hyperliquid_preflight_outdir
-            or args.hyperliquid_account_readiness_outdir
-            or args.hyperliquid_signed_action_outdir
-            or args.hyperliquid_submit_signed_action
-            or args.hyperliquid_submit_session
-            or args.kraken_preflight_outdir
-            or args.kraken_auth_preflight_outdir
-            or args.kraken_account_readiness_outdir
-        ):
-            session_metadata["mode"] = "broker_preflight"
-        elif (
-            args.hyperliquid_submit_sessions_list
-            or args.hyperliquid_submit_sessions_show
-            or args.hyperliquid_submit_sessions_index
-            or args.hyperliquid_submit_sessions_status
-            or args.hyperliquid_submit_sessions_health
-            or args.hyperliquid_submit_sessions_alerts
-        ):
-            session_metadata["mode"] = "hyperliquid_submit"
-        elif (
-            args.kraken_order_validate_outdir
-            or args.kraken_order_validate_session
-            or args.broker_order_validations_list
-            or args.broker_order_validations_show
-            or args.broker_order_validations_health
-            or args.broker_order_validations_alerts
-            or args.broker_order_validations_index
-            or args.broker_order_validations_approve
-            or args.broker_order_validations_bundle
-            or args.broker_order_validations_submit_gate
-            or args.broker_order_validations_submit_stub
-            or args.broker_order_validations_submit_real
-            or args.broker_order_validations_reconcile
-            or args.broker_order_validations_status
-        ):
-            session_metadata["mode"] = "broker_validate"
-        elif (
-            args.kraken_dry_run_outdir
-            or args.kraken_dry_run_session
-            or args.broker_dry_runs_list
-            or args.broker_dry_runs_show
-            or args.broker_dry_runs_index
-        ):
-            session_metadata["mode"] = "broker_dry_run"
-        elif args.runs_list or args.runs_show or args.runs_best:
-            session_metadata["mode"] = "runs"
-        else:
-            session_metadata["mode"] = "run"
+        json_command = _apply_json_request_overlay(args, session_metadata)
+        session_metadata["mode"] = _determine_session_mode(args, json_command)
 
         emitter.emit("SESSION_STARTED", "running", **session_metadata)
 
-        # --- COMMAND ROUTING (Order matters: specific -> generic) ---
-        result_ctx = None
-
-        # Explicit dispatch for machine-driven requests via --json-request.
-        if _json_command:
-            if _json_command == "run":
-                result_ctx = handle_run_command(args)
-            elif _json_command == "sweep":
-                result_ctx = handle_sweep_command(args, run_sweep=run_sweep)
-            elif _json_command == "forward":
-                result_ctx = handle_forward_commands(args)
-            elif _json_command == "portfolio":
-                result_ctx = handle_portfolio_commands(
-                    args,
-                    write_portfolio_report=write_portfolio_report,
-                    write_mode_comparison_report=write_mode_comparison_report,
-                )
-            else:
-                raise ConfigError(
-                    f"Unknown command '{_json_command}'. "
-                    "Valid commands: run, sweep, forward, portfolio."
-                )
-
-        # --- Standard flag-driven routing (human CLI use) ---
-        if result_ctx in (None, False):
-            result_ctx = handle_broker_preflight_commands(args)
-
-        if result_ctx in (None, False):
-            result_ctx = handle_broker_dry_run_commands(args)
-
-        if result_ctx in (None, False):
-            result_ctx = handle_broker_dry_runs_commands(args)
-
-        if result_ctx in (None, False):
-            result_ctx = handle_broker_order_validations_commands(args)
-
-        if result_ctx in (None, False):
-            result_ctx = handle_hyperliquid_submit_sessions_commands(args)
-
-        if result_ctx in (None, False):
-            result_ctx = handle_paper_session_commands(args)
-
-        if result_ctx in (None, False):
-            result_ctx = handle_runs_commands(args)
-
-        if result_ctx in (None, False):
-            result_ctx = handle_report_commands(
-                args,
-                write_run_report=write_run_report,
-                write_advanced_report=write_advanced_report,
-                write_runs_index=write_runs_index,
-                build_runs_index=build_runs_index,
-                write_comparison=write_comparison,
-            )
-
-        if result_ctx in (None, False):
-            result_ctx = handle_forward_commands(args)
-
-        if result_ctx in (None, False):
-            result_ctx = handle_portfolio_commands(
-                args,
-                write_portfolio_report=write_portfolio_report,
-                write_mode_comparison_report=write_mode_comparison_report,
-            )
-
-        if result_ctx in (None, False):
-            result_ctx = handle_sweep_command(
-                args,
-                run_sweep=run_sweep,
-            )
-
-        # Final fallthrough: classic run
-        if result_ctx in (None, False):
-            result_ctx = handle_run_command(args)
+        result_ctx = _dispatch_json_request_command(args, json_command)
+        result_ctx = _dispatch_standard_commands(args, result_ctx)
 
         extra_ctx = result_ctx if isinstance(result_ctx, dict) else {}
         extra_ctx.update(
