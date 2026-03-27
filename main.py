@@ -33,6 +33,7 @@ handle_broker_dry_run_commands = None
 handle_broker_dry_runs_commands = None
 handle_broker_order_validations_commands = None
 handle_hyperliquid_submit_sessions_commands = None
+handle_pretrade_commands = None
 run_sweep = None
 write_run_report = None
 write_advanced_report = None
@@ -86,6 +87,23 @@ def _validate_json_request_contract(command: str, params: object) -> None:
         if not isinstance(config_path, str) or not config_path.strip():
             raise ConfigError(
                 "JSON request for 'sweep' requires params.config_path as a non-empty string."
+            )
+    if command == "pretrade":
+        required = (
+            "symbol",
+            "venue",
+            "side",
+            "capital",
+            "risk_percent",
+            "entry_price",
+            "stop_price",
+        )
+        missing = [name for name in required if params.get(name) in (None, "")]
+        if missing:
+            raise ConfigError(
+                "JSON request for 'pretrade' requires params fields: "
+                + ", ".join(required)
+                + f". Missing: {', '.join(missing)}."
             )
 
 
@@ -141,6 +159,7 @@ def _load_runtime_dependencies() -> None:
     global handle_broker_dry_runs_commands
     global handle_broker_order_validations_commands
     global handle_hyperliquid_submit_sessions_commands
+    global handle_pretrade_commands
     global run_sweep
     global write_run_report
     global write_advanced_report
@@ -216,6 +235,12 @@ def _load_runtime_dependencies() -> None:
         )
 
         handle_hyperliquid_submit_sessions_commands = _handle_hyperliquid_submit_sessions_commands
+    if handle_pretrade_commands is None:
+        from quantlab.cli.pretrade import (
+            handle_pretrade_commands as _handle_pretrade_commands,
+        )
+
+        handle_pretrade_commands = _handle_pretrade_commands
     if run_sweep is None:
         from quantlab.experiments import run_sweep as _run_sweep
 
@@ -281,6 +306,26 @@ def main() -> None:
         action="store_true",
         help="Run lightweight runtime health checks and exit.",
     )
+    parser.add_argument(
+        "--pretrade-plan",
+        action="store_true",
+        help="Generate a canonical pre-trade plan artifact set.",
+    )
+    parser.add_argument("--pretrade-sessions-root", metavar="ROOT_DIR", default=None)
+    parser.add_argument("--pretrade-session-id", default=None)
+    parser.add_argument("--pretrade-symbol", default=None)
+    parser.add_argument("--pretrade-venue", default=None)
+    parser.add_argument("--pretrade-side", default=None)
+    parser.add_argument("--pretrade-capital", type=float, default=None)
+    parser.add_argument("--pretrade-risk-percent", type=float, default=None)
+    parser.add_argument("--pretrade-entry-price", type=float, default=None)
+    parser.add_argument("--pretrade-stop-price", type=float, default=None)
+    parser.add_argument("--pretrade-target-price", type=float, default=None)
+    parser.add_argument("--pretrade-estimated-fees", type=float, default=0.0)
+    parser.add_argument("--pretrade-estimated-slippage", type=float, default=0.0)
+    parser.add_argument("--pretrade-account-id", default=None)
+    parser.add_argument("--pretrade-strategy-id", default=None)
+    parser.add_argument("--pretrade-notes", default=None)
 
     parser.add_argument("--ticker", default="ETH-USD")
     parser.add_argument("--start", default="2023-01-01")
@@ -800,6 +845,28 @@ def main() -> None:
                         args.sweep_outdir = params["sweep_outdir"]
                 elif _json_command == "forward" and "run_dir" in params:
                     args.forward_eval = params["run_dir"]
+                elif _json_command == "pretrade":
+                    args.pretrade_plan = True
+                    field_map = {
+                        "symbol": "pretrade_symbol",
+                        "venue": "pretrade_venue",
+                        "side": "pretrade_side",
+                        "capital": "pretrade_capital",
+                        "risk_percent": "pretrade_risk_percent",
+                        "entry_price": "pretrade_entry_price",
+                        "stop_price": "pretrade_stop_price",
+                        "target_price": "pretrade_target_price",
+                        "estimated_fees": "pretrade_estimated_fees",
+                        "estimated_slippage": "pretrade_estimated_slippage",
+                        "account_id": "pretrade_account_id",
+                        "strategy_id": "pretrade_strategy_id",
+                        "notes": "pretrade_notes",
+                        "session_id": "pretrade_session_id",
+                        "root_dir": "pretrade_sessions_root",
+                    }
+                    for key, dest in field_map.items():
+                        if key in params:
+                            setattr(args, dest, params[key])
 
             except (json.JSONDecodeError, TypeError) as e:
                 raise ConfigError(f"Invalid --json-request payload: {e}")
@@ -815,6 +882,8 @@ def main() -> None:
             session_metadata["mode"] = "portfolio"
         elif args.paper:
             session_metadata["mode"] = "paper"
+        elif args.pretrade_plan:
+            session_metadata["mode"] = "pretrade"
         elif args.report:
             session_metadata["mode"] = "report"
         elif (
@@ -892,10 +961,12 @@ def main() -> None:
                     write_portfolio_report=write_portfolio_report,
                     write_mode_comparison_report=write_mode_comparison_report,
                 )
+            elif _json_command == "pretrade":
+                result_ctx = handle_pretrade_commands(args, project_root=PROJECT_ROOT)
             else:
                 raise ConfigError(
                     f"Unknown command '{_json_command}'. "
-                    "Valid commands: run, sweep, forward, portfolio."
+                    "Valid commands: run, sweep, forward, portfolio, pretrade."
                 )
 
         # --- Standard flag-driven routing (human CLI use) ---
@@ -913,6 +984,9 @@ def main() -> None:
 
         if result_ctx in (None, False):
             result_ctx = handle_hyperliquid_submit_sessions_commands(args)
+
+        if result_ctx in (None, False):
+            result_ctx = handle_pretrade_commands(args, project_root=PROJECT_ROOT)
 
         if result_ctx in (None, False):
             result_ctx = handle_paper_session_commands(args)
