@@ -13,6 +13,7 @@ from typing import Any, Iterator
 from quantlab.brokers import HyperliquidBrokerAdapter
 from quantlab.brokers.session_store import (
     HYPERLIQUID_CANCEL_RESPONSE_FILENAME,
+    HYPERLIQUID_FILL_SUMMARY_FILENAME,
     HYPERLIQUID_ORDER_STATUS_FILENAME,
     HYPERLIQUID_RECONCILIATION_FILENAME,
     HYPERLIQUID_SIGNED_ACTION_FILENAME,
@@ -26,6 +27,58 @@ from quantlab.runs.artifacts import load_json_with_fallback
 
 
 def handle_hyperliquid_submit_sessions_commands(args) -> bool:
+    if getattr(args, "hyperliquid_submit_sessions_fills", None):
+        session_dir = _require_directory(
+            args.hyperliquid_submit_sessions_fills,
+            "Hyperliquid submit session directory",
+        )
+        summary = load_hyperliquid_submit_summary(session_dir)
+
+        signed_action, signed_action_path = load_json_with_fallback(session_dir, HYPERLIQUID_SIGNED_ACTION_FILENAME)
+        submit_response, _ = load_json_with_fallback(session_dir, HYPERLIQUID_SUBMIT_RESPONSE_FILENAME)
+        if not signed_action_path:
+            raise ConfigError("Hyperliquid submit session must have a signed-action artifact before fill refresh.")
+
+        execution_account_id = _extract_execution_account_id(signed_action)
+        oid = _extract_session_oid(submit_response)
+        cloid = _extract_session_cloid(signed_action, submit_response)
+
+        adapter = HyperliquidBrokerAdapter()
+        report = adapter.build_fill_summary_report(
+            source_session_id=summary["session_id"],
+            execution_account_id=execution_account_id,
+            oid=oid,
+            cloid=cloid,
+            signed_action_artifact=signed_action,
+            timeout_seconds=float(getattr(args, "hyperliquid_preflight_timeout", 10.0)),
+        ).to_dict()
+
+        store = HyperliquidSubmitStore(summary["session_id"], base_dir=str(session_dir.parent))
+        store.write_fill_summary(report)
+        status = {
+            "status": str(summary.get("status") or summary.get("effective_order_state") or "submitted"),
+            "updated_at": report["generated_at"],
+            "submit_state": summary.get("submit_state"),
+            "remote_submit_called": summary.get("remote_submit_called"),
+            "submitted": summary.get("submitted"),
+            "fill_summary_known": report["fills_known"],
+            "fill_summary_state": report["fill_state"],
+            "fill_summary_count": report["fill_count"],
+            "fill_summary_filled_size": report["filled_size"],
+        }
+        if report.get("errors"):
+            status["message"] = ", ".join(str(item) for item in report["errors"])
+        store.write_status(status)
+
+        fill_path = session_dir / HYPERLIQUID_FILL_SUMMARY_FILENAME
+        print("\nHyperliquid submit fill summary refreshed:\n")
+        print(f"  session_path   : {session_dir}")
+        print(f"  fill_path      : {fill_path}")
+        print(f"  fill_state     : {report['fill_state']}")
+        print(f"  fill_count     : {report['fill_count']}")
+        print(f"  filled_size    : {report['filled_size']}")
+        return True
+
     if getattr(args, "hyperliquid_submit_sessions_cancel", None):
         session_dir = _require_directory(
             args.hyperliquid_submit_sessions_cancel,
@@ -157,6 +210,7 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  total_sessions          : {health['total_sessions']}")
         print(f"  submit_response_sessions: {health['submit_response_sessions']}")
         print(f"  cancel_response_sessions: {health['cancel_response_sessions']}")
+        print(f"  fill_summary_sessions  : {health['fill_summary_sessions']}")
         print(f"  submitted_sessions      : {health['submitted_sessions']}")
         print(f"  order_status_known      : {health['order_status_known_sessions']}")
         print(f"  reconciliation_sessions : {health['reconciliation_sessions']}")
@@ -289,6 +343,7 @@ def load_hyperliquid_submit_summary(session_dir: str | Path) -> dict[str, Any]:
     order_status, order_status_path = load_json_with_fallback(path, HYPERLIQUID_ORDER_STATUS_FILENAME)
     reconciliation, reconciliation_path = load_json_with_fallback(path, HYPERLIQUID_RECONCILIATION_FILENAME)
     cancel_response, cancel_response_path = load_json_with_fallback(path, HYPERLIQUID_CANCEL_RESPONSE_FILENAME)
+    fill_summary, fill_summary_path = load_json_with_fallback(path, HYPERLIQUID_FILL_SUMMARY_FILENAME)
 
     envelope = signed_action.get("signature_envelope", {}) if isinstance(signed_action, dict) else {}
     effective_order_known = bool(reconciliation.get("status_known")) if reconciliation_path else bool(order_status.get("status_known"))
@@ -319,6 +374,20 @@ def load_hyperliquid_submit_summary(session_dir: str | Path) -> dict[str, Any]:
         "cancel_response_generated_at": cancel_response.get("generated_at"),
         "cancel_errors": cancel_response.get("errors"),
         "cancel_response_present": bool(cancel_response_path),
+        "fill_summary_known": fill_summary.get("fills_known"),
+        "fill_summary_state": fill_summary.get("fill_state"),
+        "fill_summary_count": fill_summary.get("fill_count"),
+        "fill_summary_filled_size": fill_summary.get("filled_size"),
+        "fill_summary_remaining_size": fill_summary.get("remaining_size"),
+        "fill_summary_average_fill_price": fill_summary.get("average_fill_price"),
+        "fill_summary_total_fee": fill_summary.get("total_fee"),
+        "fill_summary_total_builder_fee": fill_summary.get("total_builder_fee"),
+        "fill_summary_total_closed_pnl": fill_summary.get("total_closed_pnl"),
+        "fill_summary_first_fill_time": fill_summary.get("first_fill_time"),
+        "fill_summary_last_fill_time": fill_summary.get("last_fill_time"),
+        "fill_summary_generated_at": fill_summary.get("generated_at"),
+        "fill_summary_errors": fill_summary.get("errors"),
+        "fill_summary_present": bool(fill_summary_path),
         "order_status_known": order_status.get("status_known"),
         "latest_order_state": order_status.get("normalized_state"),
         "order_status_generated_at": order_status.get("generated_at"),
@@ -347,6 +416,7 @@ def load_hyperliquid_submit_summary(session_dir: str | Path) -> dict[str, Any]:
         "signed_action_path": str(path / HYPERLIQUID_SIGNED_ACTION_FILENAME) if signed_action_path else None,
         "submit_response_path": str(path / HYPERLIQUID_SUBMIT_RESPONSE_FILENAME) if response_path else None,
         "cancel_response_path": str(path / HYPERLIQUID_CANCEL_RESPONSE_FILENAME) if cancel_response_path else None,
+        "fill_summary_path": str(path / HYPERLIQUID_FILL_SUMMARY_FILENAME) if fill_summary_path else None,
         "order_status_path": str(path / HYPERLIQUID_ORDER_STATUS_FILENAME) if order_status_path else None,
         "reconciliation_path": str(path / HYPERLIQUID_RECONCILIATION_FILENAME) if reconciliation_path else None,
     }
@@ -361,6 +431,7 @@ def _is_valid_hyperliquid_submit_dir(path: Path) -> bool:
             HYPERLIQUID_SIGNED_ACTION_FILENAME,
             HYPERLIQUID_SUBMIT_RESPONSE_FILENAME,
             HYPERLIQUID_CANCEL_RESPONSE_FILENAME,
+            HYPERLIQUID_FILL_SUMMARY_FILENAME,
             HYPERLIQUID_ORDER_STATUS_FILENAME,
             HYPERLIQUID_RECONCILIATION_FILENAME,
         )
@@ -456,6 +527,7 @@ def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
         "total_sessions": len(sessions),
         "submit_response_sessions": sum(1 for session in sessions if session.get("submit_response_present")),
         "cancel_response_sessions": sum(1 for session in sessions if session.get("cancel_response_present")),
+        "fill_summary_sessions": sum(1 for session in sessions if session.get("fill_summary_present")),
         "submitted_sessions": sum(1 for session in sessions if session.get("submitted")),
         "order_status_known_sessions": sum(1 for session in sessions if session.get("order_status_known")),
         "reconciliation_sessions": sum(1 for session in sessions if session.get("reconciliation_present")),
@@ -521,6 +593,7 @@ def build_hyperliquid_submission_alerts(root_dir: str | Path) -> dict[str, Any]:
         "total_sessions": len(sessions),
         "submit_response_sessions": sum(1 for session in sessions if session.get("submit_response_present")),
         "cancel_response_sessions": sum(1 for session in sessions if session.get("cancel_response_present")),
+        "fill_summary_sessions": sum(1 for session in sessions if session.get("fill_summary_present")),
         "submitted_sessions": sum(1 for session in sessions if session.get("submitted")),
         "close_state_counts": dict(
             Counter(
@@ -687,6 +760,7 @@ def _parse_activity_timestamp(session: dict[str, Any] | None) -> dt.datetime | N
 
     for key in (
         "cancel_response_generated_at",
+        "fill_summary_generated_at",
         "reconciliation_generated_at",
         "order_status_generated_at",
         "submit_response_generated_at",

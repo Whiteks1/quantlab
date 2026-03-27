@@ -34,6 +34,11 @@ _INDEX_FIELDS = [
     "reconciliation_fill_state",
     "reconciliation_fill_count",
     "reconciliation_filled_size",
+    "fill_summary_state",
+    "fill_summary_count",
+    "fill_summary_filled_size",
+    "fill_summary_total_fee",
+    "fill_summary_total_closed_pnl",
     "effective_order_state",
     "path",
 ]

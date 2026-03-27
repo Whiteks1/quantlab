@@ -53,6 +53,15 @@ def test_determine_session_mode_for_hyperliquid_submit_reconcile():
     assert mode == "hyperliquid_submit"
 
 
+def test_determine_session_mode_for_hyperliquid_submit_fills():
+    parser = app._build_argument_parser()
+    args = parser.parse_args(["--hyperliquid-submit-sessions-fills", "outputs/hyperliquid_submits/demo"])
+
+    mode = app._determine_session_mode(args, json_command=None)
+
+    assert mode == "hyperliquid_submit"
+
+
 def test_determine_session_mode_for_hyperliquid_submit_cancel():
     parser = app._build_argument_parser()
     args = parser.parse_args(["--hyperliquid-submit-sessions-cancel", "outputs/hyperliquid_submits/demo"])

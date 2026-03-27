@@ -462,8 +462,28 @@ This writes:
 The reconciliation step is conservative:
 
 - it checks direct `orderStatus` first
-- it falls back to `openOrders` and `frontendOpenOrders` matching by `oid` or `cloid`
+- it falls back to `historicalOrders`, `openOrders`, `frontendOpenOrders`, and `userFills` matching by `oid` or `cloid`
 - it leaves the session in `unknown` with explicit reasons when no safe match is found
+
+### `--hyperliquid-submit-sessions-fills`
+
+Refresh a richer fill summary for one canonical Hyperliquid submit session:
+
+```bash
+python main.py --hyperliquid-submit-sessions-fills outputs/hyperliquid_submits/<session_id>
+```
+
+This writes:
+
+- `hyperliquid_fill_summary.json`
+
+The fill summary keeps reconciliation separate from fill accounting and aggregates:
+
+- matched fill count
+- filled and remaining size
+- average fill price
+- total fee and builder fee
+- total closed PnL when present
 
 ### `--hyperliquid-submit-sessions-cancel`
 
