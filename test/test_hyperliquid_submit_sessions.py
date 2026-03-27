@@ -100,6 +100,26 @@ def _write_session(tmp_path, name="20260327_hyperliquid_submit_demo"):
 
 def test_load_hyperliquid_submit_summary(tmp_path):
     session_dir = _write_session(tmp_path)
+    (session_dir / "hyperliquid_reconciliation.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.reconciliation",
+                "generated_at": "2026-03-27T12:06:00",
+                "status_known": True,
+                "normalized_state": "open",
+                "close_state": "open",
+                "fill_state": "partial",
+                "fill_count": 1,
+                "filled_size": "0.15",
+                "remaining_size": "0.10",
+                "average_fill_price": "2451",
+                "last_fill_time": 1764000000100,
+                "resolution_source": "open_orders",
+                "errors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
     summary = load_hyperliquid_submit_summary(session_dir)
 
     assert summary["session_id"] == "20260327_hyperliquid_submit_demo"
@@ -108,6 +128,8 @@ def test_load_hyperliquid_submit_summary(tmp_path):
     assert summary["submitted"] is True
     assert summary["signed_action_present"] is True
     assert summary["submit_response_present"] is True
+    assert summary["reconciliation_fill_state"] == "partial"
+    assert summary["reconciliation_filled_size"] == "0.15"
 
 
 def test_list_hyperliquid_submit_sessions(tmp_path, capsys):
@@ -248,6 +270,13 @@ def test_refresh_hyperliquid_submit_reconciliation(monkeypatch, tmp_path):
                     "execution_account_id": "0x1111111111111111111111111111111111111111",
                     "status_known": True,
                     "normalized_state": "open",
+                    "close_state": "open",
+                    "fill_state": "partial",
+                    "fill_count": 1,
+                    "filled_size": "0.15",
+                    "remaining_size": "0.10",
+                    "average_fill_price": "2451",
+                    "last_fill_time": 1764000000100,
                     "resolution_source": "open_orders",
                     "oid": 12345,
                     "cloid": "abc123cloid",
@@ -277,6 +306,8 @@ def test_refresh_hyperliquid_submit_reconciliation(monkeypatch, tmp_path):
     assert session_status["reconciliation_known"] is True
     assert session_status["reconciliation_state"] == "open"
     assert session_status["reconciliation_source"] == "open_orders"
+    assert session_status["reconciliation_fill_state"] == "partial"
+    assert session_status["reconciliation_filled_size"] == "0.15"
 
 
 def test_refresh_hyperliquid_submit_cancel(monkeypatch, tmp_path):
@@ -392,6 +423,38 @@ def test_hyperliquid_submit_alerts_use_reconciliation_state(tmp_path, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["alert_status"] == "ok"
     assert payload["has_alerts"] is False
+
+
+def test_hyperliquid_submit_health_includes_fill_and_close_state_counts(tmp_path):
+    session_dir = _write_session(tmp_path)
+    (session_dir / "hyperliquid_reconciliation.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.reconciliation",
+                "generated_at": "2026-03-27T12:06:00",
+                "status_known": True,
+                "normalized_state": "filled",
+                "close_state": "closed",
+                "fill_state": "filled",
+                "fill_count": 1,
+                "filled_size": "0.25",
+                "remaining_size": "0",
+                "average_fill_price": "2450.1",
+                "last_fill_time": 1764000000300,
+                "resolution_source": "user_fills",
+                "errors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    from quantlab.cli.hyperliquid_submit_sessions import build_hyperliquid_submission_health
+
+    payload = build_hyperliquid_submission_health(tmp_path)
+    assert payload["close_state_counts"]["closed"] == 1
+    assert payload["fill_state_counts"]["filled"] == 1
+    assert payload["latest_close_state"] == "closed"
+    assert payload["latest_fill_state"] == "filled"
 
 
 def test_invalid_hyperliquid_submit_session_raises(tmp_path):

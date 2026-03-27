@@ -448,7 +448,15 @@ def test_hyperliquid_reconciliation_report_prefers_known_order_status():
 
     def fake_fetch_json(payload, **kwargs):
         if payload["type"] == "orderStatus":
-            return {"status": "order", "order": {"status": "filled"}}
+            return {
+                "status": "order",
+                "order": {
+                    "order": {"origSz": "0.25", "sz": "0.0", "oid": 12345},
+                    "status": "filled",
+                },
+            }
+        if payload["type"] == "userFills":
+            return [{"oid": 12345, "sz": "0.25", "px": "2450.1", "time": 1764000000000}]
         raise AssertionError(payload)
 
     report = adapter.build_reconciliation_report(
@@ -460,6 +468,10 @@ def test_hyperliquid_reconciliation_report_prefers_known_order_status():
 
     assert report["status_known"] is True
     assert report["normalized_state"] == "filled"
+    assert report["close_state"] == "closed"
+    assert report["fill_state"] == "filled"
+    assert report["filled_size"] == "0.25"
+    assert report["fill_count"] == 1
     assert report["resolution_source"] == "order_status"
     assert report["matched_open_order"] is None
 
@@ -471,9 +483,13 @@ def test_hyperliquid_reconciliation_report_falls_back_to_open_orders():
         if payload["type"] == "orderStatus":
             return {"status": "missing"}
         if payload["type"] == "openOrders":
-            return [{"oid": 12345, "coin": "ETH"}]
+            return [{"oid": 12345, "coin": "ETH", "origSz": "0.25", "sz": "0.10"}]
         if payload["type"] == "frontendOpenOrders":
             return []
+        if payload["type"] == "historicalOrders":
+            return []
+        if payload["type"] == "userFills":
+            return [{"oid": 12345, "sz": "0.15", "px": "2451.0", "time": 1764000000100}]
         raise AssertionError(payload)
 
     report = adapter.build_reconciliation_report(
@@ -485,8 +501,50 @@ def test_hyperliquid_reconciliation_report_falls_back_to_open_orders():
 
     assert report["status_known"] is True
     assert report["normalized_state"] == "open"
+    assert report["close_state"] == "open"
+    assert report["fill_state"] == "partial"
+    assert report["filled_size"] == "0.15"
+    assert report["remaining_size"] == "0.1"
     assert report["resolution_source"] == "open_orders"
     assert report["matched_open_order"]["oid"] == 12345
+
+
+def test_hyperliquid_reconciliation_report_uses_historical_orders_for_closed_partial():
+    adapter = HyperliquidBrokerAdapter()
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "orderStatus":
+            return {"status": "missing"}
+        if payload["type"] == "openOrders":
+            return []
+        if payload["type"] == "frontendOpenOrders":
+            return []
+        if payload["type"] == "historicalOrders":
+            return [
+                {
+                    "order": {"oid": 12345, "origSz": "0.25", "sz": "0.0", "cloid": "abc123cloid"},
+                    "status": "canceled",
+                }
+            ]
+        if payload["type"] == "userFills":
+            return [{"oid": 12345, "sz": "0.10", "px": "2449.5", "time": 1764000000200}]
+        raise AssertionError(payload)
+
+    report = adapter.build_reconciliation_report(
+        source_session_id="hl_submit_demo_003",
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        oid=12345,
+        cloid="abc123cloid",
+        fetch_json=fake_fetch_json,
+    ).to_dict()
+
+    assert report["status_known"] is True
+    assert report["normalized_state"] == "canceled"
+    assert report["close_state"] == "closed"
+    assert report["fill_state"] == "partial"
+    assert report["fill_count"] == 1
+    assert report["matched_historical_order"]["status"] == "canceled"
+    assert report["resolution_source"] == "historical_orders"
 
 
 def test_hyperliquid_submit_report_submits_signed_action():

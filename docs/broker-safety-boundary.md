@@ -82,7 +82,7 @@ Current Stage D.1 scope covered:
 - first supervised Hyperliquid submit response artifacts generated only from previously signed Hyperliquid action artifacts with explicit reviewer confirmation
 - canonical Hyperliquid submit sessions and shared registry under `outputs/hyperliquid_submits/`
 - persistent Hyperliquid post-submit order-status artifacts over canonical submit sessions
-- explicit Hyperliquid reconciliation artifacts over canonical submit sessions using direct status plus open-order surfaces
+- explicit Hyperliquid reconciliation artifacts over canonical submit sessions using direct status, historical-order, open-order, and fill surfaces
 - supervised Hyperliquid cancel response artifacts over canonical submit sessions with explicit reviewer confirmation
 - Hyperliquid submission health summaries and deterministic alert snapshots over canonical submit sessions
 - deterministic Kraken-style payload translation
@@ -126,7 +126,7 @@ Boundary note:
 
 After this submit-safety slice is stable, the next logical implementation step is:
 
-- richer post-submit supervision such as deeper fill/close-state reconciliation behind the same boundary
+- richer post-submit supervision such as continuous streaming supervision behind the same boundary after fill/close-state reconciliation
 
 ## Related Documents
 

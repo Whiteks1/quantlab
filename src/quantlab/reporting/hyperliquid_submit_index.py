@@ -30,6 +30,10 @@ _INDEX_FIELDS = [
     "latest_order_state",
     "reconciliation_known",
     "latest_reconciliation_state",
+    "reconciliation_close_state",
+    "reconciliation_fill_state",
+    "reconciliation_fill_count",
+    "reconciliation_filled_size",
     "effective_order_state",
     "path",
 ]

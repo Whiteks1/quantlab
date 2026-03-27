@@ -111,6 +111,7 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
             execution_account_id=execution_account_id,
             oid=oid,
             cloid=cloid,
+            signed_action_artifact=signed_action,
             timeout_seconds=float(getattr(args, "hyperliquid_preflight_timeout", 10.0)),
         ).to_dict()
 
@@ -127,6 +128,10 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
             "reconciliation_known": report["status_known"],
             "reconciliation_state": report["normalized_state"],
             "reconciliation_source": report["resolution_source"],
+            "reconciliation_close_state": report.get("close_state"),
+            "reconciliation_fill_state": report.get("fill_state"),
+            "reconciliation_fill_count": report.get("fill_count"),
+            "reconciliation_filled_size": report.get("filled_size"),
         }
         if report.get("errors"):
             status["message"] = ", ".join(str(item) for item in report["errors"])
@@ -138,6 +143,9 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  reconciliation_path   : {reconciliation_path}")
         print(f"  resolution_source     : {report['resolution_source']}")
         print(f"  state                 : {report['normalized_state']}")
+        print(f"  close_state           : {report.get('close_state')}")
+        print(f"  fill_state            : {report.get('fill_state')}")
+        print(f"  fill_count            : {report.get('fill_count')}")
         print(f"  status_known          : {report['status_known']}")
         return True
 
@@ -153,6 +161,8 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  order_status_known      : {health['order_status_known_sessions']}")
         print(f"  reconciliation_sessions : {health['reconciliation_sessions']}")
         print(f"  effective_order_known   : {health['effective_order_known_sessions']}")
+        print(f"  latest_close_state      : {health.get('latest_close_state')}")
+        print(f"  latest_fill_state       : {health.get('latest_fill_state')}")
         print(f"  latest_submit_id        : {health.get('latest_submit_session_id')}")
         print(f"  latest_submit_state     : {health.get('latest_submit_state')}")
         print(f"  latest_order_state      : {health.get('latest_order_state')}")
@@ -315,6 +325,13 @@ def load_hyperliquid_submit_summary(session_dir: str | Path) -> dict[str, Any]:
         "order_status_errors": order_status.get("errors"),
         "reconciliation_known": reconciliation.get("status_known"),
         "latest_reconciliation_state": reconciliation.get("normalized_state"),
+        "reconciliation_close_state": reconciliation.get("close_state"),
+        "reconciliation_fill_state": reconciliation.get("fill_state"),
+        "reconciliation_fill_count": reconciliation.get("fill_count"),
+        "reconciliation_filled_size": reconciliation.get("filled_size"),
+        "reconciliation_remaining_size": reconciliation.get("remaining_size"),
+        "reconciliation_average_fill_price": reconciliation.get("average_fill_price"),
+        "reconciliation_last_fill_time": reconciliation.get("last_fill_time"),
         "reconciliation_generated_at": reconciliation.get("generated_at"),
         "reconciliation_source": reconciliation.get("resolution_source"),
         "reconciliation_errors": reconciliation.get("errors"),
@@ -450,6 +467,20 @@ def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
         "cancel_state_counts": dict(
             Counter((session.get("cancel_state") or "no_cancel_response") for session in sessions)
         ),
+        "close_state_counts": dict(
+            Counter(
+                (session.get("reconciliation_close_state") or "unknown")
+                for session in sessions
+                if session.get("submit_response_present")
+            )
+        ),
+        "fill_state_counts": dict(
+            Counter(
+                (session.get("reconciliation_fill_state") or "unknown")
+                for session in sessions
+                if session.get("submit_response_present")
+            )
+        ),
         "order_state_counts": dict(
             Counter(
                 (session.get("effective_order_state") or "unknown")
@@ -461,6 +492,8 @@ def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
         "latest_submit_state": latest_submit.get("submit_state") if latest_submit else None,
         "latest_order_state": latest_submit.get("effective_order_state") if latest_submit else None,
         "latest_reconciliation_state": latest_submit.get("latest_reconciliation_state") if latest_submit else None,
+        "latest_close_state": latest_submit.get("reconciliation_close_state") if latest_submit else None,
+        "latest_fill_state": latest_submit.get("reconciliation_fill_state") if latest_submit else None,
         "latest_submit_at": _activity_at(latest_submit) if latest_submit else None,
         "latest_issue_session_id": latest_issue.get("session_id") if latest_issue else None,
         "latest_issue_code": latest_issue.get("alert_code") if latest_issue else None,
@@ -489,6 +522,20 @@ def build_hyperliquid_submission_alerts(root_dir: str | Path) -> dict[str, Any]:
         "submit_response_sessions": sum(1 for session in sessions if session.get("submit_response_present")),
         "cancel_response_sessions": sum(1 for session in sessions if session.get("cancel_response_present")),
         "submitted_sessions": sum(1 for session in sessions if session.get("submitted")),
+        "close_state_counts": dict(
+            Counter(
+                (session.get("reconciliation_close_state") or "unknown")
+                for session in sessions
+                if session.get("submit_response_present")
+            )
+        ),
+        "fill_state_counts": dict(
+            Counter(
+                (session.get("reconciliation_fill_state") or "unknown")
+                for session in sessions
+                if session.get("submit_response_present")
+            )
+        ),
         "order_state_counts": dict(
             Counter(
                 (session.get("effective_order_state") or "unknown")
