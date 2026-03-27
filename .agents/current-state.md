@@ -50,7 +50,7 @@
   - the package now owns the primary CLI app under `src/quantlab/app.py`, while root `main.py` remains a compatibility bootstrap
   - `quantlab --version` and `main.py --version` both return a stable CLI version string
   - `quantlab --check` and `main.py --check` both return a deterministic JSON health summary for runtime preflight
-  - the packaged CLI app now also has extracted helpers for parser construction, JSON request overlay, session-mode inference, and dispatch ordering so `main()` is no longer the only place that understands the whole routing surface
+  - the packaged CLI app now also has extracted helpers for parser construction, JSON request overlay, session-mode inference, and dispatch ordering, with dedicated CLI helper modules now carrying most of that routing shape instead of `src/quantlab/app.py` alone
   - the CLI keeps the existing `--json-request` `sweep` path as the smoke-validation surface
   - the shared `runs_index.csv/json/md` registry is refreshed automatically after successful run-producing commands
   - paper-backed `run` executions now write dedicated artifacts under `outputs/paper_sessions/<session_id>/`
