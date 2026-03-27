@@ -12,6 +12,7 @@ from typing import Any, Iterator
 
 from quantlab.brokers import HyperliquidBrokerAdapter
 from quantlab.brokers.session_store import (
+    HYPERLIQUID_CANCEL_RESPONSE_FILENAME,
     HYPERLIQUID_ORDER_STATUS_FILENAME,
     HYPERLIQUID_RECONCILIATION_FILENAME,
     HYPERLIQUID_SIGNED_ACTION_FILENAME,
@@ -25,6 +26,69 @@ from quantlab.runs.artifacts import load_json_with_fallback
 
 
 def handle_hyperliquid_submit_sessions_commands(args) -> bool:
+    if getattr(args, "hyperliquid_submit_sessions_cancel", None):
+        session_dir = _require_directory(
+            args.hyperliquid_submit_sessions_cancel,
+            "Hyperliquid submit session directory",
+        )
+        if not bool(getattr(args, "hyperliquid_cancel_confirm", False)):
+            raise ConfigError("hyperliquid_cancel_confirm is required for supervised Hyperliquid cancel.")
+
+        reviewer = getattr(args, "hyperliquid_cancel_reviewer", None)
+        if not isinstance(reviewer, str) or not reviewer.strip():
+            raise ConfigError("hyperliquid_cancel_reviewer is required for supervised Hyperliquid cancel.")
+
+        summary = load_hyperliquid_submit_summary(session_dir)
+        signed_action, signed_action_path = load_json_with_fallback(session_dir, HYPERLIQUID_SIGNED_ACTION_FILENAME)
+        submit_response, submit_response_path = load_json_with_fallback(session_dir, HYPERLIQUID_SUBMIT_RESPONSE_FILENAME)
+        if not signed_action_path:
+            raise ConfigError("Hyperliquid submit session must have a signed-action artifact before cancel.")
+        if not submit_response_path:
+            raise ConfigError("Hyperliquid submit session must have a submit-response artifact before cancel.")
+
+        adapter = HyperliquidBrokerAdapter()
+        cancel_note = getattr(args, "hyperliquid_cancel_note", None)
+        report = adapter.build_cancel_report(
+            source_session_id=summary["session_id"],
+            signed_action_artifact=signed_action,
+            submit_response_artifact=submit_response,
+            reviewer=reviewer.strip(),
+            note=cancel_note.strip() if isinstance(cancel_note, str) and cancel_note.strip() else None,
+            timeout_seconds=float(getattr(args, "hyperliquid_preflight_timeout", 10.0)),
+            signing_private_key=getattr(args, "hyperliquid_private_key", None),
+            signing_private_key_env=getattr(args, "hyperliquid_private_key_env", "HYPERLIQUID_PRIVATE_KEY"),
+        ).to_dict()
+
+        store = HyperliquidSubmitStore(summary["session_id"], base_dir=str(session_dir.parent))
+        store.write_cancel_response(report)
+        status = {
+            "status": _derive_hyperliquid_cancel_session_status(summary, report),
+            "updated_at": report["generated_at"],
+            "submit_state": summary.get("submit_state"),
+            "remote_submit_called": summary.get("remote_submit_called"),
+            "submitted": summary.get("submitted"),
+            "order_status_known": summary.get("order_status_known"),
+            "order_status_state": summary.get("latest_order_state"),
+            "reconciliation_known": summary.get("reconciliation_known"),
+            "reconciliation_state": summary.get("latest_reconciliation_state"),
+            "reconciliation_source": summary.get("reconciliation_source"),
+            "cancel_state": report["cancel_state"],
+            "cancel_remote_called": report["remote_cancel_called"],
+            "cancel_accepted": report["cancel_accepted"],
+        }
+        if report.get("errors"):
+            status["message"] = ", ".join(str(item) for item in report["errors"])
+        store.write_status(status)
+
+        cancel_path = session_dir / HYPERLIQUID_CANCEL_RESPONSE_FILENAME
+        print("\nHyperliquid submit cancel completed:\n")
+        print(f"  session_path        : {session_dir}")
+        print(f"  cancel_path         : {cancel_path}")
+        print(f"  cancel_state        : {report['cancel_state']}")
+        print(f"  cancel_accepted     : {report['cancel_accepted']}")
+        print(f"  remote_cancel_called: {report['remote_cancel_called']}")
+        return True
+
     if getattr(args, "hyperliquid_submit_sessions_reconcile", None):
         session_dir = _require_directory(
             args.hyperliquid_submit_sessions_reconcile,
@@ -84,6 +148,7 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"\nHyperliquid submission health: {root_dir}\n")
         print(f"  total_sessions          : {health['total_sessions']}")
         print(f"  submit_response_sessions: {health['submit_response_sessions']}")
+        print(f"  cancel_response_sessions: {health['cancel_response_sessions']}")
         print(f"  submitted_sessions      : {health['submitted_sessions']}")
         print(f"  order_status_known      : {health['order_status_known_sessions']}")
         print(f"  reconciliation_sessions : {health['reconciliation_sessions']}")
@@ -213,6 +278,7 @@ def load_hyperliquid_submit_summary(session_dir: str | Path) -> dict[str, Any]:
     submit_response, response_path = load_json_with_fallback(path, HYPERLIQUID_SUBMIT_RESPONSE_FILENAME)
     order_status, order_status_path = load_json_with_fallback(path, HYPERLIQUID_ORDER_STATUS_FILENAME)
     reconciliation, reconciliation_path = load_json_with_fallback(path, HYPERLIQUID_RECONCILIATION_FILENAME)
+    cancel_response, cancel_response_path = load_json_with_fallback(path, HYPERLIQUID_CANCEL_RESPONSE_FILENAME)
 
     envelope = signed_action.get("signature_envelope", {}) if isinstance(signed_action, dict) else {}
     effective_order_known = bool(reconciliation.get("status_known")) if reconciliation_path else bool(order_status.get("status_known"))
@@ -237,6 +303,12 @@ def load_hyperliquid_submit_summary(session_dir: str | Path) -> dict[str, Any]:
         "submit_errors": submit_response.get("errors"),
         "oid": submit_response.get("oid"),
         "cloid": submit_response.get("cloid") or _extract_session_cloid(signed_action, submit_response),
+        "cancel_state": cancel_response.get("cancel_state"),
+        "cancel_accepted": cancel_response.get("cancel_accepted"),
+        "cancel_remote_called": cancel_response.get("remote_cancel_called"),
+        "cancel_response_generated_at": cancel_response.get("generated_at"),
+        "cancel_errors": cancel_response.get("errors"),
+        "cancel_response_present": bool(cancel_response_path),
         "order_status_known": order_status.get("status_known"),
         "latest_order_state": order_status.get("normalized_state"),
         "order_status_generated_at": order_status.get("generated_at"),
@@ -257,6 +329,7 @@ def load_hyperliquid_submit_summary(session_dir: str | Path) -> dict[str, Any]:
         "status_path": str(path / HYPERLIQUID_SUBMIT_STATUS_FILENAME) if status_path else None,
         "signed_action_path": str(path / HYPERLIQUID_SIGNED_ACTION_FILENAME) if signed_action_path else None,
         "submit_response_path": str(path / HYPERLIQUID_SUBMIT_RESPONSE_FILENAME) if response_path else None,
+        "cancel_response_path": str(path / HYPERLIQUID_CANCEL_RESPONSE_FILENAME) if cancel_response_path else None,
         "order_status_path": str(path / HYPERLIQUID_ORDER_STATUS_FILENAME) if order_status_path else None,
         "reconciliation_path": str(path / HYPERLIQUID_RECONCILIATION_FILENAME) if reconciliation_path else None,
     }
@@ -270,6 +343,7 @@ def _is_valid_hyperliquid_submit_dir(path: Path) -> bool:
             HYPERLIQUID_SUBMIT_STATUS_FILENAME,
             HYPERLIQUID_SIGNED_ACTION_FILENAME,
             HYPERLIQUID_SUBMIT_RESPONSE_FILENAME,
+            HYPERLIQUID_CANCEL_RESPONSE_FILENAME,
             HYPERLIQUID_ORDER_STATUS_FILENAME,
             HYPERLIQUID_RECONCILIATION_FILENAME,
         )
@@ -343,6 +417,14 @@ def _derive_hyperliquid_submit_session_status(order_status: dict[str, Any]) -> s
     return str(order_status.get("normalized_state") or "unknown")
 
 
+def _derive_hyperliquid_cancel_session_status(summary: dict[str, Any], cancel_report: dict[str, Any]) -> str:
+    if bool(cancel_report.get("cancel_accepted")):
+        if summary.get("effective_order_state") == "canceled":
+            return "canceled"
+        return "cancel_pending"
+    return str(summary.get("status") or summary.get("effective_order_state") or "submitted")
+
+
 def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
     root = _require_directory(root_dir, "Hyperliquid submit sessions root")
     sessions = [load_hyperliquid_submit_summary(path) for path in scan_hyperliquid_submit_sessions(root)]
@@ -356,6 +438,7 @@ def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
         "root_dir": str(root),
         "total_sessions": len(sessions),
         "submit_response_sessions": sum(1 for session in sessions if session.get("submit_response_present")),
+        "cancel_response_sessions": sum(1 for session in sessions if session.get("cancel_response_present")),
         "submitted_sessions": sum(1 for session in sessions if session.get("submitted")),
         "order_status_known_sessions": sum(1 for session in sessions if session.get("order_status_known")),
         "reconciliation_sessions": sum(1 for session in sessions if session.get("reconciliation_present")),
@@ -363,6 +446,9 @@ def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
         "status_counts": dict(Counter((session.get("status") or "unknown") for session in sessions)),
         "submit_state_counts": dict(
             Counter((session.get("submit_state") or "no_submit_response") for session in sessions)
+        ),
+        "cancel_state_counts": dict(
+            Counter((session.get("cancel_state") or "no_cancel_response") for session in sessions)
         ),
         "order_state_counts": dict(
             Counter(
@@ -401,6 +487,7 @@ def build_hyperliquid_submission_alerts(root_dir: str | Path) -> dict[str, Any]:
         "generated_at": dt.datetime.now().replace(microsecond=0).isoformat(),
         "total_sessions": len(sessions),
         "submit_response_sessions": sum(1 for session in sessions if session.get("submit_response_present")),
+        "cancel_response_sessions": sum(1 for session in sessions if session.get("cancel_response_present")),
         "submitted_sessions": sum(1 for session in sessions if session.get("submitted")),
         "order_state_counts": dict(
             Counter(
@@ -429,6 +516,25 @@ def _collect_hyperliquid_submission_alerts(sessions: list[dict[str, Any]]) -> li
         submitted = bool(session.get("submitted"))
         submit_state = str(session.get("submit_state") or session.get("status") or "unknown")
         activity_at = _parse_activity_timestamp(session)
+
+        if session.get("cancel_response_present") and not bool(session.get("cancel_accepted")):
+            cancel_state = str(session.get("cancel_state") or "unknown")
+            code_map = {
+                "cancel_request_failed": "HYPERLIQUID_CANCEL_REQUEST_FAILED",
+                "cancel_rejected": "HYPERLIQUID_CANCEL_REJECTED",
+                "missing_signing_key": "HYPERLIQUID_CANCEL_SIGNING_KEY_MISSING",
+                "signer_identity_mismatch": "HYPERLIQUID_CANCEL_SIGNER_MISMATCH",
+            }
+            severity = "critical" if cancel_state in {"cancel_request_failed", "cancel_rejected"} else "warning"
+            alerts.append(
+                _build_hyperliquid_alert(
+                    code=code_map.get(cancel_state, "HYPERLIQUID_CANCEL_ATTENTION"),
+                    severity=severity,
+                    session=session,
+                    activity_at=activity_at,
+                    message=_join_reasons(session.get("cancel_errors")) or f"Hyperliquid cancel state is '{cancel_state}'.",
+                )
+            )
 
         if submitted:
             if not session.get("order_status_present") and not session.get("reconciliation_present"):
@@ -533,6 +639,7 @@ def _parse_activity_timestamp(session: dict[str, Any] | None) -> dt.datetime | N
         return None
 
     for key in (
+        "cancel_response_generated_at",
         "reconciliation_generated_at",
         "order_status_generated_at",
         "submit_response_generated_at",

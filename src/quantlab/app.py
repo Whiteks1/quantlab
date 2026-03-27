@@ -492,6 +492,27 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="Reconcile a Hyperliquid submit session against direct order status and open-order surfaces.",
     )
     parser.add_argument(
+        "--hyperliquid-submit-sessions-cancel",
+        metavar="SESSION_DIR",
+        default=None,
+        help="Submit a supervised cancel request for a canonical Hyperliquid submit session.",
+    )
+    parser.add_argument(
+        "--hyperliquid-cancel-reviewer",
+        default=None,
+        help="Reviewer name required for supervised Hyperliquid cancel.",
+    )
+    parser.add_argument(
+        "--hyperliquid-cancel-note",
+        default=None,
+        help="Optional note attached to a supervised Hyperliquid cancel artifact.",
+    )
+    parser.add_argument(
+        "--hyperliquid-cancel-confirm",
+        action="store_true",
+        help="Explicit confirmation required for supervised Hyperliquid cancel.",
+    )
+    parser.add_argument(
         "--hyperliquid-submit-sessions-health",
         metavar="ROOT_DIR",
         default=None,
@@ -869,6 +890,7 @@ def _determine_session_mode(args: argparse.Namespace, json_command: str | None) 
         or args.hyperliquid_submit_sessions_index
         or args.hyperliquid_submit_sessions_status
         or args.hyperliquid_submit_sessions_reconcile
+        or args.hyperliquid_submit_sessions_cancel
         or args.hyperliquid_submit_sessions_health
         or args.hyperliquid_submit_sessions_alerts
     ):

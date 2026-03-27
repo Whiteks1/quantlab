@@ -262,6 +262,53 @@ class HyperliquidSubmitReport:
 
 
 @dataclass(frozen=True)
+class HyperliquidCancelReport:
+    adapter_name: str
+    generated_at: str
+    source_session_id: str
+    source_action_hash: str | None
+    source_signer_id: str | None
+    source_signing_payload_sha256: str | None
+    source_submit_state: str | None
+    cancel_payload: dict[str, object] | None
+    cancel_state: str
+    remote_cancel_called: bool
+    cancel_accepted: bool
+    response_type: str | None
+    asset: int | None
+    oid: int | None
+    cloid: str | None
+    exchange_response: dict[str, object] | None
+    reviewer: str
+    note: str | None
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact_type": "quantlab.hyperliquid.cancel_response",
+            "adapter_name": self.adapter_name,
+            "generated_at": self.generated_at,
+            "source_session_id": self.source_session_id,
+            "source_action_hash": self.source_action_hash,
+            "source_signer_id": self.source_signer_id,
+            "source_signing_payload_sha256": self.source_signing_payload_sha256,
+            "source_submit_state": self.source_submit_state,
+            "cancel_payload": self.cancel_payload,
+            "cancel_state": self.cancel_state,
+            "remote_cancel_called": self.remote_cancel_called,
+            "cancel_accepted": self.cancel_accepted,
+            "response_type": self.response_type,
+            "asset": self.asset,
+            "oid": self.oid,
+            "cloid": self.cloid,
+            "exchange_response": self.exchange_response,
+            "reviewer": self.reviewer,
+            "note": self.note,
+            "errors": list(self.errors),
+        }
+
+
+@dataclass(frozen=True)
 class HyperliquidOrderStatusReport:
     adapter_name: str
     generated_at: str
@@ -1103,6 +1150,251 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             errors=tuple(_unique_reasons(errors)),
         )
 
+    def build_cancel_report(
+        self,
+        *,
+        source_session_id: str,
+        signed_action_artifact: dict[str, object],
+        submit_response_artifact: dict[str, object],
+        reviewer: str,
+        note: str | None = None,
+        timeout_seconds: float = 10.0,
+        post_json=None,
+        remote_cancel: bool = True,
+        signing_private_key: str | None = None,
+        signing_private_key_env: str = "HYPERLIQUID_PRIVATE_KEY",
+        is_mainnet: bool = True,
+    ) -> HyperliquidCancelReport:
+        errors: list[str] = []
+        cancel_payload = None
+        exchange_response: dict[str, object] | None = None
+        response_type = None
+        remote_cancel_called = False
+        cancel_accepted = False
+        cancel_state = "cancel_not_ready"
+
+        source_envelope = (
+            signed_action_artifact.get("signature_envelope", {}) if isinstance(signed_action_artifact, dict) else {}
+        )
+        source_action_hash = _safe_string(source_envelope.get("action_hash")) if isinstance(source_envelope, dict) else None
+        source_signer_id = _safe_string(source_envelope.get("signer_id")) if isinstance(source_envelope, dict) else None
+        source_signing_payload_sha256 = (
+            _safe_string(source_envelope.get("signing_payload_sha256")) if isinstance(source_envelope, dict) else None
+        )
+        source_submit_state = (
+            _safe_string(submit_response_artifact.get("submit_state")) if isinstance(submit_response_artifact, dict) else None
+        )
+
+        if not isinstance(signed_action_artifact, dict):
+            errors.append("invalid_signed_action_artifact")
+        if not isinstance(submit_response_artifact, dict):
+            errors.append("invalid_submit_response_artifact")
+
+        if isinstance(signed_action_artifact, dict):
+            if signed_action_artifact.get("artifact_type") != "quantlab.hyperliquid.signed_action":
+                errors.append("unexpected_signed_action_artifact_type")
+            if not bool(signed_action_artifact.get("readiness_allowed")):
+                errors.append("signed_action_not_ready")
+        if isinstance(submit_response_artifact, dict):
+            if submit_response_artifact.get("artifact_type") != "quantlab.hyperliquid.submit_response":
+                errors.append("unexpected_submit_response_artifact_type")
+            if not bool(submit_response_artifact.get("remote_submit_called")):
+                errors.append("submit_not_attempted")
+            if not bool(submit_response_artifact.get("submitted")):
+                errors.append("submit_not_confirmed")
+
+        asset = _extract_hyperliquid_submit_asset(signed_action_artifact) if isinstance(signed_action_artifact, dict) else None
+        oid = _extract_hyperliquid_submit_oid(submit_response_artifact) if isinstance(submit_response_artifact, dict) else None
+        cloid = (
+            _extract_hyperliquid_submit_cloid(signed_action_artifact) if isinstance(signed_action_artifact, dict) else None
+        )
+        if asset is None:
+            errors.append("missing_source_asset")
+        if oid is None and not cloid:
+            errors.append("missing_order_identifier")
+
+        if not isinstance(source_envelope, dict):
+            errors.append("missing_signature_envelope")
+        else:
+            if source_envelope.get("signature_state") != "signed":
+                errors.append("signed_action_not_signed")
+            if not bool(source_envelope.get("signature_present")):
+                errors.append("signature_missing")
+
+        private_key, private_key_source = _load_hyperliquid_private_key(
+            explicit_value=signing_private_key,
+            env_name=signing_private_key_env,
+        )
+        if not private_key:
+            errors.append("missing_signing_key")
+        elif not _hyperliquid_signing_dependencies_available():
+            errors.append("signing_dependencies_missing")
+
+        nonce = int(time.time_ns() // 1_000_000)
+        vault_address = None
+        if isinstance(source_envelope, dict):
+            signing_payload = source_envelope.get("signing_payload")
+            if isinstance(signing_payload, dict):
+                vault_address = _safe_string(signing_payload.get("vaultAddress"))
+
+        cancel_action = _build_hyperliquid_cancel_action_payload(asset=asset, oid=oid, cloid=cloid)
+        if cancel_action is None:
+            errors.append("cancel_action_unavailable")
+
+        if errors:
+            cancel_state = errors[0]
+            return HyperliquidCancelReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                source_session_id=source_session_id,
+                source_action_hash=source_action_hash,
+                source_signer_id=source_signer_id,
+                source_signing_payload_sha256=source_signing_payload_sha256,
+                source_submit_state=source_submit_state,
+                cancel_payload=None,
+                cancel_state=cancel_state,
+                remote_cancel_called=False,
+                cancel_accepted=False,
+                response_type=None,
+                asset=asset,
+                oid=oid,
+                cloid=cloid,
+                exchange_response=None,
+                reviewer=reviewer,
+                note=note,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        try:
+            signed = sign_hyperliquid_l1_action(
+                private_key=private_key,
+                action_payload=cancel_action,
+                vault_address=vault_address,
+                nonce=nonce,
+                expires_after=None,
+                is_mainnet=is_mainnet,
+            )
+        except Exception as exc:  # noqa: BLE001
+            cancel_state = "cancel_signing_failed"
+            errors.append(f"cancel_signing_failed:{exc.__class__.__name__}")
+            return HyperliquidCancelReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                source_session_id=source_session_id,
+                source_action_hash=source_action_hash,
+                source_signer_id=source_signer_id,
+                source_signing_payload_sha256=source_signing_payload_sha256,
+                source_submit_state=source_submit_state,
+                cancel_payload=None,
+                cancel_state=cancel_state,
+                remote_cancel_called=False,
+                cancel_accepted=False,
+                response_type=None,
+                asset=asset,
+                oid=oid,
+                cloid=cloid,
+                exchange_response=None,
+                reviewer=reviewer,
+                note=note,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        derived_signer = _safe_string(signed.get("signer_address"))
+        if source_signer_id and derived_signer and source_signer_id.lower() != derived_signer.lower():
+            errors.append("signer_identity_mismatch")
+            cancel_state = "signer_identity_mismatch"
+            return HyperliquidCancelReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                source_session_id=source_session_id,
+                source_action_hash=source_action_hash,
+                source_signer_id=source_signer_id,
+                source_signing_payload_sha256=source_signing_payload_sha256,
+                source_submit_state=source_submit_state,
+                cancel_payload=None,
+                cancel_state=cancel_state,
+                remote_cancel_called=False,
+                cancel_accepted=False,
+                response_type=None,
+                asset=asset,
+                oid=oid,
+                cloid=cloid,
+                exchange_response=None,
+                reviewer=reviewer,
+                note=note,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        cancel_payload = {
+            "action": cancel_action,
+            "nonce": nonce,
+            "signature": signed.get("signature"),
+        }
+        if vault_address:
+            cancel_payload["vaultAddress"] = vault_address
+
+        if not remote_cancel:
+            return HyperliquidCancelReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                source_session_id=source_session_id,
+                source_action_hash=source_action_hash,
+                source_signer_id=source_signer_id,
+                source_signing_payload_sha256=source_signing_payload_sha256,
+                source_submit_state=source_submit_state,
+                cancel_payload=cancel_payload,
+                cancel_state="pending_remote_cancel",
+                remote_cancel_called=False,
+                cancel_accepted=False,
+                response_type=None,
+                asset=asset,
+                oid=oid,
+                cloid=cloid,
+                exchange_response=None,
+                reviewer=reviewer,
+                note=note,
+                errors=(),
+            )
+
+        try:
+            exchange_response = fetch_hyperliquid_exchange(
+                cancel_payload,
+                timeout_seconds=timeout_seconds,
+                post_json=post_json,
+            )
+            remote_cancel_called = True
+            response_type = _extract_hyperliquid_response_type(exchange_response)
+            cancel_errors = _extract_hyperliquid_exchange_errors(exchange_response)
+            errors.extend(cancel_errors)
+            cancel_accepted = not cancel_errors
+            cancel_state = "canceled_remote" if cancel_accepted else "cancel_rejected"
+        except Exception as exc:  # noqa: BLE001
+            remote_cancel_called = True
+            cancel_state = "cancel_request_failed"
+            errors.append(f"cancel_request_failed:{exc.__class__.__name__}")
+
+        return HyperliquidCancelReport(
+            adapter_name=self.adapter_name,
+            generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+            source_session_id=source_session_id,
+            source_action_hash=source_action_hash,
+            source_signer_id=source_signer_id,
+            source_signing_payload_sha256=source_signing_payload_sha256,
+            source_submit_state=source_submit_state,
+            cancel_payload=cancel_payload,
+            cancel_state=cancel_state,
+            remote_cancel_called=remote_cancel_called,
+            cancel_accepted=cancel_accepted,
+            response_type=response_type,
+            asset=asset,
+            oid=oid,
+            cloid=cloid,
+            exchange_response=exchange_response,
+            reviewer=reviewer,
+            note=note,
+            errors=tuple(_unique_reasons(errors)),
+        )
+
     def build_reconciliation_report(
         self,
         *,
@@ -1480,6 +1772,9 @@ def _build_hyperliquid_submit_payload(
 def _extract_hyperliquid_submit_oid(exchange_response: dict[str, object] | None) -> int | None:
     if not isinstance(exchange_response, dict):
         return None
+    direct_oid = exchange_response.get("oid")
+    if isinstance(direct_oid, int):
+        return direct_oid
     response = exchange_response.get("response")
     if not isinstance(response, dict):
         return None
@@ -1496,6 +1791,20 @@ def _extract_hyperliquid_submit_oid(exchange_response: dict[str, object] | None)
             if isinstance(value, dict) and isinstance(value.get("oid"), int):
                 return value.get("oid")
     return None
+
+
+def _extract_hyperliquid_submit_asset(signed_action_artifact: dict[str, object]) -> int | None:
+    action_payload = signed_action_artifact.get("action_payload")
+    if not isinstance(action_payload, dict):
+        return None
+    orders = action_payload.get("orders")
+    if not isinstance(orders, list) or not orders:
+        return None
+    first_order = orders[0]
+    if not isinstance(first_order, dict):
+        return None
+    asset = first_order.get("a")
+    return asset if isinstance(asset, int) and asset >= 0 else None
 
 
 def _extract_hyperliquid_submit_cloid(signed_action_artifact: dict[str, object]) -> str | None:
@@ -1523,11 +1832,11 @@ def _extract_hyperliquid_response_type(exchange_response: dict[str, object] | No
     return str(status) if status is not None else None
 
 
-def _classify_hyperliquid_submit_response(
+def _extract_hyperliquid_exchange_errors(
     exchange_response: dict[str, object] | None,
-) -> tuple[bool, list[str]]:
+) -> list[str]:
     if not isinstance(exchange_response, dict):
-        return False, ["invalid_exchange_response"]
+        return ["invalid_exchange_response"]
 
     errors: list[str] = []
     status = str(exchange_response.get("status") or "").strip().lower()
@@ -1547,8 +1856,37 @@ def _classify_hyperliquid_submit_response(
                     if isinstance(item, dict) and "error" in item:
                         errors.append(f"status_error:{item.get('error')}")
 
+    return _unique_reasons(str(item) for item in errors)
+
+
+def _classify_hyperliquid_submit_response(
+    exchange_response: dict[str, object] | None,
+) -> tuple[bool, list[str]]:
+    errors = _extract_hyperliquid_exchange_errors(exchange_response)
+    status = str(exchange_response.get("status") or "").strip().lower() if isinstance(exchange_response, dict) else ""
     submitted = not errors and status == "ok"
-    return submitted, _unique_reasons(str(item) for item in errors)
+    return submitted, errors
+
+
+def _build_hyperliquid_cancel_action_payload(
+    *,
+    asset: int | None,
+    oid: int | None,
+    cloid: str | None,
+) -> dict[str, object] | None:
+    if asset is None:
+        return None
+    if oid is not None:
+        return {
+            "type": "cancel",
+            "cancels": [{"a": asset, "o": oid}],
+        }
+    if cloid:
+        return {
+            "type": "cancelByCloid",
+            "cancels": [{"asset": asset, "cloid": cloid}],
+        }
+    return None
 
 
 _HYPERLIQUID_CANCELED_STATES = {

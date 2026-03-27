@@ -18,6 +18,7 @@ from .boundary import (
 from .hyperliquid import (
     HyperliquidAccountReadinessReport,
     HyperliquidBrokerAdapter,
+    HyperliquidCancelReport,
     HyperliquidOrderStatusReport,
     HyperliquidPreflightReport,
     HyperliquidReconciliationReport,
@@ -49,6 +50,7 @@ __all__ = [
     "ExecutionPreflight",
     "HyperliquidAccountReadinessReport",
     "HyperliquidBrokerAdapter",
+    "HyperliquidCancelReport",
     "HyperliquidOrderStatusReport",
     "HyperliquidPreflightReport",
     "HyperliquidReconciliationReport",

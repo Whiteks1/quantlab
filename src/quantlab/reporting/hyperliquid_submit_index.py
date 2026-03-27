@@ -21,6 +21,8 @@ _INDEX_FIELDS = [
     "request_id",
     "source_signer_id",
     "submit_state",
+    "cancel_state",
+    "cancel_accepted",
     "remote_submit_called",
     "submitted",
     "response_type",
