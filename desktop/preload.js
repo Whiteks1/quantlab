@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("quantlabDesktop", {
   getWorkspaceState: () => ipcRenderer.invoke("quantlab:get-workspace-state"),
   requestJson: (relativePath) => ipcRenderer.invoke("quantlab:request-json", relativePath),
+  requestText: (relativePath) => ipcRenderer.invoke("quantlab:request-text", relativePath),
   postJson: (relativePath, payload) => ipcRenderer.invoke("quantlab:post-json", relativePath, payload),
   openExternal: (url) => ipcRenderer.invoke("quantlab:open-external", url),
   onWorkspaceState: (callback) => {
