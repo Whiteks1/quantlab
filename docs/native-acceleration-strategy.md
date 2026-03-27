@@ -151,6 +151,11 @@ In other words:
 
 Profile representative `run` and `sweep` workloads.
 
+That profiling surface now exists via:
+
+- [docs/backtest-profiling.md](./backtest-profiling.md)
+- `python scripts/profile_backtest.py`
+
 ### Step 2
 
 Refactor the backtest loop into a pure array-oriented helper with a stable contract.
