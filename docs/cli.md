@@ -39,6 +39,7 @@ Machine-facing request entrypoint for:
 - `sweep`
 - `forward`
 - `portfolio`
+- `pretrade`
 
 Example:
 
@@ -50,6 +51,12 @@ Optional lifecycle signalling:
 
 ```bash
 python main.py --json-request "{\"schema_version\":\"1.0\",\"request_id\":\"req_demo_002\",\"command\":\"sweep\",\"params\":{\"config_path\":\"configs/experiments/eth_2023_grid.yaml\"}}" --signal-file logs/quantlab-signals.jsonl
+```
+
+Pre-trade planning request:
+
+```bash
+python main.py --json-request "{\"schema_version\":\"1.0\",\"request_id\":\"req_demo_003\",\"command\":\"pretrade\",\"params\":{\"symbol\":\"ETH-USD\",\"venue\":\"kraken\",\"side\":\"buy\",\"capital\":1000,\"risk_percent\":1,\"entry_price\":2000,\"stop_price\":1950,\"target_price\":2100}}"
 ```
 
 ## 2. Run Execution
@@ -207,7 +214,33 @@ This writes:
 
 The index is intentionally separate from `outputs/runs/runs_index.*` and is meant for repeated paper-session operations.
 
-## 5. Broker Dry-Run
+## 5. Pre-Trade Planning
+
+### `--pretrade-plan`
+
+Generate a canonical pre-trade planning artifact set:
+
+```bash
+python main.py --pretrade-plan --pretrade-symbol ETH-USD --pretrade-venue kraken --pretrade-side buy --pretrade-capital 1000 --pretrade-risk-percent 1 --pretrade-entry-price 2000 --pretrade-stop-price 1950 --pretrade-target-price 2100
+```
+
+This writes:
+
+- `outputs/pretrade_sessions/<session_id>/input.json`
+- `outputs/pretrade_sessions/<session_id>/plan.json`
+- `outputs/pretrade_sessions/<session_id>/summary.json`
+- `outputs/pretrade_sessions/<session_id>/plan.md`
+
+Current scope:
+
+- deterministic position sizing from capital and risk percent
+- stop and target coherence checks
+- fees and slippage estimates
+- stable machine-facing `plan.json` with `contract_type = "quantlab.pretrade.plan"`
+
+This surface is intentionally pre-trade only and does not submit any order.
+
+## 6. Broker Dry-Run
 
 ### `--hyperliquid-preflight-outdir`
 
@@ -939,7 +972,7 @@ Refresh the shared broker dry-run registry explicitly:
 python main.py --broker-dry-runs-index outputs/broker_dry_runs
 ```
 
-## 6. Forward Evaluation
+## 7. Forward Evaluation
 
 ### `--forward-eval`
 
@@ -970,7 +1003,7 @@ outputs/forward_runs/<session_id>/
   forward_report.md
 ```
 
-## 7. Portfolio Workflows
+## 8. Portfolio Workflows
 
 ### `--portfolio-report`
 
@@ -1005,7 +1038,7 @@ outputs/forward_runs/
   portfolio_compare.md
 ```
 
-## 8. Sweep Workflows
+## 9. Sweep Workflows
 
 Flag-driven sweep:
 
@@ -1021,7 +1054,7 @@ python main.py --json-request "{\"schema_version\":\"1.0\",\"request_id\":\"req_
 
 `report.json.machine_contract` is the canonical machine-facing result surface for automated sweep consumption.
 
-## 9. Legacy Flags
+## 10. Legacy Flags
 
 These remain accepted for backward compatibility, but should not be expanded further in docs or integrations:
 
@@ -1037,7 +1070,7 @@ Legacy read-compatible artifacts also remain in the codebase:
 
 The preferred public surface is the canonical contract documented in [run-artifact-contract.md](./run-artifact-contract.md).
 
-## 9. Design Rules
+## 11. Design Rules
 
 - `main.py` and `src/quantlab/cli/` should remain orchestration-only
 - domain and quantitative logic belong outside the entrypoint

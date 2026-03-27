@@ -135,7 +135,8 @@ python main.py --help
 
 ## Current Capabilities
 
-- `--json-request`: machine-facing request entrypoint for `run`, `sweep`, `forward`, and `portfolio`
+- `--json-request`: machine-facing request entrypoint for `run`, `sweep`, `forward`, `portfolio`, and `pretrade`
+- `--pretrade-plan`: generate canonical pre-trade planning artifacts under `outputs/pretrade_sessions/`
 - `--signal-file`: optional JSONL lifecycle signalling for machine-driven execution
 - `--version`: stable CLI version string
 - `--check`: deterministic runtime health summary
