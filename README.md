@@ -101,6 +101,12 @@ pip install -e .[perf]
 Version:
 
 ```bash
+quantlab --version
+```
+
+Compatibility path:
+
+```bash
 python main.py --version
 ```
 
@@ -111,6 +117,12 @@ Typical output:
 ```
 
 Preflight health:
+
+```bash
+quantlab --check
+```
+
+Compatibility path:
 
 ```bash
 python main.py --check
@@ -128,6 +140,12 @@ Typical output shape:
 ```
 
 CLI help:
+
+```bash
+quantlab --help
+```
+
+Compatibility path:
 
 ```bash
 python main.py --help
