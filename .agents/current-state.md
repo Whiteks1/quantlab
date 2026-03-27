@@ -85,6 +85,7 @@
   - native acceleration strategy now documents `Numba` as the first acceleration experiment and the backtest engine as the first realistic hotspot candidate before any broader `C++` or `Rust` move
   - a local backtest profiling surface now exists to measure the Python engine before any `Numba` or native extraction work
   - the backtest engine now also has an optional `Numba` pilot backend for the extracted inner loop while keeping Python as the default path
+  - the pre-trade subsystem now has an explicit boundary ADR: the calculator may act as an upstream workbench, but QuantLab remains the owner of policy, draft execution bridging, and all execution authority
 
 
 ## Known Issues / Technical Debt
