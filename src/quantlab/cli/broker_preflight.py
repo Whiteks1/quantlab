@@ -134,6 +134,52 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
             "signature_state": report["signature_envelope"]["signature_state"],
         }
 
+    if getattr(args, "hyperliquid_submit_signed_action", None):
+        signed_action_path = Path(args.hyperliquid_submit_signed_action).resolve()
+        if not signed_action_path.exists() or not signed_action_path.is_file():
+            raise ConfigError("Hyperliquid signed action artifact must exist as a file.")
+        if signed_action_path.name != "hyperliquid_signed_action.json":
+            raise ConfigError("Expected a hyperliquid_signed_action.json artifact path.")
+        if not bool(getattr(args, "hyperliquid_submit_confirm", False)):
+            raise ConfigError("hyperliquid_submit_confirm is required for supervised Hyperliquid submit.")
+
+        reviewer = getattr(args, "hyperliquid_submit_reviewer", None)
+        if not isinstance(reviewer, str) or not reviewer.strip():
+            raise ConfigError("hyperliquid_submit_reviewer is required for supervised Hyperliquid submit.")
+
+        with open(signed_action_path, "r", encoding="utf-8") as fh:
+            signed_action_artifact = json.load(fh)
+
+        adapter = HyperliquidBrokerAdapter()
+        submit_note = getattr(args, "hyperliquid_submit_note", None)
+        report = adapter.build_submit_report(
+            source_artifact_path=str(signed_action_path),
+            signed_action_artifact=signed_action_artifact,
+            reviewer=reviewer.strip(),
+            note=submit_note.strip() if isinstance(submit_note, str) and submit_note.strip() else None,
+            timeout_seconds=float(getattr(args, "hyperliquid_preflight_timeout", 10.0)),
+        ).to_dict()
+
+        artifact_path = signed_action_path.parent / "hyperliquid_submit_response.json"
+        with open(artifact_path, "w", encoding="utf-8") as fh:
+            json.dump(report, fh, indent=2, ensure_ascii=False)
+
+        print("\nHyperliquid supervised submit completed:\n")
+        print(f"  source_artifact_path : {signed_action_path}")
+        print(f"  response_artifact    : {artifact_path}")
+        print(f"  submit_state         : {report['submit_state']}")
+        print(f"  remote_submit_called : {report['remote_submit_called']}")
+
+        return {
+            "status": "success",
+            "mode": "broker_submit",
+            "adapter_name": report["adapter_name"],
+            "artifact_path": str(artifact_path),
+            "submit_state": report["submit_state"],
+            "remote_submit_called": report["remote_submit_called"],
+            "submitted": report["submitted"],
+        }
+
     if getattr(args, "kraken_preflight_outdir", None):
         symbol = getattr(args, "broker_symbol", None) or getattr(args, "ticker", None)
         if not isinstance(symbol, str) or not symbol.strip():

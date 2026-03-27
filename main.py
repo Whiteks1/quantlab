@@ -410,6 +410,27 @@ def main() -> None:
         help="Persist a local Hyperliquid action and signature-envelope artifact in a directory.",
     )
     parser.add_argument(
+        "--hyperliquid-submit-signed-action",
+        metavar="FILE",
+        default=None,
+        help="Submit a previously generated hyperliquid_signed_action.json artifact through the supervised Hyperliquid path.",
+    )
+    parser.add_argument(
+        "--hyperliquid-submit-reviewer",
+        default=None,
+        help="Reviewer name required for supervised Hyperliquid submit.",
+    )
+    parser.add_argument(
+        "--hyperliquid-submit-note",
+        default=None,
+        help="Optional note attached to a supervised Hyperliquid submit artifact.",
+    )
+    parser.add_argument(
+        "--hyperliquid-submit-confirm",
+        action="store_true",
+        help="Explicit confirmation required for supervised Hyperliquid submit.",
+    )
+    parser.add_argument(
         "--hyperliquid-private-key",
         default=None,
         help="Private key for local Hyperliquid action signing.",
@@ -764,6 +785,7 @@ def main() -> None:
             args.hyperliquid_preflight_outdir
             or args.hyperliquid_account_readiness_outdir
             or args.hyperliquid_signed_action_outdir
+            or args.hyperliquid_submit_signed_action
             or args.kraken_preflight_outdir
             or args.kraken_auth_preflight_outdir
             or args.kraken_account_readiness_outdir

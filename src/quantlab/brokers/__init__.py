@@ -21,6 +21,7 @@ from .hyperliquid import (
     HyperliquidPreflightReport,
     HyperliquidResolvedExecutionContext,
     HyperliquidSignedActionReport,
+    HyperliquidSubmitReport,
     recover_hyperliquid_l1_action_signer,
     sign_hyperliquid_l1_action,
 )
@@ -49,6 +50,7 @@ __all__ = [
     "HyperliquidPreflightReport",
     "HyperliquidResolvedExecutionContext",
     "HyperliquidSignedActionReport",
+    "HyperliquidSubmitReport",
     "recover_hyperliquid_l1_action_signer",
     "sign_hyperliquid_l1_action",
     "KrakenAccountSnapshotReport",
