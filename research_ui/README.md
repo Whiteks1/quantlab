@@ -7,7 +7,6 @@ This version supports:
 - Automatic synchronization with `outputs/runs/runs_index.json`.
 - Paper-session health visibility from `outputs/paper_sessions/` through the local preview server.
 - Broker order-validation and submission health visibility from `outputs/broker_order_validations/` when present.
-- Pre-trade planning visibility from `outputs/pretrade_sessions/`, including bounded execution-preflight summaries when present.
 - Hyperliquid surface visibility for read-only preflight, account readiness, and signed-action build progress.
 - Stepbit workspace boundary visibility when local `stepbit-app` and `stepbit-core` repos are present beside `quant_lab`.
 - Sortable table by any metric column.
@@ -26,7 +25,7 @@ This version supports:
    [http://localhost:8000](http://localhost:8000)
 
 ## Constraints & Architecture
-- **Read-Only**: This dashboard cannot execute runs, submit orders, or modify data.
+- **Read-Only**: This dashboard cannot execute runs or modify data.
 - **Low Coupling**: It reads standard JSON artifacts from the `outputs/` directory plus a few tiny local summary endpoints for paper, broker, Hyperliquid, and Stepbit workspace state.
 - **No Dependencies**: Built with Vanilla JS/CSS for maximum stability and zero-install preview.
 - **Honest Boundary Model**: Stepbit is shown as an external connected workspace surface, not as an in-process QuantLab runtime.

@@ -2,7 +2,6 @@ const CONFIG = {
     registryPath: "/outputs/runs/runs_index.json",
     paperHealthPath: "/api/paper-sessions-health",
     brokerHealthPath: "/api/broker-submissions-health",
-    pretradePlansPath: "/api/pretrade-plans",
     hyperliquidSurfacePath: "/api/hyperliquid-surface",
     stepbitWorkspacePath: "/api/stepbit-workspace",
     refreshInterval: 30000,
@@ -24,7 +23,6 @@ const state = {
     detailCache: new Map(),
     paperHealth: null,
     brokerHealth: null,
-    pretradePlans: null,
     hyperliquidSurface: null,
     stepbitWorkspace: null,
     lastRegistrySyncAt: null,
@@ -77,21 +75,12 @@ const elements = {
     toastContainer: document.getElementById("toast-container"),
     paperTotalSessions: document.getElementById("paper-total-sessions"),
     brokerTotalSessions: document.getElementById("broker-total-sessions"),
-    pretradeTotalSessions: document.getElementById("pretrade-total-sessions"),
     paperLatestSession: document.getElementById("paper-latest-session"),
     paperLatestSessionMeta: document.getElementById("paper-latest-session-meta"),
     paperAvailability: document.getElementById("paper-availability"),
     brokerAvailability: document.getElementById("broker-availability"),
-    pretradeAvailability: document.getElementById("pretrade-availability"),
     brokerLatestSession: document.getElementById("broker-latest-session"),
     brokerLatestSessionMeta: document.getElementById("broker-latest-session-meta"),
-    pretradeLatestSession: document.getElementById("pretrade-latest-session"),
-    pretradeLatestMeta: document.getElementById("pretrade-latest-meta"),
-    pretradeSummary: document.getElementById("pretrade-summary"),
-    pretradeMeta: document.getElementById("pretrade-meta"),
-    pretradeBody: document.getElementById("pretrade-body"),
-    pretradeStrip: document.getElementById("pretrade-strip"),
-    pretradeHealthMeta: document.getElementById("pretrade-health-meta"),
     hyperliquidState: document.getElementById("hyperliquid-state"),
     hyperliquidMeta: document.getElementById("hyperliquid-meta"),
     hyperliquidSignatureState: document.getElementById("hyperliquid-signature-state"),
@@ -151,7 +140,6 @@ async function fetchRegistry(showToast = false, silent = false) {
             fetch(`${CONFIG.registryPath}?t=${Date.now()}`),
             fetchPaperHealth(true),
             fetchBrokerHealth(true),
-            fetchPretradePlans(true),
             fetchHyperliquidSurface(true),
             fetchStepbitWorkspace(true),
         ]);
@@ -233,29 +221,6 @@ async function fetchBrokerHealth(silent = false) {
         };
         if (!silent) {
             notify(`Broker health fetch failed: ${error.message}`, "error");
-        }
-    }
-}
-
-async function fetchPretradePlans(silent = false) {
-    try {
-        const response = await fetch(`${CONFIG.pretradePlansPath}?t=${Date.now()}`);
-        if (!response.ok) {
-            throw new Error(`Pre-trade plans unavailable: ${response.status}`);
-        }
-        state.pretradePlans = await response.json();
-    } catch (error) {
-        state.pretradePlans = {
-            status: "error",
-            available: false,
-            total_sessions: 0,
-            execution_allowed_sessions: 0,
-            execution_rejected_sessions: 0,
-            sessions: [],
-            message: error.message,
-        };
-        if (!silent) {
-            notify(`Pre-trade fetch failed: ${error.message}`, "error");
         }
     }
 }
@@ -387,7 +352,6 @@ function updateDashboard() {
     const modeCounts = state.runs.reduce((acc, run) => ({ ...acc, [run.mode || "unknown"]: (acc[run.mode || "unknown"] || 0) + 1 }), {});
     const paperHealth = state.paperHealth || { total_sessions: 0, status_counts: {} };
     const brokerHealth = state.brokerHealth || { total_sessions: 0, status_counts: {}, alert_counts: {} };
-    const pretradePlans = state.pretradePlans || { total_sessions: 0, sessions: [] };
     const hyperliquidSurface = state.hyperliquidSurface || { implemented_surfaces: {}, latest_artifacts: {} };
     const stepbitWorkspace = state.stepbitWorkspace || { repos: {} };
     const stepbitRepos = Object.values(stepbitWorkspace.repos || {}).filter((repo) => repo && repo.present);
@@ -395,7 +359,6 @@ function updateDashboard() {
         || hyperliquidSurface.latest_artifacts?.account_readiness
         || hyperliquidSurface.latest_artifacts?.preflight
         || null;
-    const latestPretrade = pretradePlans.sessions?.[0] || null;
 
     elements.totalRuns.textContent = String(state.nRuns);
     elements.activeSessions.textContent = String(activeRuns);
@@ -405,8 +368,8 @@ function updateDashboard() {
     elements.drawdownFloor.textContent = `Drawdown floor: ${Number.isFinite(minDrawdown) ? formatPercent(minDrawdown) : "-"}`;
     elements.generatedAt.textContent = `Artifact generated: ${formatDateTime(state.generatedAt)}`;
     elements.heroSummary.textContent = state.runs.length
-        ? `${state.filteredRuns.length} visible of ${state.nRuns} indexed runs, with paper ops, broker safety, pre-trade planning, Hyperliquid readiness, and Stepbit workspace state visible beside the registry of the QuantLab web3 app.`
-        : "No indexed runs available yet. The surface still tracks paper ops, broker safety, pre-trade planning, Hyperliquid readiness, and the Stepbit boundary for the QuantLab web3 app.";
+        ? `${state.filteredRuns.length} visible of ${state.nRuns} indexed runs, with paper ops, broker safety, Hyperliquid readiness, and Stepbit workspace state visible beside the registry of the QuantLab web3 app.`
+        : "No indexed runs available yet. The surface still tracks paper ops, broker safety, Hyperliquid readiness, and the Stepbit boundary for the QuantLab web3 app.";
     elements.heroBestRun.textContent = topRun ? topRun.run_id : "No best run yet";
     elements.heroBestMeta.textContent = topRun ? `${titleCase(topRun.mode)} · Sharpe ${formatNumber(topRun.sharpe_simple)} · Return ${formatPercent(topRun.total_return)}` : "Waiting for usable metrics";
     elements.heroRootPill.textContent = "Source: outputs/runs";
@@ -421,28 +384,14 @@ function updateDashboard() {
     elements.brokerHealthMeta.textContent = buildBrokerMeta(brokerHealth);
     elements.paperTotalSessions.textContent = String(paperHealth.total_sessions || 0);
     elements.brokerTotalSessions.textContent = String(brokerHealth.total_sessions || 0);
-    elements.pretradeTotalSessions.textContent = String(pretradePlans.total_sessions || 0);
     elements.paperLatestSession.textContent = paperHealth.latest_session_id || "No sessions";
     elements.paperLatestSessionMeta.textContent = [titleCase(paperHealth.latest_session_status || "unknown"), formatDateTime(paperHealth.latest_session_at)].filter((value) => value && value !== "-").join(" · ") || "No paper activity yet";
     elements.paperAvailability.textContent = paperHealth.available ? `Root: ${normalizeDisplayPath(paperHealth.root_dir || "outputs/paper_sessions")}` : (paperHealth.message || "No paper root found yet");
     elements.brokerAvailability.textContent = brokerHealth.available ? `Root: ${normalizeDisplayPath(brokerHealth.root_dir || "outputs/broker_order_validations")}` : (brokerHealth.message || "No broker validation root found yet");
-    elements.pretradeAvailability.textContent = pretradePlans.available ? `Root: ${normalizeDisplayPath(pretradePlans.root_dir || "outputs/pretrade_sessions")}` : (pretradePlans.message || "No pre-trade root found yet");
     elements.brokerLatestSession.textContent = brokerHealth.latest_submit_session_id || "No submit sessions";
     elements.brokerLatestSessionMeta.textContent = brokerHealth.latest_submit_session_id
         ? [titleCase(brokerHealth.latest_submit_state || "unknown"), titleCase(brokerHealth.latest_order_state || "unknown"), formatDateTime(brokerHealth.latest_submit_at)].filter(Boolean).join(" · ")
         : "No broker submit activity yet";
-    elements.pretradeLatestSession.textContent = latestPretrade?.session_id || "No plans";
-    elements.pretradeLatestMeta.textContent = latestPretrade
-        ? [latestPretrade.symbol, titleCase(latestPretrade.side || "unknown"), formatDateTime(latestPretrade.generated_at)].filter(Boolean).join(" · ")
-        : "No pre-trade artifacts yet";
-    elements.pretradeSummary.textContent = pretradePlans.available
-        ? `${pretradePlans.total_sessions || 0} plan(s) available for artifact browsing and scenario comparison.`
-        : "Waiting for bounded pre-trade artifacts.";
-    elements.pretradeMeta.textContent = pretradePlans.available
-        ? `Execution allowed: ${pretradePlans.execution_allowed_sessions || 0} · Rejected: ${pretradePlans.execution_rejected_sessions || 0}`
-        : "Read-only scenario comparison and boundary preflight visibility";
-    elements.pretradeStrip.innerHTML = buildPretradeStrip(pretradePlans);
-    elements.pretradeHealthMeta.textContent = buildPretradeMeta(pretradePlans);
     elements.hyperliquidState.textContent = hyperliquidSurface.implemented_surfaces?.signed_action_build ? "Read-only ready" : "Not available";
     elements.hyperliquidMeta.textContent = latestHyperArtifact
         ? [titleCase(latestHyperArtifact.artifact_type || "artifact"), formatDateTime(latestHyperArtifact.generated_at), latestHyperArtifact.resolved_transport ? `Transport ${titleCase(latestHyperArtifact.resolved_transport)}` : null].filter(Boolean).join(" · ")
@@ -461,8 +410,6 @@ function updateDashboard() {
     elements.sidebarStepbitMeta.textContent = stepbitRepos.length
         ? stepbitRepos.map((repo) => `${repo.headline || titleCase(repo.role)}${repo.dirty ? " · dirty" : ""}`).join(" · ")
         : "No local Stepbit repos discovered yet";
-
-    renderPretradeTable();
 }
 
 function renderTable() {
@@ -507,42 +454,6 @@ function renderTable() {
     `).join("");
 }
 
-function renderPretradeTable() {
-    const pretrade = state.pretradePlans || { sessions: [], total_sessions: 0, available: false };
-    const sessions = Array.isArray(pretrade.sessions) ? pretrade.sessions : [];
-
-    if (!pretrade.available && !sessions.length) {
-        elements.pretradeBody.innerHTML = `<tr><td colspan="10" class="loading-state"><div class="empty-panel"><strong>No pre-trade artifacts found.</strong><span>Expected root: <code>outputs/pretrade_sessions</code>. Generate plans from the CLI to surface them here.</span></div></td></tr>`;
-        return;
-    }
-
-    if (!sessions.length) {
-        elements.pretradeBody.innerHTML = `<tr><td colspan="10" class="loading-state"><div class="empty-panel"><strong>No pre-trade plans available.</strong><span>The workbench stays bounded and read-only until local artifacts appear.</span></div></td></tr>`;
-        return;
-    }
-
-    elements.pretradeBody.innerHTML = sessions.map((session) => `
-        <tr>
-            <td><span class="font-mono">${escapeHtml(session.session_id || "unknown")}</span></td>
-            <td>${escapeHtml(session.symbol || "N/A")}</td>
-            <td>${escapeHtml(session.venue || "N/A")}</td>
-            <td><span class="badge ${modeBadge(session.side || "unknown")}">${escapeHtml(session.side || "unknown")}</span></td>
-            <td>${formatNumber(session.risk_amount)}</td>
-            <td>${formatNumber(session.notional)}</td>
-            <td>${formatNumber(session.risk_reward_ratio)}</td>
-            <td>${renderExecutionBadge(session)}</td>
-            <td class="text-secondary">${formatDateTime(session.generated_at)}</td>
-            <td>
-                <div class="table-actions">
-                    <a class="btn-icon" href="/${escapeAttribute(session.plan_path)}" target="_blank" rel="noreferrer" title="Open plan JSON">◉</a>
-                    <a class="btn-icon" href="/${escapeAttribute(session.plan_markdown_path)}" target="_blank" rel="noreferrer" title="Open plan markdown">↗</a>
-                    ${session.execution_bridge_path ? `<a class="btn-icon" href="/${escapeAttribute(session.execution_bridge_path)}" target="_blank" rel="noreferrer" title="Open execution bridge">⚑</a>` : ""}
-                </div>
-            </td>
-        </tr>
-    `).join("");
-}
-
 function route() {
     const hash = window.location.hash || "#/";
     Object.values(elements.views).forEach((view) => view.classList.remove("active"));
@@ -558,7 +469,7 @@ function route() {
     state.currentRunId = null;
     elements.views.runs.classList.add("active");
     elements.navItems.runs.classList.add("active");
-    elements.breadcrumb.textContent = "Research, Paper Ops, Pre-Trade, Broker Safety, Stepbit Boundary";
+    elements.breadcrumb.textContent = "Research, Paper Ops, Broker Safety, Stepbit Boundary";
 }
 
 async function loadRunDetail(runId, silent = false) {
@@ -771,7 +682,6 @@ function formatBytes(value) { return value == null ? "-" : value < 1024 ? `${val
 function shortCommit(value) { return value ? String(value).slice(0, 7) : ""; }
 function titleCase(value) { return String(value || "").split(/[_\s-]+/).filter(Boolean).map((part) => part[0].toUpperCase() + part.slice(1)).join(" "); }
 function escapeHtml(value) { return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
-function escapeAttribute(value) { return escapeHtml(value); }
 function modeBadge(mode) { return mode === "grid" || mode === "sweep" ? "badge-purple" : mode === "walkforward" || mode === "forward" ? "badge-green" : "badge-blue"; }
 function tone(value, positiveIsGood) { if (value == null) { return "tone-neutral"; } return positiveIsGood ? (value >= 0 ? "tone-positive" : "tone-negative") : (value <= -0.15 ? "tone-negative" : "tone-positive"); }
 function statusCount(health, key) { return Number(health?.status_counts?.[key] || 0); }
@@ -838,29 +748,6 @@ function buildPaperMeta(health) {
     return `Latest paper session: ${latestId} · ${latestState}`;
 }
 
-function buildPretradeStrip(pretrade) {
-    if (!pretrade?.available && !pretrade?.total_sessions) {
-        return `<span class="paper-status-pill is-muted">No pre-trade root yet</span>`;
-    }
-    const statuses = [
-        ["allowed", Number(pretrade?.execution_allowed_sessions || 0), "is-good"],
-        ["rejected", Number(pretrade?.execution_rejected_sessions || 0), "is-warning"],
-        ["planned", Number(pretrade?.total_sessions || 0), "is-live"],
-    ].filter(([, count]) => count > 0);
-    return statuses.length
-        ? statuses.map(([label, count, toneClass]) => `<span class="paper-status-pill ${toneClass}"><strong>${count}</strong>${titleCase(label)}</span>`).join("")
-        : `<span class="paper-status-pill is-muted">No pre-trade plans yet</span>`;
-}
-
-function buildPretradeMeta(pretrade) {
-    if (!pretrade?.available) {
-        return pretrade?.message || "Pre-trade visibility will appear when outputs/pretrade_sessions exists";
-    }
-    const latestId = pretrade.latest_session_id || "no plans";
-    const latestAt = formatDateTime(pretrade.latest_generated_at);
-    return `Latest plan: ${latestId} · ${latestAt}`;
-}
-
 function buildBrokerStrip(health) {
     if (!health?.available && !health?.total_sessions) {
         return `<span class="paper-status-pill is-muted">No broker root yet</span>`;
@@ -908,17 +795,4 @@ function buildStepbitMeta(workspace) {
         return "No Stepbit repos discovered yet.";
     }
     return repos.map((repo) => `${repo.headline || titleCase(repo.role)} · ${repo.branch || "n/a"}${repo.dirty ? " · dirty" : ""}`).join(" · ");
-}
-
-function renderExecutionBadge(session) {
-    if (!session.execution_bridge_present) {
-        return `<span class="paper-status-pill is-muted">Plan only</span>`;
-    }
-    if (session.execution_allowed === true) {
-        return `<span class="paper-status-pill is-good">Allowed</span>`;
-    }
-    const reasons = Array.isArray(session.execution_reasons) && session.execution_reasons.length
-        ? ` title="${escapeAttribute(session.execution_reasons.join(", "))}"`
-        : "";
-    return `<span class="paper-status-pill is-warning"${reasons}>Rejected</span>`;
 }
