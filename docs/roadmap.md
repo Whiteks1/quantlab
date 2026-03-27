@@ -290,6 +290,7 @@ Initial slice already present:
 - canonical Hyperliquid submit sessions and shared registry under `outputs/hyperliquid_submits/`
 - persistent Hyperliquid post-submit order-status artifacts over canonical submit sessions
 - explicit Hyperliquid reconciliation artifacts over canonical submit sessions using direct status plus open-order surfaces
+- supervised Hyperliquid cancel response artifacts over canonical submit sessions with explicit reviewer confirmation
 - Hyperliquid submission health summaries and deterministic alert snapshots over canonical submit sessions
 - read-only Kraken public preflight probes
 - read-only Kraken authenticated preflight probes

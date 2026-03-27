@@ -83,6 +83,7 @@ Current Stage D.1 scope covered:
 - canonical Hyperliquid submit sessions and shared registry under `outputs/hyperliquid_submits/`
 - persistent Hyperliquid post-submit order-status artifacts over canonical submit sessions
 - explicit Hyperliquid reconciliation artifacts over canonical submit sessions using direct status plus open-order surfaces
+- supervised Hyperliquid cancel response artifacts over canonical submit sessions with explicit reviewer confirmation
 - Hyperliquid submission health summaries and deterministic alert snapshots over canonical submit sessions
 - deterministic Kraken-style payload translation
 - read-only Kraken public preflight probes for pair support and basic readiness
@@ -116,16 +117,16 @@ Boundary note:
 - supervised submit gate artifacts are the final local confirmation step before any future submit implementation, but they still do not submit anything by themselves
 - supervised submit stub artifacts are the first operational shape of a future submit path, but they still remain local and do not hit the broker
 - supervised real-submit response artifacts are the first intentionally narrow path that can hit Kraken's real order endpoint, and they still require explicit confirmation plus a previously validated source session
-- supervised Hyperliquid submit response artifacts are intentionally narrower than the Kraken submit stack: they now have canonical session lifecycle, direct status refresh, first-pass reconciliation, and local health/alert visibility, but still do not yet provide cancel flow
+- supervised Hyperliquid submit response artifacts are intentionally narrower than the Kraken submit stack: they now have canonical session lifecycle, direct status refresh, first-pass reconciliation, a first cancel boundary, and local health/alert visibility
 - reconciliation is now the required safety path for ambiguous submit states before any future retry logic is introduced
-- persistent order-status refresh is now the first operator-facing post-submit visibility layer before any future continuous supervision or cancel flow
+- persistent order-status refresh remains the first operator-facing post-submit visibility layer before any future continuous supervision or websocket flow
 - broker submission health and alerts are local operator surfaces only; they summarize risky states but do not trigger broker-side actions by themselves
 
 ## Next Step
 
 After this submit-safety slice is stable, the next logical implementation step is:
 
-- deeper post-submit supervision such as cancel boundaries and richer order-state reconciliation behind the same boundary
+- richer post-submit supervision such as deeper fill/close-state reconciliation behind the same boundary
 
 ## Related Documents
 

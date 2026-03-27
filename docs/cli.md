@@ -465,6 +465,26 @@ The reconciliation step is conservative:
 - it falls back to `openOrders` and `frontendOpenOrders` matching by `oid` or `cloid`
 - it leaves the session in `unknown` with explicit reasons when no safe match is found
 
+### `--hyperliquid-submit-sessions-cancel`
+
+Submit a supervised cancel request for one canonical Hyperliquid submit session:
+
+```bash
+python main.py --hyperliquid-submit-sessions-cancel outputs/hyperliquid_submits/<session_id> --hyperliquid-cancel-reviewer marce --hyperliquid-cancel-confirm
+```
+
+This writes:
+
+- `hyperliquid_cancel_response.json`
+
+The cancel step is intentionally narrow:
+
+- it requires an existing signed-action artifact and submit-response artifact
+- it signs a fresh cancel action with the current Hyperliquid signer backend
+- it prefers `oid` and falls back to `cloid` when needed
+- it records cancel acceptance separately from remote order-state confirmation
+- it does not claim the order is canceled until later status/reconciliation confirms that state
+
 ### `--hyperliquid-submit-sessions-health`
 
 Summarize Hyperliquid submission health across canonical submit sessions:
@@ -477,6 +497,7 @@ This prints a compact operator summary with:
 
 - total sessions
 - submit-response coverage
+- cancel-response coverage
 - submitted session count
 - sessions with known order state
 - sessions with reconciliation artifacts
