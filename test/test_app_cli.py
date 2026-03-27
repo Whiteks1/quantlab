@@ -44,6 +44,15 @@ def test_determine_session_mode_for_hyperliquid_submit_health():
     assert mode == "hyperliquid_submit"
 
 
+def test_determine_session_mode_for_hyperliquid_submit_reconcile():
+    parser = app._build_argument_parser()
+    args = parser.parse_args(["--hyperliquid-submit-sessions-reconcile", "outputs/hyperliquid_submits/demo"])
+
+    mode = app._determine_session_mode(args, json_command=None)
+
+    assert mode == "hyperliquid_submit"
+
+
 def test_determine_session_mode_prefers_json_command():
     parser = app._build_argument_parser()
     args = parser.parse_args(["--paper"])

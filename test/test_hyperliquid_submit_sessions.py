@@ -18,6 +18,7 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "hyperliquid_submit_sessions_show": None,
         "hyperliquid_submit_sessions_index": None,
         "hyperliquid_submit_sessions_status": None,
+        "hyperliquid_submit_sessions_reconcile": None,
         "hyperliquid_submit_sessions_health": None,
         "hyperliquid_submit_sessions_alerts": None,
         "hyperliquid_preflight_timeout": 10.0,
@@ -153,6 +154,7 @@ def test_hyperliquid_submit_health_summary(tmp_path, capsys):
     output = capsys.readouterr().out
     assert "Hyperliquid submission health" in output
     assert "total_sessions" in output
+    assert "reconciliation_sessions" in output
     assert "latest_submit_id" in output
 
 
@@ -222,6 +224,89 @@ def test_refresh_hyperliquid_submit_status(monkeypatch, tmp_path):
     assert session_status["status"] == "open"
     assert session_status["order_status_known"] is True
     assert session_status["order_status_state"] == "open"
+
+
+def test_refresh_hyperliquid_submit_reconciliation(monkeypatch, tmp_path):
+    from quantlab.cli import hyperliquid_submit_sessions as module
+
+    session_dir = _write_session(tmp_path)
+
+    def fake_reconciliation(self, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.hyperliquid.reconciliation",
+                    "adapter_name": "hyperliquid",
+                    "generated_at": "2026-03-27T12:06:00",
+                    "source_session_id": "20260327_hyperliquid_submit_demo",
+                    "execution_account_id": "0x1111111111111111111111111111111111111111",
+                    "status_known": True,
+                    "normalized_state": "open",
+                    "resolution_source": "open_orders",
+                    "oid": 12345,
+                    "cloid": "abc123cloid",
+                    "order_status_report": {
+                        "status_known": False,
+                        "normalized_state": "unknown",
+                    },
+                    "matched_open_order": {"oid": 12345},
+                    "matched_frontend_open_order": None,
+                    "errors": [],
+                }
+
+        return _Fake()
+
+    monkeypatch.setattr(module.HyperliquidBrokerAdapter, "build_reconciliation_report", fake_reconciliation)
+
+    args = _make_args(hyperliquid_submit_sessions_reconcile=str(session_dir))
+    assert handle_hyperliquid_submit_sessions_commands(args) is True
+
+    reconciliation_artifact = session_dir / "hyperliquid_reconciliation.json"
+    assert reconciliation_artifact.exists()
+    reconciliation_payload = json.loads(reconciliation_artifact.read_text(encoding="utf-8"))
+    assert reconciliation_payload["resolution_source"] == "open_orders"
+
+    session_status = json.loads((session_dir / "session_status.json").read_text(encoding="utf-8"))
+    assert session_status["status"] == "open"
+    assert session_status["reconciliation_known"] is True
+    assert session_status["reconciliation_state"] == "open"
+    assert session_status["reconciliation_source"] == "open_orders"
+
+
+def test_hyperliquid_submit_alerts_use_reconciliation_state(tmp_path, capsys):
+    session_dir = _write_session(tmp_path)
+    (session_dir / "hyperliquid_order_status.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.order_status",
+                "generated_at": "2026-03-27T12:05:00",
+                "status_known": False,
+                "normalized_state": "unknown",
+                "errors": ["missing_order"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "hyperliquid_reconciliation.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.reconciliation",
+                "generated_at": "2026-03-27T12:06:00",
+                "status_known": True,
+                "normalized_state": "open",
+                "resolution_source": "open_orders",
+                "errors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    args = _make_args(hyperliquid_submit_sessions_alerts=str(tmp_path))
+    assert handle_hyperliquid_submit_sessions_commands(args) is True
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["alert_status"] == "ok"
+    assert payload["has_alerts"] is False
 
 
 def test_invalid_hyperliquid_submit_session_raises(tmp_path):

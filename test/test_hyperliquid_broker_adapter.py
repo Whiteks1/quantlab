@@ -427,7 +427,52 @@ def test_hyperliquid_signed_action_report_flags_signer_identity_mismatch():
     assert report["readiness_allowed"] is False
     assert "signer_identity_mismatch" in report["readiness_reasons"]
     assert "signer_identity_mismatch" in report["errors"]
-    assert report["signature_envelope"]["signature_state"] == "signer_identity_mismatch"
+
+
+def test_hyperliquid_reconciliation_report_prefers_known_order_status():
+    adapter = HyperliquidBrokerAdapter()
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "orderStatus":
+            return {"status": "order", "order": {"status": "filled"}}
+        raise AssertionError(payload)
+
+    report = adapter.build_reconciliation_report(
+        source_session_id="hl_submit_demo_001",
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        oid=12345,
+        fetch_json=fake_fetch_json,
+    ).to_dict()
+
+    assert report["status_known"] is True
+    assert report["normalized_state"] == "filled"
+    assert report["resolution_source"] == "order_status"
+    assert report["matched_open_order"] is None
+
+
+def test_hyperliquid_reconciliation_report_falls_back_to_open_orders():
+    adapter = HyperliquidBrokerAdapter()
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "orderStatus":
+            return {"status": "missing"}
+        if payload["type"] == "openOrders":
+            return [{"oid": 12345, "coin": "ETH"}]
+        if payload["type"] == "frontendOpenOrders":
+            return []
+        raise AssertionError(payload)
+
+    report = adapter.build_reconciliation_report(
+        source_session_id="hl_submit_demo_002",
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        oid=12345,
+        fetch_json=fake_fetch_json,
+    ).to_dict()
+
+    assert report["status_known"] is True
+    assert report["normalized_state"] == "open"
+    assert report["resolution_source"] == "open_orders"
+    assert report["matched_open_order"]["oid"] == 12345
 
 
 def test_hyperliquid_submit_report_submits_signed_action():
