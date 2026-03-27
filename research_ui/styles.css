@@ -558,6 +558,13 @@ a {
     min-width: 0;
 }
 
+.pretrade-insights {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
 .insight-card,
 .stat-card,
 .detail-panel,
@@ -637,6 +644,10 @@ a {
     background: linear-gradient(90deg, rgba(95, 209, 194, 0.8), rgba(240, 179, 93, 0));
 }
 
+.ops-overview .ops-card:nth-child(5)::after {
+    background: linear-gradient(90deg, rgba(240, 107, 107, 0.78), rgba(103, 180, 255, 0));
+}
+
 .paper-strip {
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
@@ -657,6 +668,11 @@ a {
     font-family: var(--font-display);
     font-size: 1.1rem;
     line-height: 1;
+}
+
+.pretrade-note {
+    color: var(--muted);
+    line-height: 1.5;
 }
 
 .paper-status-pill.is-good {
