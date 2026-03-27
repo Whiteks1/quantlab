@@ -17,6 +17,7 @@ build/
 .venv/
 venv/
 env/
+desktop/node_modules/
 
 # =========================
 # Environment secrets

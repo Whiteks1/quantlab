@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuantLab Desktop</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-mark">QL</div>
+                <div>
+                    <div class="brand-title">QuantLab Desktop</div>
+                    <div class="brand-subtitle">Single research workspace</div>
+                </div>
+            </div>
+
+            <nav class="nav-list" aria-label="Primary">
+                <button class="nav-item is-active" data-action="open-chat">Chat</button>
+                <button class="nav-item" data-action="open-launch">Launch</button>
+                <button class="nav-item" data-action="open-runs">Runs</button>
+                <button class="nav-item" data-action="open-compare">Compare</button>
+                <button class="nav-item" data-action="open-ops">Paper Ops</button>
+            </nav>
+
+            <section class="sidebar-panel">
+                <div class="panel-label">Current principle</div>
+                <p>One shell, one runtime strip, one place to launch, inspect, compare, and decide.</p>
+            </section>
+
+            <section class="sidebar-panel">
+                <div class="panel-label">Runtime</div>
+                <div id="runtime-summary" class="runtime-summary">Starting QuantLab services...</div>
+                <div id="runtime-meta" class="runtime-meta">Waiting for local workspace state.</div>
+            </section>
+
+            <section class="sidebar-panel">
+                <div class="panel-label">Suggested actions</div>
+                <div class="chip-list">
+                    <button class="chip" data-prompt="Open runs">Open runs</button>
+                    <button class="chip" data-prompt="Open compare">Open compare</button>
+                    <button class="chip" data-prompt="Show runtime status">Show runtime status</button>
+                    <button class="chip" data-prompt="Open latest run">Open latest run</button>
+                </div>
+            </section>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div>
+                    <div class="eyebrow">QuantLab Desktop v0</div>
+                    <h1 id="topbar-title">Chat</h1>
+                </div>
+                <div class="topbar-actions">
+                    <button class="ghost-btn" id="command-palette-trigger" type="button">Command Palette</button>
+                    <button class="primary-btn" id="open-browser-runs" type="button">Open In Browser</button>
+                </div>
+            </header>
+
+            <section class="command-bar">
+                <label class="command-input-wrap" for="palette-input">
+                    <span>Quick command</span>
+                    <input id="palette-input" type="text" placeholder="Type a command like 'open runs' or 'open latest run'">
+                </label>
+                <button class="ghost-btn" id="run-command" type="button">Run</button>
+            </section>
+
+            <section class="workspace-grid">
+                <div class="left-column">
+                    <section class="chat-panel card">
+                        <div class="section-head">
+                            <div>
+                                <div class="section-label">QuantLab assistant</div>
+                                <h2>Command bus</h2>
+                            </div>
+                        </div>
+
+                        <div id="chat-log" class="chat-log"></div>
+
+                        <form id="chat-form" class="chat-form">
+                            <textarea id="chat-input" rows="3" placeholder="Ask for a deterministic action: open compare, show runtime status, open latest run..."></textarea>
+                            <div class="chat-actions">
+                                <button class="primary-btn" type="submit">Send</button>
+                            </div>
+                        </form>
+                    </section>
+                </div>
+
+                <div class="right-column">
+                    <section class="card tabs-shell">
+                        <div class="section-head">
+                            <div>
+                                <div class="section-label">Context tabs</div>
+                                <h2>Focused work surfaces</h2>
+                            </div>
+                        </div>
+
+                        <div id="tabs-bar" class="tabs-bar"></div>
+                        <div id="tab-content" class="tab-content"></div>
+                    </section>
+
+                    <section class="runtime-strip card">
+                        <div class="section-head">
+                            <div>
+                                <div class="section-label">Runtime strip</div>
+                                <h2>Service state</h2>
+                            </div>
+                        </div>
+                        <div id="runtime-chips" class="runtime-chips"></div>
+                    </section>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="palette-overlay" class="palette-overlay hidden" role="dialog" aria-modal="true">
+        <div class="palette-dialog">
+            <div class="section-head">
+                <div>
+                    <div class="section-label">Command palette</div>
+                    <h2>Open a surface</h2>
+                </div>
+                <button class="ghost-btn" id="close-palette" type="button">Close</button>
+            </div>
+            <div id="palette-results" class="palette-results"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

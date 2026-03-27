@@ -151,6 +151,31 @@ Compatibility path:
 python main.py --help
 ```
 
+## Desktop Shell Prototype
+
+The repository now also includes an initial desktop shell under [desktop/](./desktop/).
+
+Its current role is:
+
+- launch a single Electron app instead of juggling browser tabs
+- auto-start `research_ui/server.py`
+- provide a chat-centered command bus
+- open `Launch`, `Runs`, `Compare`, and `Paper Ops` as desktop tabs
+- surface local runtime visibility for QuantLab and Stepbit
+
+Start it with:
+
+```powershell
+cd desktop
+npm install
+npm start
+```
+
+See also:
+
+- [desktop/README.md](./desktop/README.md)
+- [docs/quantlab-desktop-v1.md](./docs/quantlab-desktop-v1.md)
+
 ## Current Capabilities
 
 - `--json-request`: machine-facing request entrypoint for `run`, `sweep`, `forward`, and `portfolio`
