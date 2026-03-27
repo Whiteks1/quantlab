@@ -45,6 +45,12 @@ def main() -> None:
         default="fixed",
         help="Backtest slippage mode to profile.",
     )
+    parser.add_argument(
+        "--backend",
+        choices=("python", "numba"),
+        default="python",
+        help="Backtest engine backend to profile.",
+    )
     parser.add_argument("--seed", type=int, default=42, help="Synthetic data seed.")
     parser.add_argument(
         "--json-out",
@@ -57,6 +63,7 @@ def main() -> None:
         repeats=args.repeats,
         warmup=args.warmup,
         slippage_mode=args.slippage_mode,
+        backend=args.backend,
         seed=args.seed,
     )
 
@@ -65,6 +72,7 @@ def main() -> None:
     print(f"  repeats       : {report['repeats']}")
     print(f"  warmup        : {report['warmup']}")
     print(f"  slippage_mode : {report['slippage_mode']}")
+    print(f"  backend       : {report['backend']}")
     print("")
     for workload in report["workloads"]:
         print(f"rows={workload['rows']}")

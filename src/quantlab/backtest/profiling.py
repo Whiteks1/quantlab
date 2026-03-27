@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from quantlab.backtest.engine import run_backtest
+from quantlab.backtest.engine import available_backtest_backends, run_backtest
 
 
 @dataclass(frozen=True)
@@ -16,6 +16,7 @@ class BacktestProfileResult:
     repeats: int
     warmup: int
     slippage_mode: str
+    backend: str
     elapsed_seconds: tuple[float, ...]
     mean_seconds: float
     median_seconds: float
@@ -32,6 +33,7 @@ class BacktestProfileResult:
             "repeats": self.repeats,
             "warmup": self.warmup,
             "slippage_mode": self.slippage_mode,
+            "backend": self.backend,
             "elapsed_seconds": list(self.elapsed_seconds),
             "mean_seconds": self.mean_seconds,
             "median_seconds": self.median_seconds,
@@ -72,6 +74,7 @@ def profile_backtest_workload(
     repeats: int = 3,
     warmup: int = 1,
     slippage_mode: str = "fixed",
+    backend: str = "python",
     seed: int = 42,
 ) -> BacktestProfileResult:
     if repeats <= 0:
@@ -83,12 +86,22 @@ def profile_backtest_workload(
 
     last_result: pd.DataFrame | None = None
     for _ in range(warmup):
-        last_result = run_backtest(df=df, signals=signals, slippage_mode=slippage_mode)
+        last_result = run_backtest(
+            df=df,
+            signals=signals,
+            slippage_mode=slippage_mode,
+            backend=backend,
+        )
 
     timings: list[float] = []
     for _ in range(repeats):
         started = time.perf_counter()
-        last_result = run_backtest(df=df, signals=signals, slippage_mode=slippage_mode)
+        last_result = run_backtest(
+            df=df,
+            signals=signals,
+            slippage_mode=slippage_mode,
+            backend=backend,
+        )
         timings.append(time.perf_counter() - started)
 
     assert last_result is not None
@@ -104,6 +117,7 @@ def profile_backtest_workload(
         repeats=repeats,
         warmup=warmup,
         slippage_mode=slippage_mode,
+        backend=backend,
         elapsed_seconds=tuple(timings),
         mean_seconds=mean_seconds,
         median_seconds=median_seconds,
@@ -122,6 +136,7 @@ def build_backtest_profile_report(
     repeats: int = 3,
     warmup: int = 1,
     slippage_mode: str = "fixed",
+    backend: str = "python",
     seed: int = 42,
 ) -> dict[str, object]:
     workloads = [
@@ -130,16 +145,19 @@ def build_backtest_profile_report(
             repeats=repeats,
             warmup=warmup,
             slippage_mode=slippage_mode,
+            backend=backend,
             seed=seed,
         ).to_dict()
         for size in sizes
     ]
     return {
         "artifact_type": "quantlab.backtest.profile",
+        "available_backends": list(available_backtest_backends()),
         "sizes": list(sizes),
         "repeats": repeats,
         "warmup": warmup,
         "slippage_mode": slippage_mode,
+        "backend": backend,
         "seed": seed,
         "workloads": workloads,
     }
