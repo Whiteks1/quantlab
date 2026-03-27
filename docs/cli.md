@@ -296,7 +296,7 @@ Signer backend options:
 
 Current limitation:
 
-- nothing is submitted to Hyperliquid
+- this command itself does not submit anything to Hyperliquid
 - if no signing key is present, the artifact keeps `signature_state = pending_signer_backend`
 
 Example with signer backend enabled through environment:
@@ -307,6 +307,45 @@ python main.py --hyperliquid-signed-action-outdir outputs/broker_preflight/hyper
 
 - on success, the artifact moves to `signature_state = signed`
 - if the derived signer address does not match `execution-signer-id`, the artifact reports `signature_state = signer_identity_mismatch`
+
+### `--hyperliquid-submit-signed-action`
+
+Submit a previously signed Hyperliquid artifact through the first supervised remote-submit path:
+
+```bash
+python main.py --hyperliquid-submit-signed-action outputs/broker_preflight/hyperliquid_signed_action_demo/hyperliquid_signed_action.json --hyperliquid-submit-reviewer marce --hyperliquid-submit-confirm --hyperliquid-submit-note "first supervised submit"
+```
+
+Required flags:
+
+- `--hyperliquid-submit-reviewer`
+- `--hyperliquid-submit-confirm`
+
+Optional:
+
+- `--hyperliquid-submit-note`
+
+This writes:
+
+- `outputs/broker_preflight/hyperliquid_signed_action_demo/hyperliquid_submit_response.json`
+
+The artifact currently includes:
+
+- source signed-action path
+- source signer identity and payload hash
+- final submit payload sent to Hyperliquid
+- explicit reviewer and optional note
+- remote-submit state
+- exchange response snapshot
+- response type where present
+- explicit errors when submission is rejected or the signed artifact is not ready
+
+Important safety notes:
+
+- this path only accepts `hyperliquid_signed_action.json`
+- the source artifact must already be `signature_state = signed`
+- this is a narrow supervised submit surface, not yet a full session/reconciliation framework
+- no websocket execution, cancel flow, or Hyperliquid post-submit tracking exists yet
 
 ### `--kraken-preflight-outdir`
 

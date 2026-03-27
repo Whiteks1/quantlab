@@ -2,7 +2,7 @@
 
 ## Active Stage
 - **Stage**: Stage D.2 — Supervised Broker Submit Safety
-- **Last Updated**: 2026-03-26
+- **Last Updated**: 2026-03-27
 - **Focus**: Stage D.2 is centered on closing ambiguity around supervised Kraken submit, especially idempotency, reconciliation, and post-submit operator safety.
 - **Authority Note**: Stepbit-facing integration remains a secondary boundary track. QuantLab stays autonomous and external consumer needs do not override QuantLab-owned priorities.
 - **Product Identity Note**: Publicly, QuantLab should now be described as a `web3 app` in direction, but still as a supervised and safety-first execution system in current maturity.
@@ -40,6 +40,7 @@
   - preserve paper-session discipline as a prerequisite, not the current bottleneck
   - keep Kraken as the first implemented execution boundary while positioning Hyperliquid as the first next venue intended for personal connection
   - review whether the current boundary can express Hyperliquid signer, wallet, routing, and websocket semantics without ad hoc adapter leaks
+  - keep the first Hyperliquid supervised submit path intentionally narrow and auditable before adding richer session, status, or websocket execution work
 - **Implemented Direction**:
   - canonical run artifacts now center on `metadata.json`, `config.json`, `metrics.json`, and `report.json`
   - successful plain `run` executions now write that canonical artifact pack under `outputs/runs/<run_id>/`
@@ -77,6 +78,7 @@
   - Hyperliquid now also has a read-only account/signer readiness artifact that checks role resolution and basic execution-account visibility before any future signed action path
   - Hyperliquid now also has a local action/signature-envelope build surface with resolved nonce and `expiresAfter`
   - Hyperliquid signer backend integration can now produce a real local L1 action signature while still leaving submit for a later slice
+  - Hyperliquid signed-action artifacts can now also drive a first supervised submit path that materializes `hyperliquid_submit_response.json` with explicit reviewer confirmation and exchange response capture
   - Hyperliquid boundary review now documents the main contract gaps around signer identity, API wallets, subaccounts/vaults, and websocket-first venue interaction
   - native acceleration strategy now documents `Numba` as the first acceleration experiment and the backtest engine as the first realistic hotspot candidate before any broader `C++` or `Rust` move
   - a local backtest profiling surface now exists to measure the Python engine before any `Numba` or native extraction work
