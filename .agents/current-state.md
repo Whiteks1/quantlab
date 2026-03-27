@@ -41,6 +41,7 @@
   - keep Kraken as the first implemented execution boundary while positioning Hyperliquid as the first next venue intended for personal connection
   - review whether the current boundary can express Hyperliquid signer, wallet, routing, and websocket semantics without ad hoc adapter leaks
   - keep the first Hyperliquid supervised submit path intentionally narrow and auditable before adding richer session, status, or websocket execution work
+  - add local operator visibility over canonical Hyperliquid submit sessions before widening execution further
 - **Implemented Direction**:
   - canonical run artifacts now center on `metadata.json`, `config.json`, `metrics.json`, and `report.json`
   - successful plain `run` executions now write that canonical artifact pack under `outputs/runs/<run_id>/`
@@ -81,6 +82,7 @@
   - Hyperliquid signed-action artifacts can now also drive a first supervised submit path that materializes `hyperliquid_submit_response.json` with explicit reviewer confirmation and exchange response capture
   - Hyperliquid supervised submit can now also materialize canonical local submit sessions and a shared index under `outputs/hyperliquid_submits/`
   - Hyperliquid submit sessions can now also materialize `hyperliquid_order_status.json` with normalized post-submit state from direct `orderStatus` queries
+  - Hyperliquid submit sessions now also support aggregate health summaries and deterministic alert snapshots for operator visibility
   - Hyperliquid boundary review now documents the main contract gaps around signer identity, API wallets, subaccounts/vaults, and websocket-first venue interaction
   - native acceleration strategy now documents `Numba` as the first acceleration experiment and the backtest engine as the first realistic hotspot candidate before any broader `C++` or `Rust` move
   - a local backtest profiling surface now exists to measure the Python engine before any `Numba` or native extraction work

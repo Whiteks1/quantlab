@@ -406,6 +406,38 @@ Refresh normalized post-submit order status for one canonical Hyperliquid submit
 python main.py --hyperliquid-submit-sessions-status outputs/hyperliquid_submits/<session_id>
 ```
 
+### `--hyperliquid-submit-sessions-health`
+
+Summarize Hyperliquid submission health across canonical submit sessions:
+
+```bash
+python main.py --hyperliquid-submit-sessions-health outputs/hyperliquid_submits
+```
+
+This prints a compact operator summary with:
+
+- total sessions
+- submit-response coverage
+- submitted session count
+- sessions with known order state
+- latest submit id/state
+- latest notable issue id/code/time
+
+### `--hyperliquid-submit-sessions-alerts`
+
+Emit a deterministic alert snapshot for notable Hyperliquid submit-session states:
+
+```bash
+python main.py --hyperliquid-submit-sessions-alerts outputs/hyperliquid_submits
+```
+
+Alert output stays local and read-only. It is meant to highlight states such as:
+
+- submitted sessions missing a persistent `hyperliquid_order_status.json`
+- submitted sessions whose remote order state is still unknown
+- rejected or canceled remote order states
+- submit attempts that failed or remain in a non-ready state
+
 This writes:
 
 - `outputs/hyperliquid_submits/<session_id>/hyperliquid_order_status.json`
