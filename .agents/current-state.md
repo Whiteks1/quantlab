@@ -90,6 +90,7 @@
   - a local backtest profiling surface now exists to measure the Python engine before any `Numba` or native extraction work
   - the backtest engine now also has an optional `Numba` pilot backend for the extracted inner loop while keeping Python as the default path
   - the pre-trade subsystem now has an explicit boundary ADR: the calculator may act as an upstream workbench, but QuantLab remains the owner of policy, draft execution bridging, and all execution authority
+  - QuantLab now also has a bounded intake for `calculadora_riego_trading` handoff artifacts, validating external machine contracts and required context before any future draft execution bridging
 
 
 ## Known Issues / Technical Debt

@@ -35,6 +35,7 @@ _SYNC_NAMES = [
     "handle_broker_dry_runs_commands",
     "handle_broker_order_validations_commands",
     "handle_hyperliquid_submit_sessions_commands",
+    "handle_pretrade_handoff_commands",
     "run_sweep",
     "write_run_report",
     "write_advanced_report",
