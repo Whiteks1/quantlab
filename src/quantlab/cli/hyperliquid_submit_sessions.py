@@ -160,7 +160,6 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  effective_state     : {supervision_report['final_reconciliation_state']}")
         print(f"  fill_state          : {supervision_report['final_fill_state']}")
         return True
-
     if getattr(args, "hyperliquid_submit_sessions_fills", None):
         session_dir = _require_directory(
             args.hyperliquid_submit_sessions_fills,
