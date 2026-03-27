@@ -210,6 +210,22 @@ def _write_hyperliquid_submit_session(root: Path, session_id: str) -> None:
         ),
         encoding="utf-8",
     )
+    (session_dir / "hyperliquid_supervision.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.supervision",
+                "adapter_name": "hyperliquid",
+                "generated_at": "2026-03-27T12:07:00",
+                "supervision_state": "active",
+                "attention_required": False,
+                "polls_completed": 3,
+                "monitoring_mode": "websocket_aware_rest_polling",
+                "resolved_transport": "websocket",
+                "errors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
 def test_build_paper_health_payload_returns_zero_state_when_root_missing(tmp_path: Path):
     payload, status = research_ui_server.build_paper_health_payload(tmp_path)
 
@@ -295,10 +311,11 @@ def test_build_hyperliquid_surface_payload_detects_latest_artifacts(tmp_path: Pa
     assert payload["status"] == "ok"
     assert payload["implemented_surfaces"]["signed_action_build"] is True
     assert payload["implemented_surfaces"]["order_submit"] is True
+    assert payload["implemented_surfaces"]["continuous_supervision"] is True
     assert payload["submit_health"]["total_sessions"] == 1
     assert payload["submit_has_alerts"] is False
     assert payload["latest_artifacts"]["order_status"]["normalized_state"] == "open"
-    assert payload["latest_ready_artifact_type"] == "quantlab.hyperliquid.order_status"
+    assert payload["latest_ready_artifact_type"] == "quantlab.hyperliquid.supervision"
     assert payload["signature_state"] in {"pending_signer_backend", "signed"}
 
 

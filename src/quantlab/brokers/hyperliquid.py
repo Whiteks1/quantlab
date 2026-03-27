@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import datetime as dt
+from decimal import Decimal, InvalidOperation
 import hashlib
 import json
 import os
@@ -262,6 +263,53 @@ class HyperliquidSubmitReport:
 
 
 @dataclass(frozen=True)
+class HyperliquidCancelReport:
+    adapter_name: str
+    generated_at: str
+    source_session_id: str
+    source_action_hash: str | None
+    source_signer_id: str | None
+    source_signing_payload_sha256: str | None
+    source_submit_state: str | None
+    cancel_payload: dict[str, object] | None
+    cancel_state: str
+    remote_cancel_called: bool
+    cancel_accepted: bool
+    response_type: str | None
+    asset: int | None
+    oid: int | None
+    cloid: str | None
+    exchange_response: dict[str, object] | None
+    reviewer: str
+    note: str | None
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact_type": "quantlab.hyperliquid.cancel_response",
+            "adapter_name": self.adapter_name,
+            "generated_at": self.generated_at,
+            "source_session_id": self.source_session_id,
+            "source_action_hash": self.source_action_hash,
+            "source_signer_id": self.source_signer_id,
+            "source_signing_payload_sha256": self.source_signing_payload_sha256,
+            "source_submit_state": self.source_submit_state,
+            "cancel_payload": self.cancel_payload,
+            "cancel_state": self.cancel_state,
+            "remote_cancel_called": self.remote_cancel_called,
+            "cancel_accepted": self.cancel_accepted,
+            "response_type": self.response_type,
+            "asset": self.asset,
+            "oid": self.oid,
+            "cloid": self.cloid,
+            "exchange_response": self.exchange_response,
+            "reviewer": self.reviewer,
+            "note": self.note,
+            "errors": list(self.errors),
+        }
+
+
+@dataclass(frozen=True)
 class HyperliquidOrderStatusReport:
     adapter_name: str
     generated_at: str
@@ -306,12 +354,22 @@ class HyperliquidReconciliationReport:
     execution_account_id: str | None
     status_known: bool
     normalized_state: str | None
+    close_state: str | None
+    fill_state: str | None
     resolution_source: str | None
     oid: int | None
     cloid: str | None
+    original_size: str | None
+    filled_size: str | None
+    remaining_size: str | None
+    fill_count: int
+    average_fill_price: str | None
+    last_fill_time: int | None
     order_status_report: dict[str, object] | None
     matched_open_order: dict[str, object] | None
     matched_frontend_open_order: dict[str, object] | None
+    matched_historical_order: dict[str, object] | None
+    matched_fill_sample: tuple[dict[str, object], ...]
     errors: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
@@ -323,12 +381,73 @@ class HyperliquidReconciliationReport:
             "execution_account_id": self.execution_account_id,
             "status_known": self.status_known,
             "normalized_state": self.normalized_state,
+            "close_state": self.close_state,
+            "fill_state": self.fill_state,
             "resolution_source": self.resolution_source,
             "oid": self.oid,
             "cloid": self.cloid,
+            "original_size": self.original_size,
+            "filled_size": self.filled_size,
+            "remaining_size": self.remaining_size,
+            "fill_count": self.fill_count,
+            "average_fill_price": self.average_fill_price,
+            "last_fill_time": self.last_fill_time,
             "order_status_report": self.order_status_report,
             "matched_open_order": self.matched_open_order,
             "matched_frontend_open_order": self.matched_frontend_open_order,
+            "matched_historical_order": self.matched_historical_order,
+            "matched_fill_sample": list(self.matched_fill_sample),
+            "errors": list(self.errors),
+        }
+
+
+@dataclass(frozen=True)
+class HyperliquidFillSummaryReport:
+    adapter_name: str
+    generated_at: str
+    source_session_id: str
+    execution_account_id: str | None
+    fills_known: bool
+    query_attempted: bool
+    oid: int | None
+    cloid: str | None
+    fill_state: str | None
+    original_size: str | None
+    filled_size: str | None
+    remaining_size: str | None
+    fill_count: int
+    average_fill_price: str | None
+    total_fee: str | None
+    total_builder_fee: str | None
+    total_closed_pnl: str | None
+    first_fill_time: int | None
+    last_fill_time: int | None
+    matched_fill_sample: tuple[dict[str, object], ...]
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact_type": "quantlab.hyperliquid.fill_summary",
+            "adapter_name": self.adapter_name,
+            "generated_at": self.generated_at,
+            "source_session_id": self.source_session_id,
+            "execution_account_id": self.execution_account_id,
+            "fills_known": self.fills_known,
+            "query_attempted": self.query_attempted,
+            "oid": self.oid,
+            "cloid": self.cloid,
+            "fill_state": self.fill_state,
+            "original_size": self.original_size,
+            "filled_size": self.filled_size,
+            "remaining_size": self.remaining_size,
+            "fill_count": self.fill_count,
+            "average_fill_price": self.average_fill_price,
+            "total_fee": self.total_fee,
+            "total_builder_fee": self.total_builder_fee,
+            "total_closed_pnl": self.total_closed_pnl,
+            "first_fill_time": self.first_fill_time,
+            "last_fill_time": self.last_fill_time,
+            "matched_fill_sample": list(self.matched_fill_sample),
             "errors": list(self.errors),
         }
 
@@ -1103,6 +1222,251 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             errors=tuple(_unique_reasons(errors)),
         )
 
+    def build_cancel_report(
+        self,
+        *,
+        source_session_id: str,
+        signed_action_artifact: dict[str, object],
+        submit_response_artifact: dict[str, object],
+        reviewer: str,
+        note: str | None = None,
+        timeout_seconds: float = 10.0,
+        post_json=None,
+        remote_cancel: bool = True,
+        signing_private_key: str | None = None,
+        signing_private_key_env: str = "HYPERLIQUID_PRIVATE_KEY",
+        is_mainnet: bool = True,
+    ) -> HyperliquidCancelReport:
+        errors: list[str] = []
+        cancel_payload = None
+        exchange_response: dict[str, object] | None = None
+        response_type = None
+        remote_cancel_called = False
+        cancel_accepted = False
+        cancel_state = "cancel_not_ready"
+
+        source_envelope = (
+            signed_action_artifact.get("signature_envelope", {}) if isinstance(signed_action_artifact, dict) else {}
+        )
+        source_action_hash = _safe_string(source_envelope.get("action_hash")) if isinstance(source_envelope, dict) else None
+        source_signer_id = _safe_string(source_envelope.get("signer_id")) if isinstance(source_envelope, dict) else None
+        source_signing_payload_sha256 = (
+            _safe_string(source_envelope.get("signing_payload_sha256")) if isinstance(source_envelope, dict) else None
+        )
+        source_submit_state = (
+            _safe_string(submit_response_artifact.get("submit_state")) if isinstance(submit_response_artifact, dict) else None
+        )
+
+        if not isinstance(signed_action_artifact, dict):
+            errors.append("invalid_signed_action_artifact")
+        if not isinstance(submit_response_artifact, dict):
+            errors.append("invalid_submit_response_artifact")
+
+        if isinstance(signed_action_artifact, dict):
+            if signed_action_artifact.get("artifact_type") != "quantlab.hyperliquid.signed_action":
+                errors.append("unexpected_signed_action_artifact_type")
+            if not bool(signed_action_artifact.get("readiness_allowed")):
+                errors.append("signed_action_not_ready")
+        if isinstance(submit_response_artifact, dict):
+            if submit_response_artifact.get("artifact_type") != "quantlab.hyperliquid.submit_response":
+                errors.append("unexpected_submit_response_artifact_type")
+            if not bool(submit_response_artifact.get("remote_submit_called")):
+                errors.append("submit_not_attempted")
+            if not bool(submit_response_artifact.get("submitted")):
+                errors.append("submit_not_confirmed")
+
+        asset = _extract_hyperliquid_submit_asset(signed_action_artifact) if isinstance(signed_action_artifact, dict) else None
+        oid = _extract_hyperliquid_submit_oid(submit_response_artifact) if isinstance(submit_response_artifact, dict) else None
+        cloid = (
+            _extract_hyperliquid_submit_cloid(signed_action_artifact) if isinstance(signed_action_artifact, dict) else None
+        )
+        if asset is None:
+            errors.append("missing_source_asset")
+        if oid is None and not cloid:
+            errors.append("missing_order_identifier")
+
+        if not isinstance(source_envelope, dict):
+            errors.append("missing_signature_envelope")
+        else:
+            if source_envelope.get("signature_state") != "signed":
+                errors.append("signed_action_not_signed")
+            if not bool(source_envelope.get("signature_present")):
+                errors.append("signature_missing")
+
+        private_key, private_key_source = _load_hyperliquid_private_key(
+            explicit_value=signing_private_key,
+            env_name=signing_private_key_env,
+        )
+        if not private_key:
+            errors.append("missing_signing_key")
+        elif not _hyperliquid_signing_dependencies_available():
+            errors.append("signing_dependencies_missing")
+
+        nonce = int(time.time_ns() // 1_000_000)
+        vault_address = None
+        if isinstance(source_envelope, dict):
+            signing_payload = source_envelope.get("signing_payload")
+            if isinstance(signing_payload, dict):
+                vault_address = _safe_string(signing_payload.get("vaultAddress"))
+
+        cancel_action = _build_hyperliquid_cancel_action_payload(asset=asset, oid=oid, cloid=cloid)
+        if cancel_action is None:
+            errors.append("cancel_action_unavailable")
+
+        if errors:
+            cancel_state = errors[0]
+            return HyperliquidCancelReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                source_session_id=source_session_id,
+                source_action_hash=source_action_hash,
+                source_signer_id=source_signer_id,
+                source_signing_payload_sha256=source_signing_payload_sha256,
+                source_submit_state=source_submit_state,
+                cancel_payload=None,
+                cancel_state=cancel_state,
+                remote_cancel_called=False,
+                cancel_accepted=False,
+                response_type=None,
+                asset=asset,
+                oid=oid,
+                cloid=cloid,
+                exchange_response=None,
+                reviewer=reviewer,
+                note=note,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        try:
+            signed = sign_hyperliquid_l1_action(
+                private_key=private_key,
+                action_payload=cancel_action,
+                vault_address=vault_address,
+                nonce=nonce,
+                expires_after=None,
+                is_mainnet=is_mainnet,
+            )
+        except Exception as exc:  # noqa: BLE001
+            cancel_state = "cancel_signing_failed"
+            errors.append(f"cancel_signing_failed:{exc.__class__.__name__}")
+            return HyperliquidCancelReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                source_session_id=source_session_id,
+                source_action_hash=source_action_hash,
+                source_signer_id=source_signer_id,
+                source_signing_payload_sha256=source_signing_payload_sha256,
+                source_submit_state=source_submit_state,
+                cancel_payload=None,
+                cancel_state=cancel_state,
+                remote_cancel_called=False,
+                cancel_accepted=False,
+                response_type=None,
+                asset=asset,
+                oid=oid,
+                cloid=cloid,
+                exchange_response=None,
+                reviewer=reviewer,
+                note=note,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        derived_signer = _safe_string(signed.get("signer_address"))
+        if source_signer_id and derived_signer and source_signer_id.lower() != derived_signer.lower():
+            errors.append("signer_identity_mismatch")
+            cancel_state = "signer_identity_mismatch"
+            return HyperliquidCancelReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                source_session_id=source_session_id,
+                source_action_hash=source_action_hash,
+                source_signer_id=source_signer_id,
+                source_signing_payload_sha256=source_signing_payload_sha256,
+                source_submit_state=source_submit_state,
+                cancel_payload=None,
+                cancel_state=cancel_state,
+                remote_cancel_called=False,
+                cancel_accepted=False,
+                response_type=None,
+                asset=asset,
+                oid=oid,
+                cloid=cloid,
+                exchange_response=None,
+                reviewer=reviewer,
+                note=note,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        cancel_payload = {
+            "action": cancel_action,
+            "nonce": nonce,
+            "signature": signed.get("signature"),
+        }
+        if vault_address:
+            cancel_payload["vaultAddress"] = vault_address
+
+        if not remote_cancel:
+            return HyperliquidCancelReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                source_session_id=source_session_id,
+                source_action_hash=source_action_hash,
+                source_signer_id=source_signer_id,
+                source_signing_payload_sha256=source_signing_payload_sha256,
+                source_submit_state=source_submit_state,
+                cancel_payload=cancel_payload,
+                cancel_state="pending_remote_cancel",
+                remote_cancel_called=False,
+                cancel_accepted=False,
+                response_type=None,
+                asset=asset,
+                oid=oid,
+                cloid=cloid,
+                exchange_response=None,
+                reviewer=reviewer,
+                note=note,
+                errors=(),
+            )
+
+        try:
+            exchange_response = fetch_hyperliquid_exchange(
+                cancel_payload,
+                timeout_seconds=timeout_seconds,
+                post_json=post_json,
+            )
+            remote_cancel_called = True
+            response_type = _extract_hyperliquid_response_type(exchange_response)
+            cancel_errors = _extract_hyperliquid_exchange_errors(exchange_response)
+            errors.extend(cancel_errors)
+            cancel_accepted = not cancel_errors
+            cancel_state = "canceled_remote" if cancel_accepted else "cancel_rejected"
+        except Exception as exc:  # noqa: BLE001
+            remote_cancel_called = True
+            cancel_state = "cancel_request_failed"
+            errors.append(f"cancel_request_failed:{exc.__class__.__name__}")
+
+        return HyperliquidCancelReport(
+            adapter_name=self.adapter_name,
+            generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+            source_session_id=source_session_id,
+            source_action_hash=source_action_hash,
+            source_signer_id=source_signer_id,
+            source_signing_payload_sha256=source_signing_payload_sha256,
+            source_submit_state=source_submit_state,
+            cancel_payload=cancel_payload,
+            cancel_state=cancel_state,
+            remote_cancel_called=remote_cancel_called,
+            cancel_accepted=cancel_accepted,
+            response_type=response_type,
+            asset=asset,
+            oid=oid,
+            cloid=cloid,
+            exchange_response=exchange_response,
+            reviewer=reviewer,
+            note=note,
+            errors=tuple(_unique_reasons(errors)),
+        )
+
     def build_reconciliation_report(
         self,
         *,
@@ -1110,6 +1474,7 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
         execution_account_id: str | None,
         oid: int | None = None,
         cloid: str | None = None,
+        signed_action_artifact: dict[str, object] | None = None,
         timeout_seconds: float = 10.0,
         fetch_json=None,
     ) -> HyperliquidReconciliationReport:
@@ -1128,27 +1493,13 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
         resolution_source = "order_status" if status_report.get("query_attempted") else None
         matched_open_order = None
         matched_frontend_open_order = None
+        matched_historical_order = None
+        matched_fills: list[dict[str, object]] = []
 
         resolved_execution_account = _safe_string(execution_account_id)
         resolved_cloid = _safe_string(cloid)
         resolved_oid = oid if isinstance(oid, int) and oid >= 0 else None
-
-        if status_known:
-            return HyperliquidReconciliationReport(
-                adapter_name=self.adapter_name,
-                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
-                source_session_id=source_session_id,
-                execution_account_id=resolved_execution_account,
-                status_known=True,
-                normalized_state=normalized_state,
-                resolution_source=resolution_source,
-                oid=resolved_oid,
-                cloid=resolved_cloid,
-                order_status_report=status_report,
-                matched_open_order=None,
-                matched_frontend_open_order=None,
-                errors=tuple(_unique_reasons(errors)),
-            )
+        original_size_hint = _extract_hyperliquid_signed_action_size(signed_action_artifact)
 
         if not resolved_execution_account:
             errors.append("missing_execution_account_id")
@@ -1159,42 +1510,112 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             errors.append("missing_order_identifier")
 
         if not errors:
-            try:
-                open_orders = fetch_hyperliquid_open_orders(
-                    resolved_execution_account,
-                    timeout_seconds=timeout_seconds,
-                    fetch_json=fetch_json,
-                )
-                matched_open_order = _find_matching_hyperliquid_order(
-                    open_orders,
-                    oid=resolved_oid,
-                    cloid=resolved_cloid,
-                )
-                if matched_open_order is not None:
-                    status_known = True
-                    normalized_state = "open"
-                    resolution_source = "open_orders"
-            except Exception as exc:  # noqa: BLE001
-                errors.append(f"open_orders_reconciliation_failed:{exc.__class__.__name__}")
+            if not status_known:
+                try:
+                    open_orders = fetch_hyperliquid_open_orders(
+                        resolved_execution_account,
+                        timeout_seconds=timeout_seconds,
+                        fetch_json=fetch_json,
+                    )
+                    matched_open_order = _find_matching_hyperliquid_order(
+                        open_orders,
+                        oid=resolved_oid,
+                        cloid=resolved_cloid,
+                    )
+                    if matched_open_order is not None:
+                        status_known = True
+                        normalized_state = "open"
+                        resolution_source = "open_orders"
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"open_orders_reconciliation_failed:{exc.__class__.__name__}")
 
-        if not status_known and not errors:
+            if not status_known:
+                try:
+                    frontend_open_orders = fetch_hyperliquid_frontend_open_orders(
+                        resolved_execution_account,
+                        timeout_seconds=timeout_seconds,
+                        fetch_json=fetch_json,
+                    )
+                    matched_frontend_open_order = _find_matching_hyperliquid_order(
+                        frontend_open_orders,
+                        oid=resolved_oid,
+                        cloid=resolved_cloid,
+                    )
+                    if matched_frontend_open_order is not None:
+                        status_known = True
+                        normalized_state = "open"
+                        resolution_source = "frontend_open_orders"
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"frontend_open_orders_reconciliation_failed:{exc.__class__.__name__}")
+
+            if not status_known:
+                try:
+                    historical_orders = fetch_hyperliquid_historical_orders(
+                        resolved_execution_account,
+                        timeout_seconds=timeout_seconds,
+                        fetch_json=fetch_json,
+                    )
+                    matched_historical_order = _find_matching_hyperliquid_order(
+                        historical_orders,
+                        oid=resolved_oid,
+                        cloid=resolved_cloid,
+                    )
+                    if matched_historical_order is not None:
+                        historical_status = _safe_string(matched_historical_order.get("status"))
+                        normalized_state = _normalize_hyperliquid_order_state(historical_status)
+                        status_known = normalized_state not in {None, "unknown"}
+                        resolution_source = "historical_orders"
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"historical_orders_reconciliation_failed:{exc.__class__.__name__}")
+
             try:
-                frontend_open_orders = fetch_hyperliquid_frontend_open_orders(
+                user_fills = fetch_hyperliquid_user_fills(
                     resolved_execution_account,
                     timeout_seconds=timeout_seconds,
                     fetch_json=fetch_json,
                 )
-                matched_frontend_open_order = _find_matching_hyperliquid_order(
-                    frontend_open_orders,
+                matched_fills = _find_matching_hyperliquid_fills(
+                    user_fills,
                     oid=resolved_oid,
                     cloid=resolved_cloid,
                 )
-                if matched_frontend_open_order is not None:
-                    status_known = True
-                    normalized_state = "open"
-                    resolution_source = "frontend_open_orders"
             except Exception as exc:  # noqa: BLE001
-                errors.append(f"frontend_open_orders_reconciliation_failed:{exc.__class__.__name__}")
+                errors.append(f"user_fills_reconciliation_failed:{exc.__class__.__name__}")
+
+        matched_fills = _sort_hyperliquid_fills(matched_fills)
+        size_source = (
+            _extract_hyperliquid_status_order_snapshot(status_report)
+            or matched_open_order
+            or matched_frontend_open_order
+            or matched_historical_order
+        )
+        original_size = _extract_hyperliquid_order_original_size(size_source)
+        if original_size is None:
+            original_size = original_size_hint
+        remaining_size = _extract_hyperliquid_order_remaining_size(size_source)
+        fill_metrics = _summarize_hyperliquid_fills(matched_fills)
+        close_state = _derive_hyperliquid_close_state(normalized_state)
+        fill_state = _derive_hyperliquid_fill_state(
+            normalized_state=normalized_state,
+            close_state=close_state,
+            original_size=original_size,
+            remaining_size=remaining_size,
+            filled_size=fill_metrics["filled_size"],
+            fill_count=fill_metrics["fill_count"],
+        )
+
+        if (
+            not status_known
+            and close_state != "open"
+            and original_size is not None
+            and fill_metrics["filled_size"] is not None
+            and _decimal_at_least(fill_metrics["filled_size"], original_size)
+        ):
+            status_known = True
+            normalized_state = "filled"
+            close_state = "closed"
+            fill_state = "filled"
+            resolution_source = "user_fills"
 
         if not status_known and not errors:
             normalized_state = "unknown"
@@ -1208,12 +1629,102 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             execution_account_id=resolved_execution_account,
             status_known=status_known,
             normalized_state=normalized_state,
+            close_state=close_state,
+            fill_state=fill_state,
             resolution_source=resolution_source,
             oid=resolved_oid,
             cloid=resolved_cloid,
+            original_size=_format_decimal_string(original_size),
+            filled_size=_format_decimal_string(fill_metrics["filled_size"]),
+            remaining_size=_format_decimal_string(remaining_size),
+            fill_count=fill_metrics["fill_count"],
+            average_fill_price=_format_decimal_string(fill_metrics["average_fill_price"]),
+            last_fill_time=fill_metrics["last_fill_time"],
             order_status_report=status_report,
             matched_open_order=matched_open_order,
             matched_frontend_open_order=matched_frontend_open_order,
+            matched_historical_order=matched_historical_order,
+            matched_fill_sample=tuple(matched_fills[:5]),
+            errors=tuple(_unique_reasons(errors)),
+        )
+
+    def build_fill_summary_report(
+        self,
+        *,
+        source_session_id: str,
+        execution_account_id: str | None,
+        oid: int | None = None,
+        cloid: str | None = None,
+        signed_action_artifact: dict[str, object] | None = None,
+        timeout_seconds: float = 10.0,
+        fetch_json=None,
+    ) -> HyperliquidFillSummaryReport:
+        errors: list[str] = []
+        query_attempted = False
+        matched_fills: list[dict[str, object]] = []
+
+        resolved_execution_account = _safe_string(execution_account_id)
+        resolved_cloid = _safe_string(cloid)
+        resolved_oid = oid if isinstance(oid, int) and oid >= 0 else None
+        original_size = _extract_hyperliquid_signed_action_size(signed_action_artifact)
+
+        if not resolved_execution_account:
+            errors.append("missing_execution_account_id")
+        elif not _is_hex_address(resolved_execution_account):
+            errors.append("invalid_execution_account_id")
+
+        if resolved_oid is None and not resolved_cloid:
+            errors.append("missing_order_identifier")
+
+        if not errors:
+            try:
+                all_fills = fetch_hyperliquid_user_fills(
+                    resolved_execution_account,
+                    timeout_seconds=timeout_seconds,
+                    fetch_json=fetch_json,
+                )
+                query_attempted = True
+                matched_fills = _sort_hyperliquid_fills(
+                    _find_matching_hyperliquid_fills(
+                        all_fills,
+                        oid=resolved_oid,
+                        cloid=resolved_cloid,
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"user_fills_summary_failed:{exc.__class__.__name__}")
+
+        fill_metrics = _summarize_hyperliquid_fills(matched_fills)
+        filled_size = fill_metrics["filled_size"]
+        remaining_size = _subtract_decimals(original_size, filled_size)
+        fill_state = _derive_hyperliquid_fill_summary_state(
+            original_size=original_size,
+            filled_size=filled_size,
+            fill_count=fill_metrics["fill_count"],
+        )
+        fills_known = query_attempted and not errors
+
+        return HyperliquidFillSummaryReport(
+            adapter_name=self.adapter_name,
+            generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+            source_session_id=source_session_id,
+            execution_account_id=resolved_execution_account,
+            fills_known=fills_known,
+            query_attempted=query_attempted,
+            oid=resolved_oid,
+            cloid=resolved_cloid,
+            fill_state=fill_state,
+            original_size=_format_decimal_string(original_size),
+            filled_size=_format_decimal_string(filled_size),
+            remaining_size=_format_decimal_string(remaining_size),
+            fill_count=fill_metrics["fill_count"],
+            average_fill_price=_format_decimal_string(fill_metrics["average_fill_price"]),
+            total_fee=_format_decimal_string(fill_metrics["total_fee"]),
+            total_builder_fee=_format_decimal_string(fill_metrics["total_builder_fee"]),
+            total_closed_pnl=_format_decimal_string(fill_metrics["total_closed_pnl"]),
+            first_fill_time=fill_metrics["first_fill_time"],
+            last_fill_time=fill_metrics["last_fill_time"],
+            matched_fill_sample=tuple(matched_fills[:10]),
             errors=tuple(_unique_reasons(errors)),
         )
 
@@ -1270,6 +1781,38 @@ def fetch_hyperliquid_frontend_open_orders(
 ) -> list[dict[str, object]]:
     payload = fetch_hyperliquid_info(
         {"type": "frontendOpenOrders", "user": user},
+        timeout_seconds=timeout_seconds,
+        fetch_json=fetch_json,
+    )
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    return []
+
+
+def fetch_hyperliquid_historical_orders(
+    user: str,
+    *,
+    timeout_seconds: float = 10.0,
+    fetch_json=None,
+) -> list[dict[str, object]]:
+    payload = fetch_hyperliquid_info(
+        {"type": "historicalOrders", "user": user},
+        timeout_seconds=timeout_seconds,
+        fetch_json=fetch_json,
+    )
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    return []
+
+
+def fetch_hyperliquid_user_fills(
+    user: str,
+    *,
+    timeout_seconds: float = 10.0,
+    fetch_json=None,
+) -> list[dict[str, object]]:
+    payload = fetch_hyperliquid_info(
+        {"type": "userFills", "user": user},
         timeout_seconds=timeout_seconds,
         fetch_json=fetch_json,
     )
@@ -1480,6 +2023,9 @@ def _build_hyperliquid_submit_payload(
 def _extract_hyperliquid_submit_oid(exchange_response: dict[str, object] | None) -> int | None:
     if not isinstance(exchange_response, dict):
         return None
+    direct_oid = exchange_response.get("oid")
+    if isinstance(direct_oid, int):
+        return direct_oid
     response = exchange_response.get("response")
     if not isinstance(response, dict):
         return None
@@ -1496,6 +2042,20 @@ def _extract_hyperliquid_submit_oid(exchange_response: dict[str, object] | None)
             if isinstance(value, dict) and isinstance(value.get("oid"), int):
                 return value.get("oid")
     return None
+
+
+def _extract_hyperliquid_submit_asset(signed_action_artifact: dict[str, object]) -> int | None:
+    action_payload = signed_action_artifact.get("action_payload")
+    if not isinstance(action_payload, dict):
+        return None
+    orders = action_payload.get("orders")
+    if not isinstance(orders, list) or not orders:
+        return None
+    first_order = orders[0]
+    if not isinstance(first_order, dict):
+        return None
+    asset = first_order.get("a")
+    return asset if isinstance(asset, int) and asset >= 0 else None
 
 
 def _extract_hyperliquid_submit_cloid(signed_action_artifact: dict[str, object]) -> str | None:
@@ -1523,11 +2083,11 @@ def _extract_hyperliquid_response_type(exchange_response: dict[str, object] | No
     return str(status) if status is not None else None
 
 
-def _classify_hyperliquid_submit_response(
+def _extract_hyperliquid_exchange_errors(
     exchange_response: dict[str, object] | None,
-) -> tuple[bool, list[str]]:
+) -> list[str]:
     if not isinstance(exchange_response, dict):
-        return False, ["invalid_exchange_response"]
+        return ["invalid_exchange_response"]
 
     errors: list[str] = []
     status = str(exchange_response.get("status") or "").strip().lower()
@@ -1547,8 +2107,37 @@ def _classify_hyperliquid_submit_response(
                     if isinstance(item, dict) and "error" in item:
                         errors.append(f"status_error:{item.get('error')}")
 
+    return _unique_reasons(str(item) for item in errors)
+
+
+def _classify_hyperliquid_submit_response(
+    exchange_response: dict[str, object] | None,
+) -> tuple[bool, list[str]]:
+    errors = _extract_hyperliquid_exchange_errors(exchange_response)
+    status = str(exchange_response.get("status") or "").strip().lower() if isinstance(exchange_response, dict) else ""
     submitted = not errors and status == "ok"
-    return submitted, _unique_reasons(str(item) for item in errors)
+    return submitted, errors
+
+
+def _build_hyperliquid_cancel_action_payload(
+    *,
+    asset: int | None,
+    oid: int | None,
+    cloid: str | None,
+) -> dict[str, object] | None:
+    if asset is None:
+        return None
+    if oid is not None:
+        return {
+            "type": "cancel",
+            "cancels": [{"a": asset, "o": oid}],
+        }
+    if cloid:
+        return {
+            "type": "cancelByCloid",
+            "cancels": [{"asset": asset, "cloid": cloid}],
+        }
+    return None
 
 
 _HYPERLIQUID_CANCELED_STATES = {
@@ -1629,6 +2218,28 @@ def _find_matching_hyperliquid_order(
     return None
 
 
+def _find_matching_hyperliquid_fills(
+    fills: list[dict[str, object]] | None,
+    *,
+    oid: int | None,
+    cloid: str | None,
+) -> list[dict[str, object]]:
+    if not isinstance(fills, list):
+        return []
+    matches: list[dict[str, object]] = []
+    for item in fills:
+        if not isinstance(item, dict):
+            continue
+        item_oid = _extract_hyperliquid_order_oid(item)
+        item_cloid = _extract_hyperliquid_order_cloid(item)
+        if oid is not None and item_oid == oid:
+            matches.append(item)
+            continue
+        if cloid and item_cloid and item_cloid == cloid:
+            matches.append(item)
+    return matches
+
+
 def _extract_hyperliquid_order_oid(order_item: dict[str, object]) -> int | None:
     direct_oid = order_item.get("oid")
     if isinstance(direct_oid, int):
@@ -1655,6 +2266,125 @@ def _extract_hyperliquid_order_cloid(order_item: dict[str, object]) -> str | Non
     return None
 
 
+def _extract_hyperliquid_status_order_snapshot(status_report: dict[str, object] | None) -> dict[str, object] | None:
+    if not isinstance(status_report, dict):
+        return None
+    order_status = status_report.get("order_status")
+    if not isinstance(order_status, dict):
+        return None
+    status_block = order_status.get("order")
+    if isinstance(status_block, dict):
+        nested_order = status_block.get("order")
+        if isinstance(nested_order, dict):
+            return nested_order
+    return None
+
+
+def _extract_hyperliquid_order_original_size(order_item: dict[str, object] | None) -> Decimal | None:
+    return _extract_hyperliquid_decimal_field(order_item, "origSz")
+
+
+def _extract_hyperliquid_order_remaining_size(order_item: dict[str, object] | None) -> Decimal | None:
+    return _extract_hyperliquid_decimal_field(order_item, "sz")
+
+
+def _extract_hyperliquid_signed_action_size(signed_action_artifact: dict[str, object] | None) -> Decimal | None:
+    if not isinstance(signed_action_artifact, dict):
+        return None
+    action_payload = signed_action_artifact.get("action_payload")
+    if not isinstance(action_payload, dict):
+        return None
+    orders = action_payload.get("orders")
+    if not isinstance(orders, list) or not orders:
+        return None
+    first_order = orders[0]
+    if not isinstance(first_order, dict):
+        return None
+    return _parse_decimal(first_order.get("s"))
+
+
+def _extract_hyperliquid_decimal_field(order_item: dict[str, object] | None, key: str) -> Decimal | None:
+    if not isinstance(order_item, dict):
+        return None
+    value = order_item.get(key)
+    parsed = _parse_decimal(value)
+    if parsed is not None:
+        return parsed
+    nested_order = order_item.get("order")
+    if isinstance(nested_order, dict):
+        return _parse_decimal(nested_order.get(key))
+    return None
+
+
+def _sort_hyperliquid_fills(fills: list[dict[str, object]]) -> list[dict[str, object]]:
+    return sorted(
+        fills,
+        key=lambda item: (
+            _extract_hyperliquid_fill_time(item) or -1,
+            _extract_hyperliquid_fill_tid(item) or -1,
+        ),
+        reverse=True,
+    )
+
+
+def _summarize_hyperliquid_fills(fills: list[dict[str, object]]) -> dict[str, object]:
+    total_size = Decimal("0")
+    weighted_notional = Decimal("0")
+    total_fee = Decimal("0")
+    total_builder_fee = Decimal("0")
+    total_closed_pnl = Decimal("0")
+    first_fill_time: int | None = None
+    last_fill_time: int | None = None
+
+    for item in fills:
+        size = _parse_decimal(item.get("sz"))
+        price = _parse_decimal(item.get("px"))
+        fee = _parse_decimal(item.get("fee"))
+        builder_fee = _parse_decimal(item.get("builderFee"))
+        closed_pnl = _parse_decimal(item.get("closedPnl"))
+        fill_time = _extract_hyperliquid_fill_time(item)
+        if fill_time is not None and (first_fill_time is None or fill_time < first_fill_time):
+            first_fill_time = fill_time
+        if fill_time is not None and (last_fill_time is None or fill_time > last_fill_time):
+            last_fill_time = fill_time
+        if size is None:
+            size = Decimal("0")
+        total_size += size
+        if price is not None and size > 0:
+            weighted_notional += size * price
+        if fee is not None:
+            total_fee += fee
+        if builder_fee is not None:
+            total_builder_fee += builder_fee
+        if closed_pnl is not None:
+            total_closed_pnl += closed_pnl
+
+    average_fill_price = None
+    if total_size > 0 and weighted_notional > 0:
+        average_fill_price = weighted_notional / total_size
+
+    return {
+        "fill_count": len(fills),
+        "filled_size": total_size if total_size > 0 else None,
+        "average_fill_price": average_fill_price,
+        "total_fee": total_fee if total_fee != 0 else None,
+        "total_builder_fee": total_builder_fee if total_builder_fee != 0 else None,
+        "total_closed_pnl": total_closed_pnl if total_closed_pnl != 0 else None,
+        "first_fill_time": first_fill_time,
+        "last_fill_time": last_fill_time,
+    }
+
+
+def _extract_hyperliquid_fill_time(fill: dict[str, object]) -> int | None:
+    value = fill.get("time")
+    return value if isinstance(value, int) and value >= 0 else None
+
+
+def _extract_hyperliquid_fill_tid(fill: dict[str, object]) -> int | None:
+    value = fill.get("tid")
+    return value if isinstance(value, int) and value >= 0 else None
+
+
 def _normalize_hyperliquid_order_state(raw_status: str | None) -> str | None:
     if raw_status is None:
         return None
@@ -1670,6 +2400,97 @@ def _normalize_hyperliquid_order_state(raw_status: str | None) -> str | None:
     if lowered == "missing_order":
         return "unknown"
     return "unknown"
+
+
+def _derive_hyperliquid_close_state(normalized_state: str | None) -> str | None:
+    if normalized_state == "open":
+        return "open"
+    if normalized_state in {"filled", "canceled", "rejected"}:
+        return "closed"
+    if normalized_state == "unknown":
+        return "unknown"
+    return None
+
+
+def _derive_hyperliquid_fill_state(
+    *,
+    normalized_state: str | None,
+    close_state: str | None,
+    original_size: Decimal | None,
+    remaining_size: Decimal | None,
+    filled_size: Decimal | None,
+    fill_count: int,
+) -> str | None:
+    if normalized_state == "filled":
+        return "filled"
+    if fill_count > 0:
+        if normalized_state in {"canceled", "rejected"}:
+            return "partial"
+        if close_state == "open":
+            return "partial"
+        if original_size is not None and filled_size is not None and _decimal_at_least(filled_size, original_size):
+            return "filled"
+        return "partial"
+    if original_size is not None and remaining_size is not None:
+        if remaining_size < original_size:
+            return "partial"
+        if remaining_size >= original_size:
+            return "none"
+    if close_state in {"open", "closed"}:
+        return "none"
+    if normalized_state == "unknown":
+        return "unknown"
+    return None
+
+
+def _derive_hyperliquid_fill_summary_state(
+    *,
+    original_size: Decimal | None,
+    filled_size: Decimal | None,
+    fill_count: int,
+) -> str | None:
+    if fill_count <= 0:
+        return "none"
+    if original_size is not None and filled_size is not None and _decimal_at_least(filled_size, original_size):
+        return "filled"
+    return "partial"
+
+
+def _decimal_at_least(left: Decimal, right: Decimal, tolerance: str = "0.000000000001") -> bool:
+    return left + Decimal(tolerance) >= right
+
+
+def _subtract_decimals(left: Decimal | None, right: Decimal | None) -> Decimal | None:
+    if left is None:
+        return None
+    if right is None:
+        return left
+    result = left - right
+    if result < 0:
+        return Decimal("0")
+    return result
+
+
+def _parse_decimal(value: object) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        text = str(value).strip()
+        if not text:
+            return None
+        return Decimal(text)
+    except (ArithmeticError, InvalidOperation, ValueError):
+        return None
+
+
+def _format_decimal_string(value: Decimal | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.normalize()
+    text = format(normalized, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
 
 
 def _safe_string(value: object) -> str | None:

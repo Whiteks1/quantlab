@@ -36,7 +36,7 @@ Execution venue strategy note:
 - this is why `QuantLab web3 app` is now the right public direction, even though the product is still earlier in runtime maturity than that label's end-state implies
 - `BrokerAdapter` remains the current code name, but the architecture should now be read as an execution-venue boundary, not only a CEX-style broker boundary
 - a minimal `ExecutionContext` layer now exists in code so future venue work can model signer and routing semantics without overloading `ExecutionIntent`
-- local signer-backed Hyperliquid action signing, supervised submit artifacts, canonical submit sessions, direct post-submit status, and first reconciliation flows now exist, but richer cancel and continuous-supervision work still remain future work
+- local signer-backed Hyperliquid action signing, supervised submit artifacts, canonical submit sessions, direct post-submit status, richer fill/close reconciliation, a bounded continuous-supervision surface, and a first supervised cancel boundary now exist
 
 A secondary boundary track remains active:
 
@@ -175,7 +175,10 @@ python main.py --help
 - `--hyperliquid-submit-sessions-show`: inspect one canonical Hyperliquid submit session
 - `--hyperliquid-submit-sessions-index`: refresh the shared Hyperliquid submit index under the submit root
 - `--hyperliquid-submit-sessions-status`: refresh normalized post-submit order status for a canonical Hyperliquid submit session
-- `--hyperliquid-submit-sessions-reconcile`: reconcile a canonical Hyperliquid submit session against direct status plus open-order surfaces
+- `--hyperliquid-submit-sessions-reconcile`: reconcile a canonical Hyperliquid submit session against direct status, historical order, open-order, and fill surfaces
+- `--hyperliquid-submit-sessions-fills`: refresh a richer fill summary for a canonical Hyperliquid submit session
+- `--hyperliquid-submit-sessions-supervise`: run bounded continuous supervision over a canonical Hyperliquid submit session
+- `--hyperliquid-submit-sessions-cancel`: submit a supervised cancel request for a canonical Hyperliquid submit session
 - `--hyperliquid-submit-sessions-health`: summarize Hyperliquid submission health across canonical submit sessions
 - `--hyperliquid-submit-sessions-alerts`: emit a deterministic alert snapshot for notable Hyperliquid submit-session states
 - `--pretrade-handoff-validate`: validate a bounded `calculadora_riego_trading` handoff artifact without reintroducing broad pretrade runtime ownership
