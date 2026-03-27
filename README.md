@@ -96,6 +96,10 @@ Optional performance extras:
 pip install -e .[perf]
 ```
 
+Contribution workflow:
+
+- see [CONTRIBUTING.md](./CONTRIBUTING.md) for the preferred local-first slice workflow, PR shape, and merge guidance used in this repo
+
 ## Quick Health Check
 
 Version:
