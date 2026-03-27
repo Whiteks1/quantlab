@@ -19,8 +19,14 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "hyperliquid_submit_sessions_index": None,
         "hyperliquid_submit_sessions_status": None,
         "hyperliquid_submit_sessions_reconcile": None,
+        "hyperliquid_submit_sessions_cancel": None,
         "hyperliquid_submit_sessions_health": None,
         "hyperliquid_submit_sessions_alerts": None,
+        "hyperliquid_cancel_reviewer": None,
+        "hyperliquid_cancel_note": None,
+        "hyperliquid_cancel_confirm": False,
+        "hyperliquid_private_key": None,
+        "hyperliquid_private_key_env": "HYPERLIQUID_PRIVATE_KEY",
         "hyperliquid_preflight_timeout": 10.0,
     }
     defaults.update(kwargs)
@@ -271,6 +277,85 @@ def test_refresh_hyperliquid_submit_reconciliation(monkeypatch, tmp_path):
     assert session_status["reconciliation_known"] is True
     assert session_status["reconciliation_state"] == "open"
     assert session_status["reconciliation_source"] == "open_orders"
+
+
+def test_refresh_hyperliquid_submit_cancel(monkeypatch, tmp_path):
+    from quantlab.cli import hyperliquid_submit_sessions as module
+
+    session_dir = _write_session(tmp_path)
+
+    def fake_cancel(self, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.hyperliquid.cancel_response",
+                    "adapter_name": "hyperliquid",
+                    "generated_at": "2026-03-27T12:07:00",
+                    "source_session_id": "20260327_hyperliquid_submit_demo",
+                    "source_action_hash": "0xabc",
+                    "source_signer_id": "0x1111111111111111111111111111111111111111",
+                    "source_signing_payload_sha256": "abc123",
+                    "source_submit_state": "submitted_remote",
+                    "cancel_payload": {"action": {"type": "cancel"}},
+                    "cancel_state": "canceled_remote",
+                    "remote_cancel_called": True,
+                    "cancel_accepted": True,
+                    "response_type": "ok",
+                    "asset": 1,
+                    "oid": 12345,
+                    "cloid": "abc123cloid",
+                    "exchange_response": {"status": "ok"},
+                    "reviewer": "marce",
+                    "note": "stop it",
+                    "errors": [],
+                }
+
+        return _Fake()
+
+    monkeypatch.setattr(module.HyperliquidBrokerAdapter, "build_cancel_report", fake_cancel)
+
+    args = _make_args(
+        hyperliquid_submit_sessions_cancel=str(session_dir),
+        hyperliquid_cancel_reviewer="marce",
+        hyperliquid_cancel_note="stop it",
+        hyperliquid_cancel_confirm=True,
+    )
+    assert handle_hyperliquid_submit_sessions_commands(args) is True
+
+    cancel_artifact = session_dir / "hyperliquid_cancel_response.json"
+    assert cancel_artifact.exists()
+    cancel_payload = json.loads(cancel_artifact.read_text(encoding="utf-8"))
+    assert cancel_payload["cancel_state"] == "canceled_remote"
+    assert cancel_payload["cancel_accepted"] is True
+
+    session_status = json.loads((session_dir / "session_status.json").read_text(encoding="utf-8"))
+    assert session_status["status"] == "cancel_pending"
+    assert session_status["cancel_state"] == "canceled_remote"
+    assert session_status["cancel_accepted"] is True
+
+
+def test_hyperliquid_submit_alerts_include_cancel_failures(tmp_path, capsys):
+    session_dir = _write_session(tmp_path)
+    (session_dir / "hyperliquid_cancel_response.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.cancel_response",
+                "generated_at": "2026-03-27T12:07:00",
+                "cancel_state": "cancel_request_failed",
+                "cancel_accepted": False,
+                "remote_cancel_called": True,
+                "errors": ["cancel_request_failed:TimeoutError"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    args = _make_args(hyperliquid_submit_sessions_alerts=str(tmp_path))
+    assert handle_hyperliquid_submit_sessions_commands(args) is True
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["alert_status"] == "critical"
+    assert any(alert["alert_code"] == "HYPERLIQUID_CANCEL_REQUEST_FAILED" for alert in payload["alerts"])
 
 
 def test_hyperliquid_submit_alerts_use_reconciliation_state(tmp_path, capsys):
