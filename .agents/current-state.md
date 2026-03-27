@@ -47,8 +47,9 @@
   - successful plain `run` executions now write that canonical artifact pack under `outputs/runs/<run_id>/`
   - legacy `meta.json` / `run_report.json` remain read-compatible only
   - machine-facing `run` and `sweep` outputs are exposed through canonical `report.json.machine_contract`
-  - `main.py --version` returns a stable CLI version string
-  - `main.py --check` returns a deterministic JSON health summary for runtime preflight
+  - the package now owns the primary CLI app under `src/quantlab/app.py`, while root `main.py` remains a compatibility bootstrap
+  - `quantlab --version` and `main.py --version` both return a stable CLI version string
+  - `quantlab --check` and `main.py --check` both return a deterministic JSON health summary for runtime preflight
   - the CLI keeps the existing `--json-request` `sweep` path as the smoke-validation surface
   - the shared `runs_index.csv/json/md` registry is refreshed automatically after successful run-producing commands
   - paper-backed `run` executions now write dedicated artifacts under `outputs/paper_sessions/<session_id>/`
