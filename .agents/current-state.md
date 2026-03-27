@@ -85,7 +85,8 @@
   - Hyperliquid supervised submit can now also materialize canonical local submit sessions and a shared index under `outputs/hyperliquid_submits/`
   - Hyperliquid submit sessions can now also materialize `hyperliquid_order_status.json` with normalized post-submit state from direct `orderStatus` queries
   - Hyperliquid submit sessions can now also materialize `hyperliquid_reconciliation.json` so ambiguous post-submit states can be reconciled against direct status, historical-order, open-order, and fill surfaces with richer fill/close-state detail
-  - Hyperliquid submit sessions can now also materialize `hyperliquid_fill_summary.json` for richer post-submit fill accounting, fee totals, and closed-PnL visibility without moving to continuous supervision yet
+  - Hyperliquid submit sessions can now also materialize `hyperliquid_fill_summary.json` for richer post-submit fill accounting, fee totals, and closed-PnL visibility as a separate artifact beside broader supervision
+  - Hyperliquid submit sessions can now also materialize `hyperliquid_supervision.json` for bounded continuous supervision with websocket-aware monitoring metadata plus refreshed status, reconciliation, and fill-summary artifacts
   - Hyperliquid submit sessions can now also materialize `hyperliquid_cancel_response.json` as a first supervised cancel boundary with explicit reviewer confirmation
   - Hyperliquid submit sessions now also support aggregate health summaries and deterministic alert snapshots for operator visibility
   - Hyperliquid boundary review now documents the main contract gaps around signer identity, API wallets, subaccounts/vaults, and websocket-first venue interaction

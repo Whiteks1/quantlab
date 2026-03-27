@@ -485,6 +485,32 @@ The fill summary keeps reconciliation separate from fill accounting and aggregat
 - total fee and builder fee
 - total closed PnL when present
 
+### `--hyperliquid-submit-sessions-supervise`
+
+Run bounded continuous supervision over one canonical Hyperliquid submit session:
+
+```bash
+python main.py --hyperliquid-submit-sessions-supervise outputs/hyperliquid_submits/<session_id>
+```
+
+Useful modifiers:
+
+- `--hyperliquid-supervision-polls`
+- `--hyperliquid-supervision-interval-seconds`
+
+This writes:
+
+- `hyperliquid_supervision.json`
+- refreshed `hyperliquid_order_status.json`
+- refreshed `hyperliquid_reconciliation.json`
+- refreshed `hyperliquid_fill_summary.json`
+
+The supervision step is intentionally still pull-based:
+
+- it does not open private Hyperliquid websockets yet
+- it does carry websocket-aware monitoring metadata when the execution context prefers websocket transport
+- it gives operators a bounded local monitoring pass without introducing daemon-style runtime complexity
+
 ### `--hyperliquid-submit-sessions-cancel`
 
 Submit a supervised cancel request for one canonical Hyperliquid submit session:

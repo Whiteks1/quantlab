@@ -84,6 +84,7 @@ Current Stage D.1 scope covered:
 - persistent Hyperliquid post-submit order-status artifacts over canonical submit sessions
 - explicit Hyperliquid reconciliation artifacts over canonical submit sessions using direct status, historical-order, open-order, and fill surfaces
 - dedicated Hyperliquid fill-summary artifacts over canonical submit sessions for richer fee, fill-size, and closed-PnL visibility
+- bounded continuous-supervision artifacts over canonical Hyperliquid submit sessions with websocket-aware monitoring metadata and repeated local snapshots
 - supervised Hyperliquid cancel response artifacts over canonical submit sessions with explicit reviewer confirmation
 - Hyperliquid submission health summaries and deterministic alert snapshots over canonical submit sessions
 - deterministic Kraken-style payload translation
@@ -120,14 +121,14 @@ Boundary note:
 - supervised real-submit response artifacts are the first intentionally narrow path that can hit Kraken's real order endpoint, and they still require explicit confirmation plus a previously validated source session
 - supervised Hyperliquid submit response artifacts are intentionally narrower than the Kraken submit stack: they now have canonical session lifecycle, direct status refresh, first-pass reconciliation, a first cancel boundary, and local health/alert visibility
 - reconciliation is now the required safety path for ambiguous submit states before any future retry logic is introduced
-- persistent order-status refresh remains the first operator-facing post-submit visibility layer before any future continuous supervision or websocket flow
+- persistent order-status refresh now feeds a bounded continuous-supervision layer before any future private-websocket execution flow
 - broker submission health and alerts are local operator surfaces only; they summarize risky states but do not trigger broker-side actions by themselves
 
 ## Next Step
 
 After this submit-safety slice is stable, the next logical implementation step is:
 
-- richer post-submit supervision such as continuous streaming supervision behind the same boundary after fill/close-state reconciliation
+- richer post-submit supervision such as private-websocket-aware streaming behind the same boundary after bounded continuous supervision
 
 ## Related Documents
 

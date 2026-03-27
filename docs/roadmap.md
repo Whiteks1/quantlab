@@ -291,6 +291,7 @@ Initial slice already present:
 - persistent Hyperliquid post-submit order-status artifacts over canonical submit sessions
 - explicit Hyperliquid reconciliation artifacts over canonical submit sessions using direct status, historical order, open-order, and fill surfaces
 - dedicated Hyperliquid fill-summary artifacts over canonical submit sessions for richer fee, fill-size, and closed-PnL visibility
+- bounded continuous-supervision artifacts over canonical Hyperliquid submit sessions with websocket-aware monitoring metadata and repeated local snapshots
 - supervised Hyperliquid cancel response artifacts over canonical submit sessions with explicit reviewer confirmation
 - Hyperliquid submission health summaries and deterministic alert snapshots over canonical submit sessions
 - read-only Kraken public preflight probes
