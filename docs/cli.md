@@ -447,6 +447,24 @@ Refresh normalized post-submit order status for one canonical Hyperliquid submit
 python main.py --hyperliquid-submit-sessions-status outputs/hyperliquid_submits/<session_id>
 ```
 
+### `--hyperliquid-submit-sessions-reconcile`
+
+Run the first Hyperliquid reconciliation step for one canonical submit session:
+
+```bash
+python main.py --hyperliquid-submit-sessions-reconcile outputs/hyperliquid_submits/<session_id>
+```
+
+This writes:
+
+- `hyperliquid_reconciliation.json`
+
+The reconciliation step is conservative:
+
+- it checks direct `orderStatus` first
+- it falls back to `openOrders` and `frontendOpenOrders` matching by `oid` or `cloid`
+- it leaves the session in `unknown` with explicit reasons when no safe match is found
+
 ### `--hyperliquid-submit-sessions-health`
 
 Summarize Hyperliquid submission health across canonical submit sessions:
@@ -461,6 +479,8 @@ This prints a compact operator summary with:
 - submit-response coverage
 - submitted session count
 - sessions with known order state
+- sessions with reconciliation artifacts
+- sessions with an effective known order state after reconciliation
 - latest submit id/state
 - latest notable issue id/code/time
 
