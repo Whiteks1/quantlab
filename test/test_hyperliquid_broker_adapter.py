@@ -524,3 +524,48 @@ def test_hyperliquid_submit_report_rejects_unsigned_artifact():
     assert report["remote_submit_called"] is False
     assert report["submit_state"] == "signed_action_not_signed"
     assert "signed_action_not_signed" in report["errors"]
+
+
+def test_hyperliquid_order_status_report_tracks_open_order_by_cloid():
+    adapter = HyperliquidBrokerAdapter()
+
+    def fake_fetch_json(payload, **kwargs):
+        assert payload["type"] == "orderStatus"
+        assert payload["user"] == "0x1111111111111111111111111111111111111111"
+        assert payload["oid"] == "abc123cloid"
+        return {
+            "status": "order",
+            "order": {
+                "status": "open",
+                "order": {"oid": 12345, "cloid": "abc123cloid"},
+            },
+        }
+
+    report = adapter.build_order_status_report(
+        source_session_id="hl_submit_demo",
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        cloid="abc123cloid",
+        fetch_json=fake_fetch_json,
+    ).to_dict()
+
+    assert report["artifact_type"] == "quantlab.hyperliquid.order_status"
+    assert report["query_attempted"] is True
+    assert report["status_known"] is True
+    assert report["raw_status"] == "open"
+    assert report["normalized_state"] == "open"
+    assert report["query_mode"] == "cloid"
+    assert report["query_identifier"] == "abc123cloid"
+
+
+def test_hyperliquid_order_status_report_requires_query_identifier():
+    adapter = HyperliquidBrokerAdapter()
+
+    report = adapter.build_order_status_report(
+        source_session_id="hl_submit_demo",
+        execution_account_id="0x1111111111111111111111111111111111111111",
+    ).to_dict()
+
+    assert report["query_attempted"] is False
+    assert report["status_known"] is False
+    assert report["normalized_state"] is None
+    assert "missing_order_identifier" in report["errors"]
