@@ -17,12 +17,15 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "hyperliquid_submit_sessions_list": None,
         "hyperliquid_submit_sessions_show": None,
         "hyperliquid_submit_sessions_index": None,
+        "hyperliquid_submit_sessions_supervise": None,
         "hyperliquid_submit_sessions_status": None,
         "hyperliquid_submit_sessions_reconcile": None,
         "hyperliquid_submit_sessions_fills": None,
         "hyperliquid_submit_sessions_cancel": None,
         "hyperliquid_submit_sessions_health": None,
         "hyperliquid_submit_sessions_alerts": None,
+        "hyperliquid_supervision_polls": 3,
+        "hyperliquid_supervision_interval_seconds": 2.0,
         "hyperliquid_cancel_reviewer": None,
         "hyperliquid_cancel_note": None,
         "hyperliquid_cancel_confirm": False,
@@ -418,6 +421,108 @@ def test_refresh_hyperliquid_submit_fill_summary(monkeypatch, tmp_path):
     assert session_status["fill_summary_filled_size"] == "0.15"
 
 
+def test_refresh_hyperliquid_submit_supervision(monkeypatch, tmp_path):
+    from quantlab.cli import hyperliquid_submit_sessions as module
+
+    session_dir = _write_session(tmp_path)
+
+    def fake_status(self, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.hyperliquid.order_status",
+                    "adapter_name": "hyperliquid",
+                    "generated_at": "2026-03-27T12:05:00",
+                    "source_session_id": "20260327_hyperliquid_submit_demo",
+                    "execution_account_id": "0x1111111111111111111111111111111111111111",
+                    "query_attempted": True,
+                    "status_known": True,
+                    "normalized_state": "open",
+                    "oid": 12345,
+                    "cloid": "abc123cloid",
+                    "errors": [],
+                }
+
+        return _Fake()
+
+    def fake_reconcile(self, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.hyperliquid.reconciliation",
+                    "adapter_name": "hyperliquid",
+                    "generated_at": "2026-03-27T12:06:00",
+                    "source_session_id": "20260327_hyperliquid_submit_demo",
+                    "execution_account_id": "0x1111111111111111111111111111111111111111",
+                    "status_known": True,
+                    "normalized_state": "open",
+                    "close_state": "open",
+                    "fill_state": "partial",
+                    "fill_count": 1,
+                    "filled_size": "0.10",
+                    "remaining_size": "0.15",
+                    "average_fill_price": "2450.1",
+                    "resolution_source": "open_orders",
+                    "errors": [],
+                }
+
+        return _Fake()
+
+    def fake_fill_summary(self, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.hyperliquid.fill_summary",
+                    "adapter_name": "hyperliquid",
+                    "generated_at": "2026-03-27T12:06:01",
+                    "source_session_id": "20260327_hyperliquid_submit_demo",
+                    "execution_account_id": "0x1111111111111111111111111111111111111111",
+                    "fills_known": True,
+                    "query_attempted": True,
+                    "oid": 12345,
+                    "cloid": "abc123cloid",
+                    "fill_state": "partial",
+                    "original_size": "0.25",
+                    "filled_size": "0.10",
+                    "remaining_size": "0.15",
+                    "fill_count": 1,
+                    "average_fill_price": "2450.1",
+                    "total_fee": "0.15",
+                    "total_builder_fee": "0.00",
+                    "total_closed_pnl": "0.00",
+                    "first_fill_time": 1764000000100,
+                    "last_fill_time": 1764000000100,
+                    "matched_fill_sample": [],
+                    "errors": [],
+                }
+
+        return _Fake()
+
+    monkeypatch.setattr(module.HyperliquidBrokerAdapter, "build_order_status_report", fake_status)
+    monkeypatch.setattr(module.HyperliquidBrokerAdapter, "build_reconciliation_report", fake_reconcile)
+    monkeypatch.setattr(module.HyperliquidBrokerAdapter, "build_fill_summary_report", fake_fill_summary)
+    monkeypatch.setattr(module.time, "sleep", lambda *_args, **_kwargs: None)
+
+    args = _make_args(
+        hyperliquid_submit_sessions_supervise=str(session_dir),
+        hyperliquid_supervision_polls=2,
+        hyperliquid_supervision_interval_seconds=0.0,
+    )
+    assert handle_hyperliquid_submit_sessions_commands(args) is True
+
+    supervision_artifact = session_dir / "hyperliquid_supervision.json"
+    assert supervision_artifact.exists()
+    supervision_payload = json.loads(supervision_artifact.read_text(encoding="utf-8"))
+    assert supervision_payload["supervision_state"] == "active"
+    assert supervision_payload["polls_completed"] == 2
+    assert supervision_payload["monitoring_mode"] == "rest_polling"
+
+    session_status = json.loads((session_dir / "session_status.json").read_text(encoding="utf-8"))
+    assert session_status["supervision_state"] == "active"
+    assert session_status["supervision_poll_count"] == 2
+    assert session_status["fill_summary_state"] == "partial"
+
+
 def test_hyperliquid_submit_alerts_include_cancel_failures(tmp_path, capsys):
     session_dir = _write_session(tmp_path)
     (session_dir / "hyperliquid_cancel_response.json").write_text(
@@ -440,6 +545,30 @@ def test_hyperliquid_submit_alerts_include_cancel_failures(tmp_path, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["alert_status"] == "critical"
     assert any(alert["alert_code"] == "HYPERLIQUID_CANCEL_REQUEST_FAILED" for alert in payload["alerts"])
+
+
+def test_hyperliquid_submit_alerts_include_supervision_attention(tmp_path, capsys):
+    session_dir = _write_session(tmp_path)
+    (session_dir / "hyperliquid_supervision.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.supervision",
+                "generated_at": "2026-03-27T12:09:00",
+                "supervision_state": "attention_required",
+                "attention_required": True,
+                "polls_completed": 3,
+                "errors": ["order_status_probe_failed:TimeoutError"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    args = _make_args(hyperliquid_submit_sessions_alerts=str(tmp_path))
+    assert handle_hyperliquid_submit_sessions_commands(args) is True
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["has_alerts"] is True
+    assert any(alert["alert_code"] == "HYPERLIQUID_SUPERVISION_ATTENTION" for alert in payload["alerts"])
 
 
 def test_hyperliquid_submit_alerts_use_reconciliation_state(tmp_path, capsys):
@@ -539,6 +668,34 @@ def test_load_hyperliquid_submit_summary_includes_fill_summary_fields(tmp_path):
     assert summary["fill_summary_state"] == "partial"
     assert summary["fill_summary_count"] == 1
     assert summary["fill_summary_total_fee"] == "0.2"
+
+
+def test_load_hyperliquid_submit_summary_includes_supervision_fields(tmp_path):
+    session_dir = _write_session(tmp_path, name="20260327_hyperliquid_supervision_demo")
+    (session_dir / "hyperliquid_supervision.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.supervision",
+                "generated_at": "2026-03-27T12:09:00",
+                "supervision_state": "active",
+                "attention_required": False,
+                "polls_completed": 3,
+                "polls_requested": 3,
+                "monitoring_mode": "websocket_aware_rest_polling",
+                "transport_preference": "websocket",
+                "resolved_transport": "websocket",
+                "last_observed_at": "2026-03-27T12:09:00",
+                "errors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = load_hyperliquid_submit_summary(session_dir)
+    assert summary["supervision_present"] is True
+    assert summary["supervision_state"] == "active"
+    assert summary["supervision_poll_count"] == 3
+    assert summary["supervision_monitoring_mode"] == "websocket_aware_rest_polling"
 
 
 def test_invalid_hyperliquid_submit_session_raises(tmp_path):
