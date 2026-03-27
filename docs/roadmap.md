@@ -17,6 +17,12 @@ QuantLab should continue to evolve in this order:
 5. supervised live execution
 6. controlled automation
 
+Performance rule:
+
+- stay Python-first by default
+- treat native acceleration as a measured hotspot tactic, not as a product-wide rewrite plan
+- prefer narrow compute kernels over multi-module language migration
+
 The key rule remains the same:
 
 - do not move into live execution before the paper, safety, and observability layers are mature
@@ -35,6 +41,7 @@ QuantLab has already completed most of the original research foundation and quan
 - walk-forward / forward-evaluation flows
 - canonical run artifacts and run history indexing
 - stable machine-facing CLI and contract surfaces for integration
+- a first repository-level decision on native acceleration strategy, with the backtest engine identified as the first realistic hotspot candidate if profiling justifies it
 
 ### In progress / partially completed
 
