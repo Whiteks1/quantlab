@@ -14,6 +14,14 @@ def run_main(args):
     )
 
 
+def run_module(args):
+    return subprocess.run(
+        [sys.executable, "-m", "quantlab"] + args,
+        capture_output=True,
+        text=True,
+    )
+
+
 def test_version():
     result = run_main(["--version"])
     assert result.returncode == 0
@@ -28,3 +36,9 @@ def test_check():
     assert payload["quantlab_import"] is True
     assert isinstance(payload["venv_active"], bool)
     assert Path(payload["project_root"]).name in {"quant_lab", "quantlab"}
+
+
+def test_module_entrypoint_version():
+    result = run_module(["--version"])
+    assert result.returncode == 0
+    assert result.stdout.strip() == "0.1.0"
