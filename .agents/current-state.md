@@ -6,6 +6,7 @@
 - **Focus**: Stage D.2 is centered on closing ambiguity around supervised Kraken submit, especially idempotency, reconciliation, and post-submit operator safety.
 - **Authority Note**: Stepbit-facing integration remains a secondary boundary track. QuantLab stays autonomous and external consumer needs do not override QuantLab-owned priorities.
 - **Product Identity Note**: Publicly, QuantLab should now be described as a `web3 app` in direction, but still as a supervised and safety-first execution system in current maturity.
+- **Performance Note**: QuantLab remains Python-first. Native acceleration is now treated as a measured hotspot tactic, with the backtest engine as the first realistic candidate if profiling justifies escalation.
 
 ## Completed/Planned Stages
 
@@ -77,6 +78,7 @@
   - Hyperliquid now also has a local action/signature-envelope build surface with resolved nonce and `expiresAfter`
   - Hyperliquid signer backend integration can now produce a real local L1 action signature while still leaving submit for a later slice
   - Hyperliquid boundary review now documents the main contract gaps around signer identity, API wallets, subaccounts/vaults, and websocket-first venue interaction
+  - native acceleration strategy now documents `Numba` as the first acceleration experiment and the backtest engine as the first realistic hotspot candidate before any broader `C++` or `Rust` move
 
 
 ## Known Issues / Technical Debt

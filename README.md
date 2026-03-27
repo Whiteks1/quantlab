@@ -51,6 +51,7 @@ Stepbit-facing hardening is valid when it reduces real boundary friction, but it
 Known technical debt still tracked internally:
 
 - duplicate workflow docs in `.agents/workflows/`: `strategy-research.md` vs `strategy_research.md`
+- native acceleration is now explicitly treated as a measured hotspot decision, not as a language-rewrite goal
 
 ## Requirements
 
@@ -175,6 +176,7 @@ See also:
 - [docs/execution-context-layer.md](./docs/execution-context-layer.md)
 - [docs/execution-venue-strategy.md](./docs/execution-venue-strategy.md)
 - [docs/hyperliquid-boundary-review.md](./docs/hyperliquid-boundary-review.md)
+- [docs/native-acceleration-strategy.md](./docs/native-acceleration-strategy.md)
 - [docs/paper-session-runbook.md](./docs/paper-session-runbook.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/workflow-operativo-codex.md](./docs/workflow-operativo-codex.md)
