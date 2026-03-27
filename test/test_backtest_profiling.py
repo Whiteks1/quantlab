@@ -21,6 +21,7 @@ def test_profile_backtest_workload_returns_positive_timings():
 
     assert result.rows == 128
     assert result.repeats == 2
+    assert result.backend == "python"
     assert len(result.elapsed_seconds) == 2
     assert all(value >= 0.0 for value in result.elapsed_seconds)
     assert result.mean_seconds >= 0.0
@@ -31,6 +32,8 @@ def test_build_backtest_profile_report_includes_requested_sizes():
     report = build_backtest_profile_report(sizes=(64, 128), repeats=1, warmup=0, seed=7)
 
     assert report["artifact_type"] == "quantlab.backtest.profile"
+    assert "python" in report["available_backends"]
+    assert report["backend"] == "python"
     assert report["sizes"] == [64, 128]
     assert len(report["workloads"]) == 2
     assert report["workloads"][0]["rows"] == 64
