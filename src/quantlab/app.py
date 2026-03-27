@@ -763,7 +763,6 @@ def _normalize_cli_aliases(args: argparse.Namespace) -> None:
     if getattr(args, "best_from", None) and not getattr(args, "runs_best", None):
         args.runs_best = args.best_from
 
-
 def _apply_json_request_overlay(args: argparse.Namespace, session_metadata: dict[str, object]) -> str | None:
     json_command: str | None = None
     if not args.json_request:
