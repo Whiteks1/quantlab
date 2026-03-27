@@ -350,6 +350,22 @@ button, input, textarea { font: inherit; }
     border-color: var(--border-strong);
 }
 
+.log-preview {
+    margin: 0;
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: rgba(4, 10, 16, 0.92);
+    color: var(--text);
+    max-height: 360px;
+    overflow: auto;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.83rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .runtime-chip {
     display: inline-flex;
     align-items: center;

@@ -8,6 +8,7 @@ const CONFIG = {
   refreshIntervalMs: 15000,
   maxWorklistRuns: 8,
   maxRecentJobs: 4,
+  maxLogPreviewChars: 5000,
 };
 
 const state = {
@@ -22,7 +23,7 @@ const state = {
     {
       role: "assistant",
       content:
-        "QuantLab Desktop now supports a real workflow.\n\nTry:\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- open latest run\n- compare selected\n- show artifacts\n- show runtime status",
+        "QuantLab Desktop now supports a real workflow.\n\nTry:\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure",
     },
   ],
   tabs: [],
@@ -76,6 +77,8 @@ const paletteActions = [
   ["compare", "Open Compare", "Open a compare tab from selected runs.", () => openCompareSelectionTab()],
   ["ops", "Open Paper Ops", "Open operational surfaces.", () => openResearchTab("ops", "Paper Ops", "#/ops")],
   ["latest-run", "Open Latest Run", "Open the latest run detail.", () => openLatestRunTab()],
+  ["latest-failed", "Open Latest Failed Launch", "Review the most recent failed launch job.", () => openLatestFailedLaunchTab()],
+  ["explain-failure", "Explain Latest Failure", "Summarize the latest failed launch from stderr and job state.", () => explainLatestFailureInChat()],
   ["artifacts", "Show Artifacts", "Open artifacts for the selected or latest run.", () => openArtifactsForPreferredRun()],
   ["runtime", "Show Runtime Status", "Summarize runtime health in chat.", () => summarizeRuntimeInChat()],
 ].map(([id, label, description, run]) => ({ id, label, description, run }));
@@ -179,6 +182,7 @@ async function refreshSnapshot() {
     state.selectedRunIds = state.selectedRunIds.filter((runId) => validIds.has(runId));
     renderWorkspaceState();
     renderWorkflow();
+    refreshLiveJobTabs();
     rerenderContextualTabs();
   } catch (_error) {
     // Keep the shell usable even if optional surfaces are down.
@@ -260,6 +264,8 @@ function renderTabs() {
     elements.tabContent.innerHTML = renderCompareTab(activeTab);
   } else if (activeTab.kind === "artifacts") {
     elements.tabContent.innerHTML = renderArtifactsTab(activeTab);
+  } else if (activeTab.kind === "job") {
+    elements.tabContent.innerHTML = renderJobTab(activeTab);
   } else {
     elements.tabContent.innerHTML = `<div class="tab-placeholder">${escapeHtml(activeTab.content || "")}</div>`;
   }
@@ -327,8 +333,22 @@ function renderJobList(jobs) {
       </div>
       <div>${escapeHtml(job.summary || "-")}</div>
       <div class="job-meta">${escapeHtml(formatDateTime(job.started_at))}${job.ended_at ? ` · ended ${escapeHtml(formatDateTime(job.ended_at))}` : " · running"}</div>
+      <div class="workflow-actions">
+        <button class="ghost-btn" type="button" data-open-job="${escapeHtml(job.request_id || "")}">Review job</button>
+        ${job.run_id ? `<button class="ghost-btn" type="button" data-open-run="${escapeHtml(job.run_id)}">Open run</button>` : ""}
+        ${job.artifacts_href ? `<button class="ghost-btn" type="button" data-open-job-artifacts="${escapeHtml(job.request_id || "")}">Artifacts</button>` : ""}
+      </div>
     </article>
   `).join("");
+  elements.workflowJobsList.querySelectorAll("[data-open-job]").forEach((button) => {
+    button.addEventListener("click", () => openJobTab(button.dataset.openJob));
+  });
+  elements.workflowJobsList.querySelectorAll("[data-open-run]").forEach((button) => {
+    button.addEventListener("click", () => openRunDetailTab(button.dataset.openRun));
+  });
+  elements.workflowJobsList.querySelectorAll("[data-open-job-artifacts]").forEach((button) => {
+    button.addEventListener("click", () => openArtifactsForJob(button.dataset.openJobArtifacts));
+  });
 }
 
 function renderRunsWorklist(runs) {
@@ -415,6 +435,20 @@ function bindTabContentEvents(tab) {
       button.addEventListener("click", () => openRunDetailTab(button.dataset.openRun));
     });
   }
+  if (tab.kind === "job") {
+    elements.tabContent.querySelectorAll("[data-open-run]").forEach((button) => {
+      button.addEventListener("click", () => openRunDetailTab(button.dataset.openRun));
+    });
+    elements.tabContent.querySelectorAll("[data-open-job-artifacts]").forEach((button) => {
+      button.addEventListener("click", () => openArtifactsForJob(button.dataset.openJobArtifacts));
+    });
+    elements.tabContent.querySelectorAll("[data-open-job-link]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const url = absoluteUrl(button.dataset.openJobLink);
+        if (url) window.quantlabDesktop.openExternal(url);
+      });
+    });
+  }
 }
 
 function handleChatPrompt(prompt) {
@@ -443,6 +477,14 @@ function handleChatPrompt(prompt) {
     openLatestRunTab();
     return;
   }
+  if (normalized.includes("latest failed launch") || normalized.includes("latest failed job")) {
+    openLatestFailedLaunchTab();
+    return;
+  }
+  if (normalized.includes("explain latest failure") || normalized.includes("explain failure")) {
+    explainLatestFailureInChat();
+    return;
+  }
   if (normalized.startsWith("show artifacts")) {
     const explicitRunId = extractRunIdAfterPrefix(prompt, "show artifacts for");
     explicitRunId ? openArtifactsTabForRun(explicitRunId) : openArtifactsForPreferredRun();
@@ -462,7 +504,7 @@ function handleChatPrompt(prompt) {
     submitLaunchRequest(launchSweepPayload, "chat");
     return;
   }
-  pushMessage("assistant", "This shell now supports real backend-backed actions. Try:\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/sweeps/example.yaml\n- open latest run\n- compare selected\n- show artifacts\n- show runtime status");
+  pushMessage("assistant", "This shell now supports real backend-backed actions. Try:\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/sweeps/example.yaml\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure");
 }
 
 async function submitLaunchRequest(payload, source) {
@@ -589,6 +631,115 @@ async function openArtifactsTabForRun(runId) {
   }
 }
 
+async function openJobTab(requestId) {
+  const job = findJob(requestId);
+  if (!job) {
+    pushMessage("assistant", `Launch job ${requestId} is not present in the current snapshot.`);
+    return;
+  }
+
+  const tabId = `job:${requestId}`;
+  upsertTab({
+    id: tabId,
+    kind: "job",
+    navKind: "launch",
+    title: `Job ${requestId}`,
+    requestId,
+    status: "loading",
+    job,
+    stdoutText: "",
+    stderrText: "",
+    error: null,
+  });
+
+  await refreshJobTab(requestId, job);
+}
+
+async function refreshJobTab(requestId, fallbackJob = null, options = {}) {
+  const { silent = false } = options;
+  const tabId = `job:${requestId}`;
+  const job = findJob(requestId) || fallbackJob;
+  if (!job) {
+    if (!silent) pushMessage("assistant", `Launch job ${requestId} is not present in the current snapshot.`);
+    return;
+  }
+
+  try {
+    const [stdoutText, stderrText] = await Promise.all([
+      loadOptionalText(job.stdout_href),
+      loadOptionalText(job.stderr_href),
+    ]);
+    upsertTab({
+      id: tabId,
+      kind: "job",
+      navKind: "launch",
+      title: `Job ${requestId}`,
+      requestId,
+      status: "ready",
+      job: findJob(requestId) || job,
+      stdoutText,
+      stderrText,
+      error: null,
+    });
+    if (!silent) pushMessage("assistant", `Opened launch job ${requestId}.`);
+  } catch (error) {
+    upsertTab({
+      id: tabId,
+      kind: "job",
+      navKind: "launch",
+      title: `Job ${requestId}`,
+      requestId,
+      status: "error",
+      job,
+      stdoutText: "",
+      stderrText: "",
+      error: error.message || "Could not load job logs.",
+    });
+    if (!silent) pushMessage("assistant", error.message || `Could not load job ${requestId}.`);
+  }
+}
+
+function openLatestFailedLaunchTab() {
+  const job = getLatestFailedJob();
+  if (!job) {
+    pushMessage("assistant", "No failed launch job is currently available.");
+    return;
+  }
+  openJobTab(job.request_id);
+}
+
+async function explainLatestFailureInChat() {
+  const job = getLatestFailedJob();
+  if (!job) {
+    pushMessage("assistant", "No failed launch job is currently available, so there is nothing to explain.");
+    return;
+  }
+  const stderrText = await loadOptionalText(job.stderr_href);
+  const explanation = buildFailureExplanation(job, stderrText);
+  pushMessage("assistant", explanation);
+}
+
+function openArtifactsForJob(requestId) {
+  const job = findJob(requestId);
+  if (!job) {
+    pushMessage("assistant", `Launch job ${requestId} is not present in the current snapshot.`);
+    return;
+  }
+  if (job.run_id) {
+    openArtifactsTabForRun(job.run_id);
+    return;
+  }
+  if (job.artifacts_href) {
+    const url = absoluteUrl(job.artifacts_href);
+    if (url) {
+      window.quantlabDesktop.openExternal(url);
+      pushMessage("assistant", `Opened artifact folder for job ${requestId} in the browser.`);
+      return;
+    }
+  }
+  pushMessage("assistant", `Job ${requestId} does not expose artifacts yet.`);
+}
+
 function closeTab(tabId) {
   state.tabs = state.tabs.filter((tab) => tab.id !== tabId);
   if (state.activeTabId === tabId) state.activeTabId = state.tabs[0]?.id || null;
@@ -640,13 +791,14 @@ function buildLaunchPayloadFromForm() {
 
 function parseLaunchRunPrompt(prompt) {
   if (!prompt.trim().toLowerCase().startsWith("launch run")) return null;
-  const ticker = extractNamedValue(prompt, "ticker");
-  const start = extractNamedValue(prompt, "start");
-  const end = extractNamedValue(prompt, "end");
+  const keys = ["ticker", "start", "end", "interval", "cash", "paper"];
+  const ticker = extractNamedValue(prompt, "ticker", keys);
+  const start = extractNamedValue(prompt, "start", keys);
+  const end = extractNamedValue(prompt, "end", keys);
   if (!ticker || !start || !end) return null;
   const params = { ticker, start, end };
-  const interval = extractNamedValue(prompt, "interval");
-  const cash = extractNamedValue(prompt, "cash");
+  const interval = extractNamedValue(prompt, "interval", keys);
+  const cash = extractNamedValue(prompt, "cash", keys);
   if (interval) params.interval = interval;
   if (cash) params.initial_cash = cash;
   if (/\bpaper\b/i.test(prompt)) params.paper = true;
@@ -655,17 +807,20 @@ function parseLaunchRunPrompt(prompt) {
 
 function parseLaunchSweepPrompt(prompt) {
   if (!prompt.trim().toLowerCase().startsWith("launch sweep")) return null;
-  const configPath = extractNamedValue(prompt, "config");
+  const keys = ["config", "out"];
+  const configPath = extractNamedValue(prompt, "config", keys);
   if (!configPath) return null;
   const payload = { command: "sweep", params: { config_path: configPath } };
-  const outDir = extractNamedValue(prompt, "out");
+  const outDir = extractNamedValue(prompt, "out", keys);
   if (outDir) payload.params.out_dir = outDir;
   return payload;
 }
 
-function extractNamedValue(prompt, key) {
-  const match = String(prompt).match(new RegExp(`${key}\\s+([^\\s]+)`, "i"));
-  return match ? match[1].trim() : "";
+function extractNamedValue(prompt, key, knownKeys = []) {
+  const otherKeys = knownKeys.filter((candidate) => candidate !== key).map(escapeRegex);
+  const boundary = otherKeys.length ? `(?=\\s+(?:${otherKeys.join("|")})\\b|$)` : `(?=$)`;
+  const match = String(prompt).match(new RegExp(`${escapeRegex(key)}\\s+(.+?)${boundary}`, "i"));
+  return match ? stripWrappingQuotes(match[1].trim()) : "";
 }
 
 function extractRunIdAfterPrefix(prompt, prefix) {
@@ -763,6 +918,62 @@ function renderArtifactsTab(tab) {
   `;
 }
 
+function renderJobTab(tab) {
+  const job = findJob(tab.requestId) || tab.job;
+  if (!job) {
+    return `<div class="tab-placeholder">The requested launch job is no longer present in the current snapshot.</div>`;
+  }
+  if (tab.status === "loading") {
+    return `<div class="tab-placeholder">Reading launch logs for ${escapeHtml(job.request_id || "unknown")}...</div>`;
+  }
+  if (tab.status === "error") {
+    return `<div class="tab-placeholder">${escapeHtml(tab.error || "Could not load launch job details.")}</div>`;
+  }
+
+  const failureSummary = buildFailureExplanation(job, tab.stderrText || "");
+  const statusTone = job.status === "succeeded" ? "tone-positive" : job.status === "failed" ? "tone-negative" : "";
+
+  return `
+    <div class="artifact-shell">
+      <div class="artifact-top">
+        <div>
+          <div class="section-label">Launch review</div>
+          <h3>${escapeHtml(job.request_id || "unknown")}</h3>
+          <div class="artifact-meta">${escapeHtml(titleCase(job.command || "unknown"))} · ${escapeHtml(job.summary || "-")}</div>
+        </div>
+        <div class="workflow-actions">
+          ${job.run_id ? `<button class="ghost-btn" type="button" data-open-run="${escapeHtml(job.run_id)}">Open run</button>` : ""}
+          ${job.artifacts_href ? `<button class="ghost-btn" type="button" data-open-job-artifacts="${escapeHtml(job.request_id || "")}">Artifacts</button>` : ""}
+          ${job.stderr_href ? `<button class="ghost-btn" type="button" data-open-job-link="${escapeHtml(job.stderr_href)}">Open stderr</button>` : ""}
+        </div>
+      </div>
+      <div class="tab-summary-grid">
+        ${renderSummaryCard("Status", titleCase(job.status || "unknown"), statusTone)}
+        ${renderSummaryCard("Started", formatDateTime(job.started_at))}
+        ${renderSummaryCard("Ended", formatDateTime(job.ended_at))}
+        ${renderSummaryCard("Run id", job.run_id || "-")}
+      </div>
+      <section class="artifact-panel">
+        <div class="section-label">Failure review</div>
+        <h3>Deterministic summary</h3>
+        <div class="artifact-meta">${escapeHtml(failureSummary)}</div>
+      </section>
+      <div class="artifact-grid">
+        <section class="artifact-panel">
+          <div class="section-label">Stdout</div>
+          <h3>Process output</h3>
+          <pre class="log-preview">${escapeHtml(formatLogPreview(tab.stdoutText || "No stdout captured."))}</pre>
+        </section>
+        <section class="artifact-panel">
+          <div class="section-label">Stderr</div>
+          <h3>Error output</h3>
+          <pre class="log-preview">${escapeHtml(formatLogPreview(tab.stderrText || job.error_message || "No stderr captured."))}</pre>
+        </section>
+      </div>
+    </div>
+  `;
+}
+
 function renderSummaryCard(label, value, tone = "") {
   return `<article class="summary-card"><div class="label">${escapeHtml(label)}</div><div class="value ${escapeHtml(tone)}">${escapeHtml(value)}</div></article>`;
 }
@@ -780,7 +991,21 @@ function upsertTab(nextTab) {
 }
 
 function rerenderContextualTabs() {
-  if (state.tabs.some((tab) => tab.kind === "compare" || tab.kind === "artifacts")) renderTabs();
+  if (state.tabs.some((tab) => tab.kind === "compare" || tab.kind === "artifacts" || tab.kind === "job")) renderTabs();
+}
+
+function refreshLiveJobTabs() {
+  state.tabs
+    .filter((tab) => tab.kind === "job")
+    .forEach((tab) => {
+      const currentJob = findJob(tab.requestId);
+      if (!currentJob) return;
+      const statusChanged = tab.job?.status !== currentJob.status;
+      const needsLiveRefresh = currentJob.status === "running" || statusChanged;
+      if (needsLiveRefresh) {
+        refreshJobTab(tab.requestId, currentJob, { silent: true });
+      }
+    });
 }
 
 async function loadRunDetail(runId) {
@@ -798,7 +1023,9 @@ async function loadRunDetail(runId) {
       // Keep trying the remaining artifact names.
     }
   }
-  state.detailCache.set(runId, detail);
+  if (detail.report) {
+    state.detailCache.set(runId, detail);
+  }
   return detail;
 }
 
@@ -823,8 +1050,16 @@ function getRuns() {
   return Array.isArray(state.snapshot?.runsRegistry?.runs) ? state.snapshot.runsRegistry.runs : [];
 }
 
+function getJobs() {
+  return Array.isArray(state.snapshot?.launchControl?.jobs) ? state.snapshot.launchControl.jobs : [];
+}
+
 function getLatestRun() {
   return getRuns()[0] || null;
+}
+
+function getLatestFailedJob() {
+  return getJobs().find((job) => job.status === "failed") || null;
 }
 
 function getSelectedRuns() {
@@ -833,6 +1068,10 @@ function getSelectedRuns() {
 
 function findRun(runId) {
   return getRuns().find((run) => run.run_id === runId) || null;
+}
+
+function findJob(requestId) {
+  return getJobs().find((job) => job.request_id === requestId) || null;
 }
 
 function summarizeLaunchPayload(payload) {
@@ -855,6 +1094,48 @@ function absoluteUrl(relativeOrUrl) {
   if (!relativeOrUrl) return "";
   if (/^https?:\/\//i.test(relativeOrUrl)) return relativeOrUrl;
   return state.workspace.serverUrl ? `${state.workspace.serverUrl.replace(/\/$/, "")}${relativeOrUrl}` : "";
+}
+
+async function loadOptionalText(relativePath) {
+  if (!relativePath) return "";
+  try {
+    return await window.quantlabDesktop.requestText(relativePath);
+  } catch (_error) {
+    return "";
+  }
+}
+
+function buildFailureExplanation(job, stderrText) {
+  if (!job) return "No launch job information is available.";
+  if (job.status !== "failed") {
+    return job.status === "succeeded"
+      ? "This launch completed successfully. Use the run tab or artifacts tab for deeper inspection."
+      : "This launch is still in progress, so a failure explanation is not available yet.";
+  }
+  const stderr = String(stderrText || job.error_message || "").trim();
+  const lowered = stderr.toLowerCase();
+  let likelyCause = "QuantLab reported a generic runtime failure. Review stderr for the exact failing step.";
+  if (lowered.includes("ticker") || lowered.includes("start") || lowered.includes("end")) {
+    likelyCause = "The failure looks related to missing or invalid launch parameters.";
+  } else if (lowered.includes("config") || lowered.includes("yaml")) {
+    likelyCause = "The failure looks related to a missing or invalid sweep configuration file.";
+  } else if (lowered.includes("module") || lowered.includes("import")) {
+    likelyCause = "The failure looks related to a Python environment or dependency import problem.";
+  } else if (lowered.includes("permission") || lowered.includes("access")) {
+    likelyCause = "The failure looks related to file-system permissions or path access.";
+  } else if (lowered.includes("file not found") || lowered.includes("no such file")) {
+    likelyCause = "The failure looks related to a missing file or artifact path.";
+  }
+  const lastLine = stderr ? stderr.split(/\r?\n/).filter(Boolean).slice(-1)[0] : "";
+  return [likelyCause, lastLine ? `Last stderr line: ${lastLine}` : "", job.error_message ? `Reported error: ${job.error_message}` : ""]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function formatLogPreview(text) {
+  const value = String(text || "");
+  if (!value) return "";
+  return value.length > CONFIG.maxLogPreviewChars ? `${value.slice(-CONFIG.maxLogPreviewChars)}\n\n[truncated to latest ${CONFIG.maxLogPreviewChars} chars]` : value;
 }
 
 function runtimeChip(label, value, tone) {
@@ -906,6 +1187,14 @@ function toneClass(value, higherIsBetter) {
 
 function metricValue(value) {
   return typeof value === "number" && !Number.isNaN(value) ? value : Number.NEGATIVE_INFINITY;
+}
+
+function stripWrappingQuotes(value) {
+  return String(value || "").replace(/^["']|["']$/g, "");
+}
+
+function escapeRegex(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function escapeHtml(value) {
