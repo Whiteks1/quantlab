@@ -28,13 +28,11 @@ function broadcastWorkspaceState() {
 
 function resolvePythonCommand() {
   const isWindows = process.platform === "win32";
-  return (
-    [
-      path.join(PROJECT_ROOT, ".venv", isWindows ? "Scripts" : "bin", isWindows ? "python.exe" : "python"),
-      process.env.PYTHON,
-      isWindows ? "python" : "python3",
-    ].filter(Boolean)[0]
-  );
+  const localVenv = path.join(PROJECT_ROOT, ".venv", isWindows ? "Scripts" : "bin", isWindows ? "python.exe" : "python");
+  if (localVenv && require("fs").existsSync(localVenv)) {
+    return localVenv;
+  }
+  return process.env.PYTHON || (isWindows ? "python" : "python3");
 }
 
 function extractServerUrl(line) {
