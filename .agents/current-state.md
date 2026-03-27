@@ -79,6 +79,7 @@
   - Hyperliquid signer backend integration can now produce a real local L1 action signature while still leaving submit for a later slice
   - Hyperliquid boundary review now documents the main contract gaps around signer identity, API wallets, subaccounts/vaults, and websocket-first venue interaction
   - native acceleration strategy now documents `Numba` as the first acceleration experiment and the backtest engine as the first realistic hotspot candidate before any broader `C++` or `Rust` move
+  - a local backtest profiling surface now exists to measure the Python engine before any `Numba` or native extraction work
 
 
 ## Known Issues / Technical Debt
