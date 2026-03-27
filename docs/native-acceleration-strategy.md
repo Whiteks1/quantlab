@@ -164,6 +164,8 @@ Refactor the backtest loop into a pure array-oriented helper with a stable contr
 
 Try `Numba` first on that helper.
 
+That pilot now exists as an optional backend for the backtest engine and can be compared locally through the profiling surface.
+
 ### Step 4
 
 If the speedup is not enough and the boundary remains stable, promote that helper to a compiled extension.

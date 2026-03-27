@@ -90,6 +90,12 @@ Developer dependencies:
 pip install -e .[dev]
 ```
 
+Optional performance extras:
+
+```bash
+pip install -e .[perf]
+```
+
 ## Quick Health Check
 
 Version:
