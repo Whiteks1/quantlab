@@ -14,6 +14,10 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "hyperliquid_preflight_outdir": None,
         "hyperliquid_account_readiness_outdir": None,
         "hyperliquid_signed_action_outdir": None,
+        "hyperliquid_submit_signed_action": None,
+        "hyperliquid_submit_reviewer": None,
+        "hyperliquid_submit_note": None,
+        "hyperliquid_submit_confirm": False,
         "hyperliquid_private_key": None,
         "hyperliquid_private_key_env": "HYPERLIQUID_PRIVATE_KEY",
         "kraken_preflight_outdir": None,
@@ -372,6 +376,94 @@ def test_writes_hyperliquid_signed_action_artifact(monkeypatch, tmp_path):
     assert payload["nonce"] == 1700000000000
     assert payload["signature_envelope"]["signature_present"] is True
     assert payload["signer_backend"] == "hyperliquid_local_private_key"
+
+
+def test_writes_hyperliquid_submit_response_artifact(monkeypatch, tmp_path):
+    from quantlab.cli import broker_preflight as module
+
+    signed_action_path = tmp_path / "hyperliquid_signed_action.json"
+    signed_action_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.signed_action",
+                "readiness_allowed": True,
+                "action_payload": {"type": "order", "orders": [], "grouping": "na"},
+                "nonce": 1700000000000,
+                "signature_envelope": {
+                    "signature_state": "signed",
+                    "signature_present": True,
+                    "signature": {"r": "0x1", "s": "0x2", "v": 27},
+                    "signer_id": "0x2222222222222222222222222222222222222222",
+                    "signing_payload_sha256": "abc123",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_submit(self, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.hyperliquid.submit_response",
+                    "adapter_name": "hyperliquid",
+                    "generated_at": "2026-03-27T12:00:00",
+                    "source_artifact_path": str(signed_action_path),
+                    "source_action_hash": "0xabc",
+                    "source_signer_id": "0x2222222222222222222222222222222222222222",
+                    "source_signing_payload_sha256": "abc123",
+                    "submit_payload": {
+                        "action": {"type": "order"},
+                        "nonce": 1700000000000,
+                        "signature": {"r": "0x1", "s": "0x2", "v": 27},
+                    },
+                    "submit_state": "submitted_remote",
+                    "remote_submit_called": True,
+                    "submitted": True,
+                    "response_type": "resting",
+                    "exchange_response": {"status": "ok"},
+                    "reviewer": "marce",
+                    "note": "go",
+                    "errors": [],
+                }
+
+        return _Fake()
+
+    monkeypatch.setattr(module.HyperliquidBrokerAdapter, "build_submit_report", fake_submit)
+
+    args = _make_args(
+        hyperliquid_submit_signed_action=str(signed_action_path),
+        hyperliquid_submit_reviewer="marce",
+        hyperliquid_submit_note="go",
+        hyperliquid_submit_confirm=True,
+    )
+    result = handle_broker_preflight_commands(args)
+
+    assert isinstance(result, dict)
+    assert result["status"] == "success"
+    assert result["submitted"] is True
+    assert result["submit_state"] == "submitted_remote"
+
+    artifact_path = tmp_path / "hyperliquid_submit_response.json"
+    assert artifact_path.exists()
+
+    payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert payload["artifact_type"] == "quantlab.hyperliquid.submit_response"
+    assert payload["reviewer"] == "marce"
+
+
+def test_hyperliquid_submit_requires_confirmation(tmp_path):
+    signed_action_path = tmp_path / "hyperliquid_signed_action.json"
+    signed_action_path.write_text("{}", encoding="utf-8")
+
+    args = _make_args(
+        hyperliquid_submit_signed_action=str(signed_action_path),
+        hyperliquid_submit_reviewer="marce",
+        hyperliquid_submit_confirm=False,
+    )
+
+    with pytest.raises(ConfigError):
+        handle_broker_preflight_commands(args)
 
 
 def test_missing_symbol_raises_config_error(tmp_path):
