@@ -26,6 +26,9 @@ _INDEX_FIELDS = [
     "response_type",
     "order_status_known",
     "latest_order_state",
+    "reconciliation_known",
+    "latest_reconciliation_state",
+    "effective_order_state",
     "path",
 ]
 

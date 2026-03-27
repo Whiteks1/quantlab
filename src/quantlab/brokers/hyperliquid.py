@@ -298,6 +298,41 @@ class HyperliquidOrderStatusReport:
         }
 
 
+@dataclass(frozen=True)
+class HyperliquidReconciliationReport:
+    adapter_name: str
+    generated_at: str
+    source_session_id: str
+    execution_account_id: str | None
+    status_known: bool
+    normalized_state: str | None
+    resolution_source: str | None
+    oid: int | None
+    cloid: str | None
+    order_status_report: dict[str, object] | None
+    matched_open_order: dict[str, object] | None
+    matched_frontend_open_order: dict[str, object] | None
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact_type": "quantlab.hyperliquid.reconciliation",
+            "adapter_name": self.adapter_name,
+            "generated_at": self.generated_at,
+            "source_session_id": self.source_session_id,
+            "execution_account_id": self.execution_account_id,
+            "status_known": self.status_known,
+            "normalized_state": self.normalized_state,
+            "resolution_source": self.resolution_source,
+            "oid": self.oid,
+            "cloid": self.cloid,
+            "order_status_report": self.order_status_report,
+            "matched_open_order": self.matched_open_order,
+            "matched_frontend_open_order": self.matched_frontend_open_order,
+            "errors": list(self.errors),
+        }
+
+
 class HyperliquidBrokerAdapter(BrokerAdapter):
     """
     Read-only Hyperliquid venue adapter for preflight and context resolution.
@@ -1068,6 +1103,120 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             errors=tuple(_unique_reasons(errors)),
         )
 
+    def build_reconciliation_report(
+        self,
+        *,
+        source_session_id: str,
+        execution_account_id: str | None,
+        oid: int | None = None,
+        cloid: str | None = None,
+        timeout_seconds: float = 10.0,
+        fetch_json=None,
+    ) -> HyperliquidReconciliationReport:
+        errors: list[str] = []
+        status_report = self.build_order_status_report(
+            source_session_id=source_session_id,
+            execution_account_id=execution_account_id,
+            oid=oid,
+            cloid=cloid,
+            timeout_seconds=timeout_seconds,
+            fetch_json=fetch_json,
+        ).to_dict()
+
+        normalized_state = status_report.get("normalized_state")
+        status_known = bool(status_report.get("status_known"))
+        resolution_source = "order_status" if status_report.get("query_attempted") else None
+        matched_open_order = None
+        matched_frontend_open_order = None
+
+        resolved_execution_account = _safe_string(execution_account_id)
+        resolved_cloid = _safe_string(cloid)
+        resolved_oid = oid if isinstance(oid, int) and oid >= 0 else None
+
+        if status_known:
+            return HyperliquidReconciliationReport(
+                adapter_name=self.adapter_name,
+                generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+                source_session_id=source_session_id,
+                execution_account_id=resolved_execution_account,
+                status_known=True,
+                normalized_state=normalized_state,
+                resolution_source=resolution_source,
+                oid=resolved_oid,
+                cloid=resolved_cloid,
+                order_status_report=status_report,
+                matched_open_order=None,
+                matched_frontend_open_order=None,
+                errors=tuple(_unique_reasons(errors)),
+            )
+
+        if not resolved_execution_account:
+            errors.append("missing_execution_account_id")
+        elif not _is_hex_address(resolved_execution_account):
+            errors.append("invalid_execution_account_id")
+
+        if resolved_oid is None and not resolved_cloid:
+            errors.append("missing_order_identifier")
+
+        if not errors:
+            try:
+                open_orders = fetch_hyperliquid_open_orders(
+                    resolved_execution_account,
+                    timeout_seconds=timeout_seconds,
+                    fetch_json=fetch_json,
+                )
+                matched_open_order = _find_matching_hyperliquid_order(
+                    open_orders,
+                    oid=resolved_oid,
+                    cloid=resolved_cloid,
+                )
+                if matched_open_order is not None:
+                    status_known = True
+                    normalized_state = "open"
+                    resolution_source = "open_orders"
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"open_orders_reconciliation_failed:{exc.__class__.__name__}")
+
+        if not status_known and not errors:
+            try:
+                frontend_open_orders = fetch_hyperliquid_frontend_open_orders(
+                    resolved_execution_account,
+                    timeout_seconds=timeout_seconds,
+                    fetch_json=fetch_json,
+                )
+                matched_frontend_open_order = _find_matching_hyperliquid_order(
+                    frontend_open_orders,
+                    oid=resolved_oid,
+                    cloid=resolved_cloid,
+                )
+                if matched_frontend_open_order is not None:
+                    status_known = True
+                    normalized_state = "open"
+                    resolution_source = "frontend_open_orders"
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"frontend_open_orders_reconciliation_failed:{exc.__class__.__name__}")
+
+        if not status_known and not errors:
+            normalized_state = "unknown"
+            resolution_source = "unresolved"
+            errors.append("reconciliation_not_found")
+
+        return HyperliquidReconciliationReport(
+            adapter_name=self.adapter_name,
+            generated_at=dt.datetime.now().replace(microsecond=0).isoformat(),
+            source_session_id=source_session_id,
+            execution_account_id=resolved_execution_account,
+            status_known=status_known,
+            normalized_state=normalized_state,
+            resolution_source=resolution_source,
+            oid=resolved_oid,
+            cloid=resolved_cloid,
+            order_status_report=status_report,
+            matched_open_order=matched_open_order,
+            matched_frontend_open_order=matched_frontend_open_order,
+            errors=tuple(_unique_reasons(errors)),
+        )
+
 
 def fetch_hyperliquid_all_mids(
     *,
@@ -1457,6 +1606,52 @@ def _extract_hyperliquid_order_status(order_status: dict[str, object] | None) ->
         nested_status = order.get("status")
         if isinstance(nested_status, str) and nested_status.strip():
             return nested_status.strip()
+    return None
+
+
+def _find_matching_hyperliquid_order(
+    orders: list[dict[str, object]] | None,
+    *,
+    oid: int | None,
+    cloid: str | None,
+) -> dict[str, object] | None:
+    if not isinstance(orders, list):
+        return None
+    for item in orders:
+        if not isinstance(item, dict):
+            continue
+        item_oid = _extract_hyperliquid_order_oid(item)
+        item_cloid = _extract_hyperliquid_order_cloid(item)
+        if oid is not None and item_oid == oid:
+            return item
+        if cloid and item_cloid and item_cloid == cloid:
+            return item
+    return None
+
+
+def _extract_hyperliquid_order_oid(order_item: dict[str, object]) -> int | None:
+    direct_oid = order_item.get("oid")
+    if isinstance(direct_oid, int):
+        return direct_oid
+    nested_order = order_item.get("order")
+    if isinstance(nested_order, dict):
+        nested_oid = nested_order.get("oid")
+        if isinstance(nested_oid, int):
+            return nested_oid
+    return None
+
+
+def _extract_hyperliquid_order_cloid(order_item: dict[str, object]) -> str | None:
+    for key in ("cloid", "c", "clientOrderId"):
+        value = _safe_string(order_item.get(key))
+        if value:
+            return value
+    nested_order = order_item.get("order")
+    if isinstance(nested_order, dict):
+        for key in ("cloid", "c", "clientOrderId"):
+            value = _safe_string(nested_order.get(key))
+            if value:
+                return value
     return None
 
 
