@@ -140,6 +140,74 @@ def _write_broker_validation_session(root: Path, session_id: str) -> None:
     )
 
 
+def _write_pretrade_session(
+    root: Path,
+    session_id: str,
+    *,
+    execution_allowed: bool | None,
+    generated_at: str,
+) -> None:
+    session_dir = root / session_id
+    session_dir.mkdir(parents=True)
+    (session_dir / "summary.json").write_text(
+        json.dumps(
+            {
+                "machine_contract": {"contract_type": "quantlab.pretrade.summary"},
+                "generated_at": generated_at,
+                "session_id": session_id,
+                "symbol": "ETH-USD",
+                "venue": "kraken",
+                "side": "buy",
+                "accepted": True,
+                "risk_amount": 10.0,
+                "position_size": 0.2,
+                "notional": 400.0,
+                "max_loss_at_stop": 10.0,
+                "net_profit_at_target": 20.0,
+                "risk_reward_ratio": 2.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "plan.json").write_text(
+        json.dumps(
+            {
+                "machine_contract": {"contract_type": "quantlab.pretrade.plan"},
+                "generated_at": generated_at,
+                "session_id": session_id,
+                "request": {
+                    "symbol": "ETH-USD",
+                    "venue": "kraken",
+                    "side": "buy",
+                },
+                "plan": {
+                    "risk_amount": 10.0,
+                    "position_size": 0.2,
+                    "notional": 400.0,
+                    "max_loss_at_stop": 10.0,
+                    "net_profit_at_target": 20.0,
+                    "risk_reward_ratio": 2.0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "plan.md").write_text("# demo\n", encoding="utf-8")
+    if execution_allowed is not None:
+        (session_dir / "execution_bridge.json").write_text(
+            json.dumps(
+                {
+                    "machine_contract": {"contract_type": "quantlab.pretrade.execution_bridge"},
+                    "execution_preflight": {
+                        "allowed": execution_allowed,
+                        "reasons": [] if execution_allowed else ["missing_account_id"],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+
 def test_build_paper_health_payload_returns_zero_state_when_root_missing(tmp_path: Path):
     payload, status = research_ui_server.build_paper_health_payload(tmp_path)
 
@@ -187,6 +255,42 @@ def test_build_broker_health_payload_summarizes_existing_sessions(tmp_path: Path
     assert payload["submitted_sessions"] == 1
     assert payload["order_status_known_sessions"] == 1
     assert payload["latest_submit_session_id"] == "broker_001"
+
+
+def test_build_pretrade_payload_returns_zero_state_when_root_missing(tmp_path: Path):
+    payload, status = research_ui_server.build_pretrade_payload(tmp_path)
+
+    assert status == 200
+    assert payload["status"] == "ok"
+    assert payload["available"] is False
+    assert payload["total_sessions"] == 0
+
+
+def test_build_pretrade_payload_summarizes_existing_sessions(tmp_path: Path):
+    pretrade_root = tmp_path / "outputs" / "pretrade_sessions"
+    _write_pretrade_session(
+        pretrade_root,
+        "pretrade_001",
+        execution_allowed=True,
+        generated_at="2026-03-27T13:05:00",
+    )
+    _write_pretrade_session(
+        pretrade_root,
+        "pretrade_002",
+        execution_allowed=False,
+        generated_at="2026-03-27T13:00:00",
+    )
+
+    payload, status = research_ui_server.build_pretrade_payload(tmp_path)
+
+    assert status == 200
+    assert payload["status"] == "ok"
+    assert payload["available"] is True
+    assert payload["total_sessions"] == 2
+    assert payload["execution_allowed_sessions"] == 1
+    assert payload["execution_rejected_sessions"] == 1
+    assert payload["latest_session_id"] == "pretrade_001"
+    assert payload["sessions"][0]["execution_allowed"] is True
 
 
 def test_build_hyperliquid_surface_payload_detects_latest_artifacts(tmp_path: Path):

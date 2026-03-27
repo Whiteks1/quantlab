@@ -27,6 +27,9 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         if self.path.startswith('/api/broker-submissions-health'):
             payload, status = build_broker_health_payload(PROJECT_ROOT)
             return self._send_json(payload, status=status)
+        if self.path.startswith('/api/pretrade-plans'):
+            payload, status = build_pretrade_payload(PROJECT_ROOT)
+            return self._send_json(payload, status=status)
         if self.path.startswith('/api/hyperliquid-surface'):
             payload, status = build_hyperliquid_surface_payload(PROJECT_ROOT)
             return self._send_json(payload, status=status)
@@ -140,6 +143,65 @@ def build_broker_health_payload(project_root: Path | None = None) -> tuple[dict,
         }, 500
 
 
+def build_pretrade_payload(project_root: Path | None = None) -> tuple[dict, int]:
+    root = Path(project_root or PROJECT_ROOT)
+    pretrade_root = root / "outputs" / "pretrade_sessions"
+
+    if not pretrade_root.exists():
+        return {
+            "status": "ok",
+            "available": False,
+            "root_dir": str(pretrade_root),
+            "message": "No pre-trade session root found yet.",
+            "total_sessions": 0,
+            "execution_allowed_sessions": 0,
+            "execution_rejected_sessions": 0,
+            "latest_session_id": None,
+            "latest_generated_at": None,
+            "sessions": [],
+        }, 200
+
+    try:
+        sessions = []
+        for child in sorted(pretrade_root.iterdir()):
+            if not child.is_dir():
+                continue
+            summary_path = child / "summary.json"
+            plan_path = child / "plan.json"
+            if not summary_path.exists() and not plan_path.exists():
+                continue
+            sessions.append(_load_pretrade_summary(child, root))
+
+        sessions.sort(
+            key=lambda item: item.get("generated_at") or "",
+            reverse=True,
+        )
+        allowed_count = sum(1 for item in sessions if item.get("execution_allowed") is True)
+        rejected_count = sum(1 for item in sessions if item.get("execution_allowed") is False)
+        latest = sessions[0] if sessions else None
+
+        return {
+            "status": "ok",
+            "available": True,
+            "root_dir": str(pretrade_root),
+            "message": "Pre-trade planning artifacts are available for bounded UI inspection.",
+            "total_sessions": len(sessions),
+            "execution_allowed_sessions": allowed_count,
+            "execution_rejected_sessions": rejected_count,
+            "latest_session_id": latest.get("session_id") if latest else None,
+            "latest_generated_at": latest.get("generated_at") if latest else None,
+            "sessions": sessions,
+        }, 200
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "status": "error",
+            "available": False,
+            "root_dir": str(pretrade_root),
+            "message": str(exc),
+            "sessions": [],
+        }, 500
+
+
 def build_hyperliquid_surface_payload(project_root: Path | None = None) -> tuple[dict, int]:
     root = Path(project_root or PROJECT_ROOT)
     search_roots = [
@@ -242,6 +304,54 @@ def build_stepbit_workspace_payload(project_root: Path | None = None) -> tuple[d
             "stepbit_core_role": "reasoning_runtime",
         },
     }, 200
+
+
+def _load_pretrade_summary(session_dir: Path, project_root: Path) -> dict[str, object]:
+    summary = _read_json_if_exists(session_dir / "summary.json") or {}
+    plan = _read_json_if_exists(session_dir / "plan.json") or {}
+    bridge = _read_json_if_exists(session_dir / "execution_bridge.json") or {}
+
+    request = plan.get("request", {}) if isinstance(plan.get("request"), dict) else {}
+    plan_data = plan.get("plan", {}) if isinstance(plan.get("plan"), dict) else {}
+    preflight = (
+        bridge.get("execution_preflight", {})
+        if isinstance(bridge.get("execution_preflight"), dict)
+        else {}
+    )
+
+    return {
+        "session_id": summary.get("session_id") or plan.get("session_id") or session_dir.name,
+        "generated_at": summary.get("generated_at") or plan.get("generated_at"),
+        "symbol": summary.get("symbol") or request.get("symbol"),
+        "venue": summary.get("venue") or request.get("venue"),
+        "side": summary.get("side") or request.get("side"),
+        "accepted": summary.get("accepted"),
+        "risk_amount": summary.get("risk_amount") or plan_data.get("risk_amount"),
+        "position_size": summary.get("position_size") or plan_data.get("position_size"),
+        "notional": summary.get("notional") or plan_data.get("notional"),
+        "max_loss_at_stop": summary.get("max_loss_at_stop") or plan_data.get("max_loss_at_stop"),
+        "net_profit_at_target": summary.get("net_profit_at_target") or plan_data.get("net_profit_at_target"),
+        "risk_reward_ratio": summary.get("risk_reward_ratio") or plan_data.get("risk_reward_ratio"),
+        "execution_bridge_present": bool(bridge),
+        "execution_allowed": preflight.get("allowed") if bridge else None,
+        "execution_reasons": preflight.get("reasons", []) if bridge else [],
+        "session_dir": str(session_dir.relative_to(project_root)).replace("\\", "/"),
+        "plan_path": str((session_dir / "plan.json").relative_to(project_root)).replace("\\", "/"),
+        "summary_path": str((session_dir / "summary.json").relative_to(project_root)).replace("\\", "/"),
+        "plan_markdown_path": str((session_dir / "plan.md").relative_to(project_root)).replace("\\", "/"),
+        "execution_bridge_path": (
+            str((session_dir / "execution_bridge.json").relative_to(project_root)).replace("\\", "/")
+            if bridge
+            else None
+        ),
+    }
+
+
+def _read_json_if_exists(path: Path) -> dict[str, object] | None:
+    if not path.exists():
+        return None
+    with path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
 
 
 def _build_workspace_repo_summary(path: Path, role: str) -> dict[str, object]:
