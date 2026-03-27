@@ -156,6 +156,7 @@ Architectural rule:
 See also:
 
 - [docs/pretrade-risk-workbench-roadmap.md](./pretrade-risk-workbench-roadmap.md)
+- [docs/pretrade-calculator-boundary.md](./pretrade-calculator-boundary.md)
 
 Exit condition:
 
