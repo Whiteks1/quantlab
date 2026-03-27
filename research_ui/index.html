@@ -3,314 +3,322 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QuantLab web3 app | Control Surface</title>
+    <title>QuantLab | Research Workspace</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="ambient ambient-left"></div>
-    <div class="ambient ambient-right"></div>
-
-    <div id="app">
+    <div class="app-shell">
         <aside class="sidebar">
-            <div class="sidebar-header">
-                <div class="logo">
-                    <span class="logo-icon">QL</span>
-                    <div>
-                        <div class="logo-text">QuantLab web3 app</div>
-                        <div class="version">Execution Surface</div>
-                    </div>
+            <div class="brand">
+                <div class="brand-mark">QL</div>
+                <div>
+                    <div class="brand-title">QuantLab</div>
+                    <div class="brand-subtitle">Research workspace</div>
                 </div>
             </div>
 
-            <nav class="sidebar-nav">
-                <a href="#/" class="nav-item active" id="nav-runs">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M4 5h16v14H4z"></path>
-                        <path d="M8 11h8"></path>
-                        <path d="M8 15h5"></path>
-                        <path d="M8 7h3"></path>
-                    </svg>
-                    Surface
-                </a>
-                <a href="#/compare" class="nav-item disabled" id="nav-compare" aria-disabled="true">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M10 3H5a2 2 0 0 0-2 2v5"></path>
-                        <path d="M14 21h5a2 2 0 0 0 2-2v-5"></path>
-                        <path d="M21 10V5a2 2 0 0 0-2-2h-5"></path>
-                        <path d="M3 14v5a2 2 0 0 0 2 2h5"></path>
-                        <path d="M8 8h8v8H8z"></path>
-                    </svg>
-                    Compare
-                </a>
-                <a href="#/settings" class="nav-item disabled" aria-disabled="true">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="3"></circle>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c0 .66.39 1.26 1.01 1.51H21a2 2 0 0 1 0 4h-.59c-.62.25-1.01.85-1.01 1.49z"></path>
-                    </svg>
-                    Config
-                </a>
+            <nav class="sidebar-nav" aria-label="Primary">
+                <a href="#/launch" class="nav-link" id="nav-launch">Launch</a>
+                <a href="#/" class="nav-link active" id="nav-runs">Runs</a>
+                <a href="#/compare" class="nav-link" id="nav-compare">Compare</a>
+                <a href="#/ops" class="nav-link" id="nav-ops">Ops</a>
             </nav>
 
-            <section class="sidebar-panel">
-                <div class="panel-label">Stage Focus</div>
-                <div class="panel-text">Read-only control surface for the QuantLab web3 app: research, paper ops, broker safety, Hyperliquid readiness, and the external Stepbit boundary.</div>
-            </section>
+            <div class="sidebar-note">
+                <div class="sidebar-note-label">Current rule</div>
+                <p>Only backend-supported flows surface here. No fake controls, no decorative pages.</p>
+            </div>
 
-            <section class="sidebar-panel sidebar-stage-map">
-                <div class="panel-label">Execution Map</div>
-                <div class="stage-list">
-                    <div class="stage-item">
-                        <span class="stage-dot"></span>
-                        <div>
-                            <strong>Stage C.1</strong>
-                            <span>Paper sessions are operationalized and no longer the main bottleneck</span>
-                        </div>
-                    </div>
-                    <div class="stage-item is-current">
-                        <span class="stage-dot"></span>
-                        <div>
-                            <strong>Stage D.2</strong>
-                            <span>Supervised submit safety, post-submit visibility, and operator control</span>
-                        </div>
-                    </div>
-                    <div class="stage-item">
-                        <span class="stage-dot"></span>
-                        <div>
-                            <strong>Stage D.1.b</strong>
-                            <span>Hyperliquid readiness, signer context, and pre-submit shape</span>
-                        </div>
-                    </div>
-                    <div class="stage-item">
-                        <span class="stage-dot"></span>
-                        <div>
-                            <strong>Stepbit Boundary</strong>
-                            <span>External control-plane and runtime connection without surrendering QuantLab authority</span>
-                        </div>
-                    </div>
+            <div class="sidebar-status">
+                <div class="status-row">
+                    <span class="status-dot" id="registry-dot"></span>
+                    <span id="registry-status">Registry initializing</span>
                 </div>
-            </section>
-
-            <section class="sidebar-panel">
-                <div class="panel-label">Boundary Link</div>
-                <div class="panel-text" id="sidebar-stepbit-status">Scanning local Stepbit workspace…</div>
-                <div class="mini-meta" id="sidebar-stepbit-meta">Waiting for workspace summary</div>
-            </section>
-
-            <div class="sidebar-footer">
-                <div class="status-indicator">
-                    <span class="dot" id="registry-dot"></span>
-                    <span class="status-text" id="registry-status">Registry: Initializing</span>
-                </div>
-                <div class="status-subtext" id="registry-date">Artifact: -</div>
+                <div class="status-meta" id="registry-date">Artifact: -</div>
+                <div class="status-meta" id="sidebar-boundary-meta">Scanning external workspaces...</div>
             </div>
         </aside>
 
-        <main class="content">
-            <header class="content-header">
+        <main class="main-content">
+            <header class="topbar">
                 <div>
-                    <div class="eyebrow">QuantLab Web3 App</div>
-                    <div class="breadcrumb" id="breadcrumb">Research, Paper Ops, Broker Safety, Stepbit Boundary</div>
+                    <div class="topbar-eyebrow">QuantLab</div>
+                    <h1 class="topbar-title" id="breadcrumb">Runs</h1>
                 </div>
 
-                <div class="header-actions">
+                <div class="topbar-actions">
                     <label class="search-box" for="run-search">
-                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                        <input type="text" id="run-search" placeholder="Search by ticker, mode, commit, or run ID">
+                        <span>Search</span>
+                        <input type="text" id="run-search" placeholder="Run id, ticker, mode, commit">
                     </label>
-
-                    <div class="action-stack">
-                        <button class="btn btn-primary" id="refresh-data" type="button">
-                            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="23 4 23 10 17 10"></polyline>
-                                <path d="M20.49 15A9 9 0 1 1 18.36 5.64L23 10"></path>
-                            </svg>
-                            Sync Registry
-                        </button>
-                        <span class="action-hint">Reloads registry, paper ops, broker safety, Hyperliquid, and Stepbit workspace state</span>
-                        <span class="sync-meta" id="sync-meta">Last sync: -</span>
-                    </div>
+                    <button class="btn btn-primary" id="refresh-data" type="button">Refresh</button>
                 </div>
             </header>
 
-            <div id="view-container">
-                <section id="run-index-view" class="view active">
-                    <div class="hero glass">
-                        <div class="hero-copy">
-                            <div class="hero-kicker">
-                                <span class="pill pill-live" id="hero-registry-pill">Registry online</span>
-                                <span class="pill pill-static" id="hero-root-pill">Source: outputs/runs</span>
-                                <span class="pill pill-stage">Stage D.2 active</span>
-                            </div>
-                            <h1>A control surface for the QuantLab web3 app we are actually building: research, supervised execution, Hyperliquid readiness, and Stepbit at the edge.</h1>
-                            <p id="hero-summary">Loading registry snapshot...</p>
-                        </div>
-
-                        <div class="hero-insights">
-                            <article class="insight-card">
-                                <div class="insight-label">Top Sharpe</div>
-                                <div class="insight-value" id="hero-best-run">-</div>
-                                <div class="insight-meta" id="hero-best-meta">Waiting for registry</div>
-                            </article>
-                            <article class="insight-card">
-                                <div class="insight-label">Mode Mix</div>
-                                <div class="mode-strip" id="mode-strip"></div>
-                                <div class="insight-meta" id="hero-mode-meta">No runs loaded</div>
-                            </article>
-                            <article class="insight-card">
-                                <div class="insight-label">Paper Ops</div>
-                                <div class="paper-strip" id="paper-strip"></div>
-                                <div class="insight-meta" id="paper-health-meta">Paper session health not loaded yet</div>
-                            </article>
-                            <article class="insight-card">
-                                <div class="insight-label">Broker Safety</div>
-                                <div class="paper-strip" id="broker-strip"></div>
-                                <div class="insight-meta" id="broker-health-meta">Broker submission health not loaded yet</div>
-                            </article>
-                        </div>
-                    </div>
-
-                    <div class="stats-overview">
-                        <div class="stat-card glass">
-                            <div class="stat-label">Indexed Runs</div>
-                            <div class="stat-value" id="stats-total-runs">-</div>
-                            <div class="stat-foot" id="stats-generated-at">Artifact generated: -</div>
-                        </div>
-
-                        <div class="stat-card glass">
-                            <div class="stat-label">Fresh Runs (24h)</div>
-                            <div class="stat-value" id="stats-active-sessions">-</div>
-                            <div class="stat-foot">Recent activity pulse</div>
-                        </div>
-
-                        <div class="stat-card glass">
-                            <div class="stat-label">Best Sharpe</div>
-                            <div class="stat-value" id="stats-best-sharpe">-</div>
-                            <div class="stat-foot" id="stats-best-run">Awaiting best run</div>
-                        </div>
-
-                        <div class="stat-card glass">
-                            <div class="stat-label">Average Return</div>
-                            <div class="stat-value" id="stats-avg-return">-</div>
-                            <div class="stat-foot" id="stats-drawdown-floor">Drawdown floor: -</div>
-                        </div>
-                    </div>
-
-                    <div class="ops-overview">
-                        <div class="ops-card glass">
-                            <div class="stat-label">Paper Sessions</div>
-                            <div class="stat-value" id="paper-total-sessions">-</div>
-                            <div class="stat-foot" id="paper-availability">Waiting for paper root</div>
-                        </div>
-
-                        <div class="ops-card glass">
-                            <div class="stat-label">Broker Sessions</div>
-                            <div class="stat-value" id="broker-total-sessions">-</div>
-                            <div class="stat-foot" id="broker-availability">Waiting for broker validation root</div>
-                        </div>
-
-                        <div class="ops-card glass">
-                            <div class="stat-label">Hyperliquid Surface</div>
-                            <div class="stat-value" id="hyperliquid-state">-</div>
-                            <div class="stat-foot" id="hyperliquid-meta">Waiting for Hyperliquid surface</div>
-                        </div>
-
-                        <div class="ops-card glass">
-                            <div class="stat-label">Stepbit Boundary</div>
-                            <div class="stat-value" id="stepbit-state">-</div>
-                            <div class="stat-foot" id="stepbit-meta">Waiting for workspace scan</div>
-                        </div>
-                    </div>
-
-                    <div class="ops-overview">
-                        <div class="ops-card glass">
-                            <div class="stat-label">Paper Latest</div>
-                            <div class="stat-value" id="paper-latest-session">-</div>
-                            <div class="stat-foot" id="paper-latest-session-meta">No paper activity yet</div>
-                        </div>
-
-                        <div class="ops-card glass">
-                            <div class="stat-label">Broker Latest</div>
-                            <div class="stat-value" id="broker-latest-session">-</div>
-                            <div class="stat-foot" id="broker-latest-session-meta">No broker submissions yet</div>
-                        </div>
-
-                        <div class="ops-card glass">
-                            <div class="stat-label">Hyperliquid Signer</div>
-                            <div class="stat-value" id="hyperliquid-signature-state">-</div>
-                            <div class="stat-foot" id="hyperliquid-signature-meta">Signature backend not wired yet</div>
-                        </div>
-
-                        <div class="ops-card glass">
-                            <div class="stat-label">Stepbit Repos</div>
-                            <div class="stat-value" id="stepbit-repos">-</div>
-                            <div class="stat-foot" id="stepbit-repos-meta">Looking for app/core repos</div>
-                        </div>
-                    </div>
-
-                    <div class="card glass table-shell">
-                        <div class="card-header">
-                            <div>
-                                <h2>Experiment Registry</h2>
-                                <p class="card-subtitle" id="table-summary">Sorting newest research artifacts first.</p>
-                            </div>
-
-                            <div class="toolbar">
-                                <div class="toolbar-group" id="mode-pills"></div>
-                                <div class="toolbar-meta" id="filter-summary">No filters applied</div>
-                                <select id="filter-mode" class="select-sm">
-                                    <option value="all">All Modes</option>
-                                </select>
-                                <button class="btn btn-secondary btn-sm" id="clear-filters" type="button">Reset Filters</button>
-                            </div>
-                        </div>
-
-                        <div class="table-responsive">
-                            <table id="runs-table">
-                                <thead>
-                                    <tr>
-                                        <th data-sort="run_id">Run ID</th>
-                                        <th data-sort="mode">Mode</th>
-                                        <th data-sort="ticker">Ticker</th>
-                                        <th data-sort="total_return">Return</th>
-                                        <th data-sort="sharpe_simple">Sharpe</th>
-                                        <th data-sort="max_drawdown">Drawdown</th>
-                                        <th data-sort="trades">Trades</th>
-                                        <th data-sort="created_at">Date</th>
-                                        <th class="no-sort">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="runs-body">
-                                    <tr>
-                                        <td colspan="9" class="loading-state">
-                                            <div class="spinner"></div>
-                                            Accessing QuantLab artifacts...
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-
-                <section id="run-detail-view" class="view">
-                    <div id="detail-body" class="detail-body glass">
-                        <div class="loading-state">
-                            <div class="spinner"></div>
-                            Loading run detail...
-                        </div>
-                    </div>
-                </section>
+            <div class="sync-strip">
+                <div id="sync-meta">Last sync: -</div>
+                <div id="surface-summary">Loading backend-supported surfaces...</div>
             </div>
+
+            <section id="launch-view" class="view">
+                <div class="section-card">
+                    <div class="section-header">
+                        <div>
+                            <div class="section-label">Execution entrypoint</div>
+                            <h2>Launch research work</h2>
+                            <p id="launch-summary">Launch only what QuantLab already supports: run and sweep.</p>
+                        </div>
+                    </div>
+
+                    <div class="launch-grid">
+                        <form id="launch-form" class="launcher-form">
+                            <div class="form-grid">
+                                <label class="field">
+                                    <span>Command</span>
+                                    <select id="launch-command" class="select-control">
+                                        <option value="run">Run</option>
+                                        <option value="sweep">Sweep</option>
+                                    </select>
+                                </label>
+                                <label class="field">
+                                    <span>Interval</span>
+                                    <input id="launch-interval" type="text" value="1d" placeholder="1d">
+                                </label>
+                                <label class="field">
+                                    <span>Initial cash</span>
+                                    <input id="launch-initial-cash" type="number" min="0" step="100" placeholder="1000">
+                                </label>
+                            </div>
+
+                            <div id="launch-run-fields" class="form-grid">
+                                <label class="field">
+                                    <span>Ticker</span>
+                                    <input id="launch-ticker" type="text" placeholder="ETH-USD">
+                                </label>
+                                <label class="field">
+                                    <span>Start</span>
+                                    <input id="launch-start" type="date">
+                                </label>
+                                <label class="field">
+                                    <span>End</span>
+                                    <input id="launch-end" type="date">
+                                </label>
+                            </div>
+
+                            <div id="launch-sweep-fields" class="form-grid hidden">
+                                <label class="field field-span-2">
+                                    <span>Config path</span>
+                                    <input id="launch-config-path" type="text" placeholder="configs/experiments/eth_2023_grid.yaml">
+                                </label>
+                                <label class="field">
+                                    <span>Out dir</span>
+                                    <input id="launch-out-dir" type="text" placeholder="outputs/sweeps/demo">
+                                </label>
+                            </div>
+
+                            <label class="check-field">
+                                <input id="launch-paper" type="checkbox">
+                                <span>Paper-backed run</span>
+                            </label>
+
+                            <div class="form-actions">
+                                <button class="btn btn-primary" id="launch-submit" type="submit">Launch in QuantLab</button>
+                                <button class="btn btn-secondary" id="launch-stepbit" type="button">Launch Stepbit AI</button>
+                                <a class="btn btn-secondary is-disabled" id="open-stepbit" href="#" aria-disabled="true" target="_blank" rel="noreferrer">Open Stepbit AI</a>
+                            </div>
+
+                            <div class="launch-feedback" id="launch-feedback">Ready to launch a real backend-supported job.</div>
+                            <div class="launch-stepbit-meta" id="launch-stepbit-meta">Stepbit can stay alongside this as planner, automation, and analysis support.</div>
+                            <div class="runtime-strip" id="launch-stepbit-runtime"></div>
+                        </form>
+
+                        <section class="ops-panel">
+                            <div class="ops-panel-header">
+                                <div>
+                                    <div class="section-label">Recent launches</div>
+                                    <h3>Job history</h3>
+                                </div>
+                                <div class="ops-panel-meta" id="launch-jobs-meta">Waiting for launcher state...</div>
+                            </div>
+                            <div id="launch-jobs-body" class="launch-jobs-body">
+                                <div class="panel-empty">
+                                    <strong>No launches yet</strong>
+                                    <span>Use the form to start a run or sweep.</span>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+
+            <section id="runs-view" class="view active">
+                <div class="section-card">
+                    <div class="section-header">
+                        <div>
+                            <div class="section-label">Run explorer</div>
+                            <h2>Research runs</h2>
+                            <p id="runs-summary">Loading runs...</p>
+                        </div>
+                        <div class="summary-grid compact-grid">
+                            <article class="summary-card">
+                                <div class="summary-label">Visible</div>
+                                <div class="summary-value" id="summary-visible-runs">-</div>
+                            </article>
+                            <article class="summary-card">
+                                <div class="summary-label">Fresh 24h</div>
+                                <div class="summary-value" id="summary-fresh-runs">-</div>
+                            </article>
+                            <article class="summary-card">
+                                <div class="summary-label">Best Sharpe</div>
+                                <div class="summary-value" id="summary-best-sharpe">-</div>
+                            </article>
+                            <article class="summary-card">
+                                <div class="summary-label">Average Return</div>
+                                <div class="summary-value" id="summary-average-return">-</div>
+                            </article>
+                        </div>
+                    </div>
+
+                    <div class="toolbar">
+                        <div class="toolbar-group" id="mode-pills"></div>
+                        <select id="filter-mode" class="select-control">
+                            <option value="all">All modes</option>
+                        </select>
+                        <button class="btn btn-secondary" id="clear-filters" type="button">Reset filters</button>
+                        <div class="toolbar-spacer"></div>
+                        <div class="toolbar-meta" id="compare-summary">Select 2 to 4 runs</div>
+                        <a class="btn btn-secondary is-disabled" id="open-compare" href="#/compare" aria-disabled="true">Compare selected</a>
+                        <button class="btn btn-secondary" id="clear-compare" type="button">Clear compare</button>
+                    </div>
+
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-compare">Compare</th>
+                                    <th data-sort="run_id">Run</th>
+                                    <th data-sort="mode">Mode</th>
+                                    <th data-sort="ticker">Ticker</th>
+                                    <th data-sort="total_return">Return</th>
+                                    <th data-sort="sharpe_simple">Sharpe</th>
+                                    <th data-sort="max_drawdown">Drawdown</th>
+                                    <th data-sort="created_at">Created</th>
+                                    <th>Open</th>
+                                </tr>
+                            </thead>
+                            <tbody id="runs-body">
+                                <tr>
+                                    <td colspan="9" class="table-empty">Loading runs...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="compare-view" class="view">
+                <div class="section-card">
+                    <div class="section-header">
+                        <div>
+                            <div class="section-label">Decision surface</div>
+                            <h2>Compare runs</h2>
+                            <p id="compare-summary-long">Select runs from the explorer to compare actual results side by side.</p>
+                        </div>
+                    </div>
+                    <div id="compare-body" class="compare-grid">
+                        <div class="panel-empty">
+                            <strong>No comparison selected</strong>
+                            <span>Choose 2 to 4 runs in the explorer and open compare.</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="ops-view" class="view">
+                <div class="section-card">
+                    <div class="section-header">
+                        <div>
+                            <div class="section-label">Operational surfaces</div>
+                            <h2>Read-only boundaries</h2>
+                            <p id="ops-summary">Loading operational surfaces...</p>
+                        </div>
+                    </div>
+
+                    <div class="ops-stack">
+                        <section class="ops-panel">
+                            <div class="ops-panel-header">
+                                <div>
+                                    <div class="section-label">Pre-trade intake</div>
+                                    <h3>Latest handoff validation</h3>
+                                </div>
+                                <div class="ops-panel-meta" id="pretrade-summary">Loading validation state...</div>
+                            </div>
+                            <div id="pretrade-panel-body" class="panel-body">
+                                <div class="panel-empty">
+                                    <strong>Loading</strong>
+                                    <span>Fetching latest bounded handoff artifact...</span>
+                                </div>
+                            </div>
+                        </section>
+
+                        <div class="summary-grid">
+                            <article class="summary-card">
+                                <div class="summary-label">Paper sessions</div>
+                                <div class="summary-value" id="paper-total-sessions">-</div>
+                                <div class="summary-foot" id="paper-health-meta">Loading paper health...</div>
+                            </article>
+                            <article class="summary-card">
+                                <div class="summary-label">Broker safety</div>
+                                <div class="summary-value" id="broker-total-sessions">-</div>
+                                <div class="summary-foot" id="broker-health-meta">Loading broker health...</div>
+                            </article>
+                            <article class="summary-card">
+                                <div class="summary-label">Hyperliquid</div>
+                                <div class="summary-value" id="hyperliquid-state">-</div>
+                                <div class="summary-foot" id="hyperliquid-meta">Loading Hyperliquid surface...</div>
+                            </article>
+                        </div>
+
+                        <section class="ops-panel">
+                            <div class="ops-panel-header">
+                                <div>
+                                    <div class="section-label">External workspaces</div>
+                                    <h3>Boundaries</h3>
+                                </div>
+                                <div class="ops-panel-meta">Visible, but not sovereign</div>
+                            </div>
+                            <div class="boundary-grid" id="boundary-grid">
+                                <article class="boundary-card">
+                                    <div class="boundary-title">Stepbit</div>
+                                    <div class="boundary-value" id="stepbit-state">-</div>
+                                    <div class="boundary-meta" id="stepbit-meta">Loading Stepbit summary...</div>
+                                </article>
+                                <article class="boundary-card">
+                                    <div class="boundary-title">Meta Trade</div>
+                                    <div class="boundary-value" id="meta-trade-state">-</div>
+                                    <div class="boundary-meta" id="meta-trade-meta">Loading Meta Trade summary...</div>
+                                </article>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+
+            <section id="detail-view" class="view">
+                <div class="section-card">
+                    <div id="detail-body" class="detail-body">
+                        <div class="panel-empty">
+                            <strong>Loading run detail</strong>
+                            <span>Reading canonical artifacts for the selected run...</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
-
-    <div id="toast-container"></div>
 
     <script src="app.js" type="module"></script>
 </body>
