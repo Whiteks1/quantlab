@@ -44,6 +44,8 @@
                 <div class="chip-list">
                     <button class="chip" data-prompt="Open runs">Open runs</button>
                     <button class="chip" data-prompt="Open compare">Open compare</button>
+                    <button class="chip" data-prompt="Compare selected">Compare selected</button>
+                    <button class="chip" data-prompt="Show artifacts">Show artifacts</button>
                     <button class="chip" data-prompt="Show runtime status">Show runtime status</button>
                     <button class="chip" data-prompt="Open latest run">Open latest run</button>
                 </div>
@@ -112,6 +114,102 @@
                             </div>
                         </div>
                         <div id="runtime-chips" class="runtime-chips"></div>
+                    </section>
+
+                    <section class="workflow-panel card">
+                        <div class="section-head">
+                            <div>
+                                <div class="section-label">Workflow</div>
+                                <h2>Launch, inspect, compare</h2>
+                            </div>
+                        </div>
+
+                        <div class="workflow-grid">
+                            <section class="workflow-section">
+                                <div class="workflow-head">
+                                    <div>
+                                        <div class="section-label">Launch panel</div>
+                                        <h3>Run or sweep</h3>
+                                    </div>
+                                    <div id="workflow-launch-meta" class="workflow-meta">Waiting for launcher state.</div>
+                                </div>
+
+                                <form id="workflow-launch-form" class="workflow-form">
+                                    <label class="field">
+                                        <span>Command</span>
+                                        <select id="workflow-launch-command">
+                                            <option value="run">Run</option>
+                                            <option value="sweep">Sweep</option>
+                                        </select>
+                                    </label>
+
+                                    <div id="workflow-run-fields" class="workflow-fields">
+                                        <label class="field">
+                                            <span>Ticker</span>
+                                            <input id="workflow-launch-ticker" type="text" placeholder="ETH-USD">
+                                        </label>
+                                        <label class="field">
+                                            <span>Start</span>
+                                            <input id="workflow-launch-start" type="date">
+                                        </label>
+                                        <label class="field">
+                                            <span>End</span>
+                                            <input id="workflow-launch-end" type="date">
+                                        </label>
+                                        <label class="field">
+                                            <span>Interval</span>
+                                            <input id="workflow-launch-interval" type="text" placeholder="1d">
+                                        </label>
+                                        <label class="field">
+                                            <span>Initial cash</span>
+                                            <input id="workflow-launch-cash" type="number" min="0" step="0.01" placeholder="10000">
+                                        </label>
+                                        <label class="check-field">
+                                            <input id="workflow-launch-paper" type="checkbox">
+                                            <span>Paper mode</span>
+                                        </label>
+                                    </div>
+
+                                    <div id="workflow-sweep-fields" class="workflow-fields hidden">
+                                        <label class="field">
+                                            <span>Config path</span>
+                                            <input id="workflow-launch-config-path" type="text" placeholder="configs/sweeps/example.yaml">
+                                        </label>
+                                        <label class="field">
+                                            <span>Output dir</span>
+                                            <input id="workflow-launch-out-dir" type="text" placeholder="outputs/sweeps/custom">
+                                        </label>
+                                    </div>
+
+                                    <div class="workflow-actions">
+                                        <button id="workflow-launch-submit" class="primary-btn" type="submit">Launch in QuantLab</button>
+                                        <span id="workflow-launch-feedback" class="workflow-feedback">Use deterministic inputs or ask from chat.</span>
+                                    </div>
+                                </form>
+
+                                <div class="workflow-jobs">
+                                    <div class="section-label">Recent launch jobs</div>
+                                    <div id="workflow-jobs-list" class="job-list"></div>
+                                </div>
+                            </section>
+
+                            <section class="workflow-section">
+                                <div class="workflow-head">
+                                    <div>
+                                        <div class="section-label">Runs worklist</div>
+                                        <h3>Recent indexed runs</h3>
+                                    </div>
+                                    <div id="workflow-runs-meta" class="workflow-meta">Waiting for run index.</div>
+                                </div>
+
+                                <div class="workflow-actions worklist-actions">
+                                    <button id="workflow-open-compare" class="ghost-btn" type="button">Open compare tab</button>
+                                    <button id="workflow-clear-selection" class="ghost-btn" type="button">Clear selection</button>
+                                </div>
+
+                                <div id="workflow-runs-list" class="run-worklist"></div>
+                            </section>
+                        </div>
                     </section>
                 </div>
             </section>

@@ -156,6 +156,24 @@ ipcMain.handle("quantlab:request-json", async (_event, relativePath) => {
   return response.json();
 });
 
+ipcMain.handle("quantlab:post-json", async (_event, relativePath, payload) => {
+  if (!workspaceState.serverUrl) {
+    throw new Error("Research UI server is not ready yet.");
+  }
+  const base = workspaceState.serverUrl.replace(/\/$/, "");
+  const response = await fetch(`${base}${relativePath}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload ?? {}),
+  });
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!response.ok) {
+    throw new Error(data.message || `${relativePath} returned ${response.status}`);
+  }
+  return data;
+});
+
 ipcMain.handle("quantlab:open-external", async (_event, url) => {
   await shell.openExternal(url);
 });
