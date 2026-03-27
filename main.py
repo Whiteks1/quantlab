@@ -326,6 +326,13 @@ def main() -> None:
     parser.add_argument("--pretrade-account-id", default=None)
     parser.add_argument("--pretrade-strategy-id", default=None)
     parser.add_argument("--pretrade-notes", default=None)
+    parser.add_argument("--pretrade-bridge-to-execution", action="store_true")
+    parser.add_argument("--pretrade-broker-target", default=None)
+    parser.add_argument("--pretrade-policy-max-notional", type=float, default=None)
+    parser.add_argument("--pretrade-policy-allowed-symbols", default=None)
+    parser.add_argument("--pretrade-policy-kill-switch", action="store_true")
+    parser.add_argument("--pretrade-policy-allow-missing-account-id", action="store_true")
+    parser.add_argument("--pretrade-execution-request-id", default=None)
 
     parser.add_argument("--ticker", default="ETH-USD")
     parser.add_argument("--start", default="2023-01-01")
@@ -863,6 +870,13 @@ def main() -> None:
                         "notes": "pretrade_notes",
                         "session_id": "pretrade_session_id",
                         "root_dir": "pretrade_sessions_root",
+                        "bridge_to_execution": "pretrade_bridge_to_execution",
+                        "broker_target": "pretrade_broker_target",
+                        "policy_max_notional": "pretrade_policy_max_notional",
+                        "policy_allowed_symbols": "pretrade_policy_allowed_symbols",
+                        "policy_kill_switch": "pretrade_policy_kill_switch",
+                        "policy_allow_missing_account_id": "pretrade_policy_allow_missing_account_id",
+                        "execution_request_id": "pretrade_execution_request_id",
                     }
                     for key, dest in field_map.items():
                         if key in params:
