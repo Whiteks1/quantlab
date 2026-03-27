@@ -80,6 +80,7 @@
   - Hyperliquid boundary review now documents the main contract gaps around signer identity, API wallets, subaccounts/vaults, and websocket-first venue interaction
   - native acceleration strategy now documents `Numba` as the first acceleration experiment and the backtest engine as the first realistic hotspot candidate before any broader `C++` or `Rust` move
   - a local backtest profiling surface now exists to measure the Python engine before any `Numba` or native extraction work
+  - the backtest engine now also has an optional `Numba` pilot backend for the extracted inner loop while keeping Python as the default path
 
 
 ## Known Issues / Technical Debt
