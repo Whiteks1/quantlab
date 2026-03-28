@@ -164,7 +164,8 @@ Its current role is:
 - launch a single Electron app instead of juggling browser tabs
 - auto-start `research_ui/server.py`
 - provide a chat-centered command bus
-- open `Launch`, `Runs`, `Compare`, and `Paper Ops` as desktop tabs
+- persist a local decision layer for `Candidates`, `Shortlist`, and `Baseline`
+- open `Launch`, `Run Workspace`, `Candidates`, `Compare`, `Artifacts`, `Paper Ops`, and launch review as desktop tabs
 - surface local runtime visibility for QuantLab and Stepbit
 
 Start it with:
