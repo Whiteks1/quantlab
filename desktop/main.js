@@ -58,7 +58,10 @@ function normalizeCandidatesStore(store) {
 
 function assertPathInsideProject(targetPath) {
   const resolvedProjectRoot = path.resolve(PROJECT_ROOT);
-  const resolvedTarget = path.resolve(String(targetPath || ""));
+  const rawTarget = String(targetPath || "").trim();
+  const resolvedTarget = path.isAbsolute(rawTarget)
+    ? path.resolve(rawTarget)
+    : path.resolve(PROJECT_ROOT, rawTarget);
   const relative = path.relative(resolvedProjectRoot, resolvedTarget);
   if (!resolvedTarget || relative.startsWith("..") || path.isAbsolute(relative) && relative === resolvedTarget) {
     throw new Error("Requested path is outside the QuantLab workspace.");
@@ -125,6 +128,28 @@ async function listDirectoryEntries(targetPath, maxDepth = 2) {
     entries,
     truncated: entries.length >= MAX_DIRECTORY_ENTRIES,
   };
+}
+
+async function readProjectText(targetPath) {
+  const safePath = assertPathInsideProject(targetPath);
+  const stats = await fsp.stat(safePath);
+  if (!stats.isFile()) {
+    throw new Error("Requested path is not a file.");
+  }
+  return fsp.readFile(safePath, "utf8");
+}
+
+async function readProjectJson(targetPath) {
+  const raw = await readProjectText(targetPath);
+  try {
+    return JSON.parse(raw);
+  } catch (_error) {
+    const sanitized = raw
+      .replace(/\bNaN\b/g, "null")
+      .replace(/\b-Infinity\b/g, "null")
+      .replace(/\bInfinity\b/g, "null");
+    return JSON.parse(sanitized);
+  }
 }
 
 function appendLog(line) {
@@ -286,6 +311,14 @@ ipcMain.handle("quantlab:save-candidates-store", async (_event, payload) => writ
 
 ipcMain.handle("quantlab:list-directory", async (_event, targetPath, maxDepth = 2) => {
   return listDirectoryEntries(targetPath, maxDepth);
+});
+
+ipcMain.handle("quantlab:read-project-text", async (_event, targetPath) => {
+  return readProjectText(targetPath);
+});
+
+ipcMain.handle("quantlab:read-project-json", async (_event, targetPath) => {
+  return readProjectJson(targetPath);
 });
 
 ipcMain.handle("quantlab:post-json", async (_event, relativePath, payload) => {

@@ -437,6 +437,196 @@ export function renderCandidatesTab(tab, ctx) {
   `;
 }
 
+export function renderExperimentsTab(tab, ctx) {
+  const workspace = ctx.experimentsWorkspace || { status: "idle", configs: [], sweeps: [], error: null };
+  const configs = Array.isArray(workspace.configs) ? workspace.configs : [];
+  const sweeps = Array.isArray(workspace.sweeps) ? workspace.sweeps : [];
+  const selectedConfig = configs.find((entry) => entry.path === tab.selectedConfigPath) || configs[0] || null;
+  const selectedSweep = sweeps.find((entry) => entry.run_id === tab.selectedSweepId) || sweeps[0] || null;
+  const latestSweep = sweeps[0] || null;
+
+  if (workspace.status === "loading" && !configs.length && !sweeps.length) {
+    return `<div class="tab-placeholder">Reading experiment configs and recent sweep artifacts from the local workspace...</div>`;
+  }
+
+  if (workspace.status === "error" && !configs.length && !sweeps.length) {
+    return `<div class="tab-placeholder">${escapeHtml(workspace.error || "Could not read local experiment workspace.")}</div>`;
+  }
+
+  const selectedSweepFiles = selectedSweep?.files || [];
+  const fileByName = (fileName) => selectedSweepFiles.find((entry) => entry.name === fileName) || null;
+  const selectedSweepResultRows = selectedSweep?.topResults?.length
+    ? selectedSweep.topResults
+    : selectedSweep?.leaderboardRows || [];
+
+  return `
+    <div class="tab-shell">
+      <div class="artifact-top">
+        <div>
+          <div class="section-label">Experiment workspace</div>
+          <h3>Configs and recent sweeps</h3>
+          <div class="artifact-meta">Local-first shell surface for launching sweeps, inspecting their outputs, and resuming quantitative iteration without leaving QuantLab Desktop.</div>
+        </div>
+        <div class="workflow-actions">
+          <button class="ghost-btn" type="button" data-experiments-refresh="true">Refresh</button>
+          ${selectedConfig ? `<button class="ghost-btn" type="button" data-experiment-launch-config="${escapeHtml(selectedConfig.path)}">Launch selected config</button>` : ""}
+          ${selectedSweep ? `<button class="ghost-btn" type="button" data-experiment-open-path="${escapeHtml(selectedSweep.path)}">Open sweep folder</button>` : ""}
+        </div>
+      </div>
+      <div class="tab-summary-grid">
+        ${renderSummaryCard("Configs", String(configs.length))}
+        ${renderSummaryCard("Recent sweeps", String(sweeps.length))}
+        ${renderSummaryCard("Latest mode", latestSweep ? titleCase(latestSweep.mode || "unknown") : "None")}
+        ${renderSummaryCard("Latest sweep", latestSweep?.run_id || "None")}
+      </div>
+      <div class="artifact-grid experiments-grid">
+        <section class="artifact-panel">
+          <div class="section-label">Catalog</div>
+          <h3>Experiment configs</h3>
+          ${configs.length ? `
+            <div class="candidate-list">
+              ${configs.map((config) => `
+                <article class="candidate-card ${selectedConfig?.path === config.path ? "is-selected" : ""}">
+                  <div class="run-row-top">
+                    <div class="run-row-title">
+                      <strong>${escapeHtml(config.name)}</strong>
+                      <div class="run-row-meta">
+                        <span>${escapeHtml(config.relativePath)}</span>
+                        <span>${escapeHtml(formatDateTime(config.modifiedAt))}</span>
+                        <span>${escapeHtml(formatBytes(config.sizeBytes))}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="workflow-actions">
+                    <button class="ghost-btn" type="button" data-experiment-config="${escapeHtml(config.path)}">${selectedConfig?.path === config.path ? "Selected" : "Preview"}</button>
+                    <button class="ghost-btn" type="button" data-experiment-launch-config="${escapeHtml(config.path)}">Launch sweep</button>
+                    <button class="ghost-btn" type="button" data-experiment-open-file="${escapeHtml(config.path)}">Open file</button>
+                  </div>
+                </article>
+              `).join("")}
+            </div>
+          ` : `<div class="empty-state">No experiment configs were found under configs/experiments.</div>`}
+        </section>
+        <section class="artifact-panel">
+          <div class="section-label">Preview</div>
+          <h3>${escapeHtml(selectedConfig?.name || "Select a config")}</h3>
+          ${selectedConfig?.previewText
+            ? `<pre class="log-preview config-preview">${escapeHtml(selectedConfig.previewText)}</pre>`
+            : `<div class="empty-state">Choose an experiment config to preview its YAML and launch a sweep from the shell.</div>`}
+        </section>
+      </div>
+      <div class="artifact-grid experiments-grid">
+        <section class="artifact-panel">
+          <div class="section-label">Recent outputs</div>
+          <h3>Sweeps</h3>
+          ${sweeps.length ? `
+            <div class="candidate-list">
+              ${sweeps.map((sweep) => `
+                <article class="candidate-card ${selectedSweep?.run_id === sweep.run_id ? "is-selected" : ""}">
+                  <div class="run-row-top">
+                    <div class="run-row-title">
+                      <strong>${escapeHtml(sweep.run_id)}</strong>
+                      <div class="run-row-meta">
+                        <span>${escapeHtml(titleCase(sweep.mode || "unknown"))}</span>
+                        <span>${escapeHtml(sweep.configName || sweep.configPath || "-")}</span>
+                        <span>${escapeHtml(formatDateTime(sweep.createdAt))}</span>
+                      </div>
+                    </div>
+                    <span class="mode-chip">${escapeHtml(titleCase(sweep.mode || "sweep"))}</span>
+                  </div>
+                  <div class="run-row-metrics">
+                    <span class="metric-chip ${toneClass(sweep.headlineReturn, true)}">Return ${formatPercent(sweep.headlineReturn)}</span>
+                    <span class="metric-chip">Sharpe ${formatNumber(sweep.headlineSharpe)}</span>
+                    <span class="metric-chip ${toneClass(sweep.headlineDrawdown, false)}">Drawdown ${formatPercent(sweep.headlineDrawdown)}</span>
+                    <span class="metric-chip">Runs ${formatCount(sweep.nRuns)}</span>
+                  </div>
+                  <div class="workflow-actions">
+                    <button class="ghost-btn" type="button" data-experiment-sweep="${escapeHtml(sweep.run_id)}">${selectedSweep?.run_id === sweep.run_id ? "Selected" : "Open details"}</button>
+                    ${sweep.configPath ? `<button class="ghost-btn" type="button" data-experiment-relaunch="${escapeHtml(sweep.configPath)}">Launch again</button>` : ""}
+                    <button class="ghost-btn" type="button" data-experiment-open-path="${escapeHtml(sweep.path)}">Folder</button>
+                  </div>
+                </article>
+              `).join("")}
+            </div>
+          ` : `<div class="empty-state">No sweep output directories were found yet under outputs/sweeps.</div>`}
+        </section>
+        <section class="artifact-panel">
+          <div class="section-label">Selected sweep</div>
+          <h3>${escapeHtml(selectedSweep?.run_id || "Choose a sweep")}</h3>
+          ${selectedSweep ? `
+            <div class="tab-summary-grid">
+              ${renderSummaryCard("Mode", titleCase(selectedSweep.mode || "unknown"))}
+              ${renderSummaryCard("Config", selectedSweep.configName || "Unknown")}
+              ${renderSummaryCard("Sweep runs", formatCount(selectedSweep.nRuns))}
+              ${renderSummaryCard("Selected test rows", formatCount(selectedSweep.nSelected))}
+              ${renderSummaryCard("Train runs", formatCount(selectedSweep.nTrainRuns))}
+              ${renderSummaryCard("Test runs", formatCount(selectedSweep.nTestRuns))}
+            </div>
+            <div class="workflow-actions">
+              <button class="ghost-btn" type="button" data-experiment-open-path="${escapeHtml(selectedSweep.path)}">Open folder</button>
+              ${fileByName("meta.json") ? `<button class="ghost-btn" type="button" data-experiment-open-file="${escapeHtml(fileByName("meta.json").path)}">meta.json</button>` : ""}
+              ${fileByName("leaderboard.csv") ? `<button class="ghost-btn" type="button" data-experiment-open-file="${escapeHtml(fileByName("leaderboard.csv").path)}">leaderboard.csv</button>` : ""}
+              ${fileByName("experiments.csv") ? `<button class="ghost-btn" type="button" data-experiment-open-file="${escapeHtml(fileByName("experiments.csv").path)}">experiments.csv</button>` : ""}
+              ${fileByName("config_resolved.yaml") ? `<button class="ghost-btn" type="button" data-experiment-open-file="${escapeHtml(fileByName("config_resolved.yaml").path)}">config_resolved.yaml</button>` : ""}
+            </div>
+            <div class="artifact-grid">
+              <section class="artifact-panel">
+                <div class="section-label">Top rows</div>
+                <h3>Leaderboard snapshot</h3>
+                ${selectedSweepResultRows.length ? `
+                  <div class="mini-table">
+                    <div class="mini-table-row head">
+                      <span>Return</span>
+                      <span>Sharpe</span>
+                      <span>Drawdown</span>
+                      <span>Trades</span>
+                    </div>
+                    ${selectedSweepResultRows.map((row) => `
+                      <div class="mini-table-row">
+                        <span class="${escapeHtml(toneClass(Number(row.total_return), true))}">${escapeHtml(formatPercent(Number(row.total_return)))}</span>
+                        <span>${escapeHtml(formatNumber(Number(row.sharpe_simple ?? row.best_test_sharpe)))}</span>
+                        <span class="${escapeHtml(toneClass(Number(row.max_drawdown), false))}">${escapeHtml(formatPercent(Number(row.max_drawdown)))}</span>
+                        <span>${escapeHtml(formatCount(Number(row.trades ?? row.n_test_runs)))}</span>
+                      </div>
+                    `).join("")}
+                  </div>
+                ` : `<div class="empty-state">No leaderboard rows were readable for this sweep.</div>`}
+              </section>
+              <section class="artifact-panel">
+                <div class="section-label">Walkforward summary</div>
+                <h3>Selection and OOS</h3>
+                ${selectedSweep.walkforwardRows?.length ? `
+                  <div class="mini-table">
+                    <div class="mini-table-row head">
+                      <span>Split</span>
+                      <span>Best test sharpe</span>
+                      <span>Best test return</span>
+                      <span>Selected</span>
+                    </div>
+                    ${selectedSweep.walkforwardRows.map((row) => `
+                      <div class="mini-table-row">
+                        <span>${escapeHtml(row.split_name || "-")}</span>
+                        <span>${escapeHtml(formatNumber(Number(row.best_test_sharpe)))}</span>
+                        <span>${escapeHtml(formatPercent(Number(row.best_test_return)))}</span>
+                        <span>${escapeHtml(formatCount(Number(row.n_selected)))}</span>
+                      </div>
+                    `).join("")}
+                  </div>
+                ` : `<div class="empty-state">This sweep did not expose walkforward summary rows.</div>`}
+              </section>
+            </div>
+            <section class="artifact-panel">
+              <div class="section-label">Workspace files</div>
+              <h3>Local sweep directory</h3>
+              ${renderLocalFilesList(selectedSweepFiles.slice(0, 12), selectedSweep.filesTruncated)}
+            </section>
+          ` : `<div class="empty-state">Select a recent sweep to inspect its local outputs.</div>`}
+        </section>
+      </div>
+    </div>
+  `;
+}
+
 export function renderPaperOpsTab(ctx) {
   const paper = ctx.snapshot?.paperHealth || null;
   const broker = ctx.snapshot?.brokerHealth || null;

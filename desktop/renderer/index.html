@@ -22,6 +22,7 @@
 
             <nav class="nav-list" aria-label="Primary">
                 <button class="nav-item is-active" data-action="open-chat">Chat</button>
+                <button class="nav-item" data-action="open-experiments">Experiments</button>
                 <button class="nav-item" data-action="open-launch">Launch</button>
                 <button class="nav-item" data-action="open-runs">Runs</button>
                 <button class="nav-item" data-action="open-candidates">Candidates</button>
@@ -43,6 +44,7 @@
             <section class="sidebar-panel">
                 <div class="panel-label">Suggested actions</div>
                 <div class="chip-list">
+                    <button class="chip" data-prompt="Open experiments">Open experiments</button>
                     <button class="chip" data-prompt="Open runs">Open runs</button>
                     <button class="chip" data-prompt="Open candidates">Open candidates</button>
                     <button class="chip" data-prompt="Open compare">Open compare</button>
@@ -178,7 +180,7 @@
                                     <div id="workflow-sweep-fields" class="workflow-fields hidden">
                                         <label class="field">
                                             <span>Config path</span>
-                                            <input id="workflow-launch-config-path" type="text" placeholder="configs/sweeps/example.yaml">
+                                            <input id="workflow-launch-config-path" type="text" placeholder="configs/experiments/eth_2023_grid.yaml">
                                         </label>
                                         <label class="field">
                                             <span>Output dir</span>
