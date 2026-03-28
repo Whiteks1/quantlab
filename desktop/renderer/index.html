@@ -24,6 +24,7 @@
                 <button class="nav-item is-active" data-action="open-chat">Chat</button>
                 <button class="nav-item" data-action="open-launch">Launch</button>
                 <button class="nav-item" data-action="open-runs">Runs</button>
+                <button class="nav-item" data-action="open-candidates">Candidates</button>
                 <button class="nav-item" data-action="open-compare">Compare</button>
                 <button class="nav-item" data-action="open-ops">Paper Ops</button>
             </nav>
@@ -43,9 +44,11 @@
                 <div class="panel-label">Suggested actions</div>
                 <div class="chip-list">
                     <button class="chip" data-prompt="Open runs">Open runs</button>
+                    <button class="chip" data-prompt="Open candidates">Open candidates</button>
                     <button class="chip" data-prompt="Open compare">Open compare</button>
                     <button class="chip" data-prompt="Compare selected">Compare selected</button>
                     <button class="chip" data-prompt="Show artifacts">Show artifacts</button>
+                    <button class="chip" data-prompt="Open shortlist compare">Shortlist compare</button>
                     <button class="chip" data-prompt="Open latest failed launch">Latest failed launch</button>
                     <button class="chip" data-prompt="Explain latest failure">Explain latest failure</button>
                     <button class="chip" data-prompt="Show runtime status">Show runtime status</button>
@@ -122,7 +125,7 @@
                         <div class="section-head">
                             <div>
                                 <div class="section-label">Workflow</div>
-                                <h2>Launch, inspect, compare</h2>
+                                <h2>Launch, inspect, decide</h2>
                             </div>
                         </div>
 
@@ -223,10 +226,14 @@
             <div class="section-head">
                 <div>
                     <div class="section-label">Command palette</div>
-                    <h2>Open a surface</h2>
+                    <h2>Open a surface or action</h2>
                 </div>
                 <button class="ghost-btn" id="close-palette" type="button">Close</button>
             </div>
+            <label class="command-input-wrap palette-search" for="palette-search">
+                <span>Filter actions</span>
+                <input id="palette-search" type="text" placeholder="Search commands like shortlist, baseline, paper ops...">
+            </label>
             <div id="palette-results" class="palette-results"></div>
         </div>
     </div>

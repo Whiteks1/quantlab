@@ -1,10 +1,16 @@
 const { app, BrowserWindow, ipcMain, shell } = require("electron");
+const fs = require("fs");
+const fsp = require("fs/promises");
 const path = require("path");
 const { spawn } = require("child_process");
 
 const DESKTOP_ROOT = __dirname;
 const PROJECT_ROOT = path.resolve(DESKTOP_ROOT, "..");
 const SERVER_SCRIPT = path.join(PROJECT_ROOT, "research_ui", "server.py");
+const OUTPUTS_ROOT = path.join(PROJECT_ROOT, "outputs");
+const DESKTOP_OUTPUTS_ROOT = path.join(OUTPUTS_ROOT, "desktop");
+const CANDIDATES_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "candidates_shortlist.json");
+const MAX_DIRECTORY_ENTRIES = 240;
 
 let mainWindow = null;
 let researchServerProcess = null;
@@ -14,6 +20,112 @@ let workspaceState = {
   logs: [],
   error: null,
 };
+
+function defaultCandidatesStore() {
+  return {
+    version: 1,
+    updated_at: null,
+    baseline_run_id: null,
+    entries: [],
+  };
+}
+
+function normalizeCandidateEntry(entry) {
+  if (!entry || typeof entry !== "object" || !entry.run_id) return null;
+  const now = new Date().toISOString();
+  return {
+    run_id: String(entry.run_id),
+    note: typeof entry.note === "string" ? entry.note : "",
+    shortlisted: Boolean(entry.shortlisted),
+    created_at: entry.created_at || now,
+    updated_at: entry.updated_at || now,
+  };
+}
+
+function normalizeCandidatesStore(store) {
+  const fallback = defaultCandidatesStore();
+  if (!store || typeof store !== "object") return fallback;
+  const entries = Array.isArray(store.entries)
+    ? store.entries.map(normalizeCandidateEntry).filter(Boolean)
+    : [];
+  return {
+    version: 1,
+    updated_at: store.updated_at || null,
+    baseline_run_id: store.baseline_run_id ? String(store.baseline_run_id) : null,
+    entries,
+  };
+}
+
+function assertPathInsideProject(targetPath) {
+  const resolvedProjectRoot = path.resolve(PROJECT_ROOT);
+  const resolvedTarget = path.resolve(String(targetPath || ""));
+  const relative = path.relative(resolvedProjectRoot, resolvedTarget);
+  if (!resolvedTarget || relative.startsWith("..") || path.isAbsolute(relative) && relative === resolvedTarget) {
+    throw new Error("Requested path is outside the QuantLab workspace.");
+  }
+  return resolvedTarget;
+}
+
+async function readCandidatesStore() {
+  try {
+    const raw = await fsp.readFile(CANDIDATES_STORE_PATH, "utf8");
+    return normalizeCandidatesStore(JSON.parse(raw));
+  } catch (error) {
+    if (error && error.code === "ENOENT") return defaultCandidatesStore();
+    throw error;
+  }
+}
+
+async function writeCandidatesStore(store) {
+  const normalized = normalizeCandidatesStore(store);
+  normalized.updated_at = new Date().toISOString();
+  await fsp.mkdir(path.dirname(CANDIDATES_STORE_PATH), { recursive: true });
+  await fsp.writeFile(CANDIDATES_STORE_PATH, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  return normalized;
+}
+
+async function listDirectoryEntries(targetPath, maxDepth = 2) {
+  const safePath = assertPathInsideProject(targetPath);
+  const rootStats = await fsp.stat(safePath);
+  if (!rootStats.isDirectory()) {
+    throw new Error("Requested path is not a directory.");
+  }
+
+  const entries = [];
+
+  async function walk(currentPath, depth) {
+    const dirEntries = await fsp.readdir(currentPath, { withFileTypes: true });
+    for (const entry of dirEntries.sort((left, right) => {
+      const leftRank = left.isDirectory() ? 0 : 1;
+      const rightRank = right.isDirectory() ? 0 : 1;
+      if (leftRank !== rightRank) return leftRank - rightRank;
+      return left.name.localeCompare(right.name);
+    })) {
+      if (entries.length >= MAX_DIRECTORY_ENTRIES) return;
+      const absolutePath = path.join(currentPath, entry.name);
+      const stats = await fsp.stat(absolutePath);
+      entries.push({
+        name: entry.name,
+        path: absolutePath,
+        relative_path: path.relative(safePath, absolutePath),
+        kind: entry.isDirectory() ? "directory" : "file",
+        size_bytes: stats.size,
+        modified_at: stats.mtime.toISOString(),
+        depth,
+      });
+      if (entry.isDirectory() && depth < maxDepth) {
+        await walk(absolutePath, depth + 1);
+      }
+    }
+  }
+
+  await walk(safePath, 0);
+  return {
+    root_path: safePath,
+    entries,
+    truncated: entries.length >= MAX_DIRECTORY_ENTRIES,
+  };
+}
 
 function appendLog(line) {
   if (!line) return;
@@ -168,6 +280,14 @@ ipcMain.handle("quantlab:request-text", async (_event, relativePath) => {
   return response.text();
 });
 
+ipcMain.handle("quantlab:get-candidates-store", async () => readCandidatesStore());
+
+ipcMain.handle("quantlab:save-candidates-store", async (_event, payload) => writeCandidatesStore(payload));
+
+ipcMain.handle("quantlab:list-directory", async (_event, targetPath, maxDepth = 2) => {
+  return listDirectoryEntries(targetPath, maxDepth);
+});
+
 ipcMain.handle("quantlab:post-json", async (_event, relativePath, payload) => {
   if (!workspaceState.serverUrl) {
     throw new Error("Research UI server is not ready yet.");
@@ -188,6 +308,13 @@ ipcMain.handle("quantlab:post-json", async (_event, relativePath, payload) => {
 
 ipcMain.handle("quantlab:open-external", async (_event, url) => {
   await shell.openExternal(url);
+});
+
+ipcMain.handle("quantlab:open-path", async (_event, targetPath) => {
+  const safePath = assertPathInsideProject(targetPath);
+  const errorMessage = await shell.openPath(safePath);
+  if (errorMessage) throw new Error(errorMessage);
+  return { ok: true };
 });
 
 app.whenReady().then(() => {

@@ -557,6 +557,10 @@ button, input, textarea { font: inherit; }
     box-shadow: var(--shadow);
 }
 
+.palette-search {
+    margin-top: 14px;
+}
+
 .palette-results { margin-top: 16px; display: grid; gap: 10px; }
 .palette-item {
     padding: 14px 16px;
@@ -568,6 +572,106 @@ button, input, textarea { font: inherit; }
 
 .palette-item strong { display: block; margin-bottom: 6px; }
 .palette-item span { color: var(--muted); }
+
+.ghost-btn.is-selected {
+    border-color: rgba(107, 227, 214, 0.35);
+    color: var(--accent);
+}
+
+.compare-rank-actions {
+    margin-top: 12px;
+}
+
+.run-row-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.candidate-flag {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(18, 28, 40, 0.82);
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.candidate-flag.candidate {
+    border-color: rgba(107, 227, 214, 0.28);
+    color: var(--accent);
+}
+
+.candidate-flag.shortlist {
+    border-color: rgba(240, 179, 93, 0.32);
+    color: var(--warning);
+}
+
+.candidate-flag.baseline {
+    border-color: rgba(118, 211, 156, 0.32);
+    color: var(--success);
+}
+
+.candidate-card {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: rgba(8, 14, 22, 0.76);
+    padding: 16px;
+    display: grid;
+    gap: 12px;
+}
+
+.candidate-list {
+    display: grid;
+    gap: 12px;
+}
+
+.baseline-card {
+    border-color: rgba(118, 211, 156, 0.28);
+}
+
+.candidate-note {
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: rgba(4, 10, 16, 0.88);
+    color: var(--muted);
+    padding: 12px 14px;
+    line-height: 1.55;
+}
+
+.metric-list.compact {
+    grid-template-columns: 1fr;
+}
+
+.metric-list.compact dd {
+    font-size: 0.96rem;
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+.mini-table {
+    display: grid;
+    gap: 8px;
+}
+
+.mini-table-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: rgba(18, 28, 40, 0.82);
+}
+
+.mini-table-row.head {
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
 
 @media (max-width: 1200px) {
     .workspace-grid { grid-template-columns: 1fr; }
