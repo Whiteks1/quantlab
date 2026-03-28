@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld("quantlabDesktop", {
   getCandidatesStore: () => ipcRenderer.invoke("quantlab:get-candidates-store"),
   saveCandidatesStore: (store) => ipcRenderer.invoke("quantlab:save-candidates-store", store),
   listDirectory: (targetPath, maxDepth) => ipcRenderer.invoke("quantlab:list-directory", targetPath, maxDepth),
+  readProjectText: (targetPath) => ipcRenderer.invoke("quantlab:read-project-text", targetPath),
+  readProjectJson: (targetPath) => ipcRenderer.invoke("quantlab:read-project-json", targetPath),
   postJson: (relativePath, payload) => ipcRenderer.invoke("quantlab:post-json", relativePath, payload),
   openExternal: (url) => ipcRenderer.invoke("quantlab:open-external", url),
   openPath: (targetPath) => ipcRenderer.invoke("quantlab:open-path", targetPath),

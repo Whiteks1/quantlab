@@ -623,6 +623,11 @@ button, input, textarea { font: inherit; }
     gap: 12px;
 }
 
+.candidate-card.is-selected {
+    border-color: rgba(107, 227, 214, 0.35);
+    box-shadow: inset 0 0 0 1px rgba(107, 227, 214, 0.08);
+}
+
 .candidate-list {
     display: grid;
     gap: 12px;
@@ -673,9 +678,19 @@ button, input, textarea { font: inherit; }
     letter-spacing: 0.08em;
 }
 
+.experiments-grid {
+    grid-template-columns: minmax(300px, 0.92fr) minmax(360px, 1.08fr);
+}
+
+.config-preview {
+    min-height: 280px;
+    max-height: 420px;
+}
+
 @media (max-width: 1200px) {
     .workspace-grid { grid-template-columns: 1fr; }
     .workflow-grid { grid-template-columns: 1fr; }
+    .experiments-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 980px) {

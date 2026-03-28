@@ -1,6 +1,7 @@
 import * as decisionStore from "./modules/decision-store.js";
 import {
   absoluteUrl as buildAbsoluteUrl,
+  basenamePath as basenameValue,
   buildRunArtifactHref as buildArtifactHref,
   escapeHtml as escapeMarkup,
   escapeRegex as escapePattern,
@@ -10,6 +11,7 @@ import {
   formatLogPreview as formatLogText,
   formatNumber as formatNumericValue,
   formatPercent as formatPercentValue,
+  parseCsvRows as parseCsvPreviewRows,
   runtimeChip as renderRuntimeChip,
   shortCommit as shortenCommit,
   stripWrappingQuotes as stripQuotes,
@@ -23,6 +25,7 @@ import {
   renderCandidatesTab as renderCandidatesTabView,
   renderCandidateFlags as renderCandidateFlagsView,
   renderCompareTab as renderCompareTabView,
+  renderExperimentsTab as renderExperimentsTabView,
   renderJobTab as renderJobTabView,
   renderPaperOpsTab as renderPaperOpsTabView,
   renderRunTab as renderRunTabView,
@@ -36,11 +39,16 @@ const CONFIG = {
   brokerHealthPath: "/api/broker-submissions-health",
   stepbitWorkspacePath: "/api/stepbit-workspace",
   detailArtifacts: ["report.json", "run_report.json"],
+  experimentsConfigDir: "configs/experiments",
+  sweepsOutputDir: "outputs/sweeps",
   refreshIntervalMs: 15000,
   maxWorklistRuns: 8,
   maxRecentJobs: 4,
   maxLogPreviewChars: 5000,
   maxCandidateCompare: 4,
+  maxExperimentsConfigs: 12,
+  maxRecentSweeps: 8,
+  maxSweepRows: 5,
 };
 
 const state = {
@@ -50,6 +58,8 @@ const state = {
   candidatesLoaded: false,
   selectedRunIds: [],
   detailCache: new Map(),
+  experimentsWorkspace: { status: "idle", configs: [], sweeps: [], error: null, updatedAt: null },
+  experimentConfigPreviewCache: new Map(),
   isSubmittingLaunch: false,
   launchFeedback: "Use deterministic inputs or ask from chat.",
   refreshTimer: null,
@@ -57,7 +67,7 @@ const state = {
     {
       role: "assistant",
       content:
-        "QuantLab Desktop now supports a real workflow.\n\nTry:\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure",
+        "QuantLab Desktop now supports a real workflow.\n\nTry:\n- open experiments\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/experiments/eth_2023_grid.yaml\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure",
     },
   ],
   tabs: [],
@@ -108,6 +118,7 @@ const elements = {
 
 const paletteActions = [
   ["chat", "Open Chat", "Return focus to the command bus.", () => focusChat()],
+  ["experiments", "Open Experiments", "Open the native experiments and sweeps workspace.", () => openExperimentsTab()],
   ["launch", "Open Launch", "Open the QuantLab launch surface.", () => openResearchTab("launch", "Launch", "#/launch")],
   ["runs", "Open Runs", "Open the run explorer.", () => openResearchTab("runs", "Runs", "#/")],
   ["candidates", "Open Candidates", "Open the shortlist and baseline surface.", () => openCandidatesTab()],
@@ -153,6 +164,7 @@ function bindEvents() {
     button.addEventListener("click", () => {
       const action = button.dataset.action;
       if (action === "open-chat") focusChat();
+      if (action === "open-experiments") openExperimentsTab();
       if (action === "open-launch") openResearchTab("launch", "Launch", "#/launch");
       if (action === "open-runs") openResearchTab("runs", "Runs", "#/");
       if (action === "open-candidates") openCandidatesTab();
@@ -255,6 +267,9 @@ async function refreshSnapshot() {
     renderWorkflow();
     refreshLiveJobTabs();
     rerenderContextualTabs();
+    if (state.tabs.some((tab) => tab.kind === "experiments")) {
+      refreshExperimentsWorkspace({ focusTab: false, silent: true });
+    }
   } catch (_error) {
     // Keep the shell usable even if optional surfaces are down.
   }
@@ -331,6 +346,8 @@ function renderTabs() {
   syncNav(activeTab.navKind || activeTab.kind);
   if (activeTab.kind === "iframe") {
     elements.tabContent.innerHTML = `<iframe class="tab-frame" src="${escapeHtml(activeTab.url)}" title="${escapeHtml(activeTab.title)}"></iframe>`;
+  } else if (activeTab.kind === "experiments") {
+    elements.tabContent.innerHTML = renderExperimentsTab(activeTab);
   } else if (activeTab.kind === "run") {
     elements.tabContent.innerHTML = renderRunTab(activeTab);
   } else if (activeTab.kind === "compare") {
@@ -514,6 +531,49 @@ function bindTabChromeEvents() {
 }
 
 function bindTabContentEvents(tab) {
+  if (tab.kind === "experiments") {
+    elements.tabContent.querySelectorAll("[data-experiments-refresh]").forEach((button) => {
+      button.addEventListener("click", () => refreshExperimentsWorkspace({ focusTab: true, silent: false }));
+    });
+    elements.tabContent.querySelectorAll("[data-experiment-config]").forEach((button) => {
+      button.addEventListener("click", () => upsertTab({ id: tab.id, selectedConfigPath: button.dataset.experimentConfig }));
+    });
+    elements.tabContent.querySelectorAll("[data-experiment-launch-config]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const configPath = button.dataset.experimentLaunchConfig;
+        if (!configPath) return;
+        await submitLaunchRequest({ command: "sweep", params: { config_path: configPath } }, "experiments");
+        await refreshExperimentsWorkspace({ focusTab: true, silent: true });
+        upsertTab({ id: tab.id, selectedConfigPath: configPath });
+      });
+    });
+    elements.tabContent.querySelectorAll("[data-experiment-open-path]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (button.dataset.experimentOpenPath) window.quantlabDesktop.openPath(button.dataset.experimentOpenPath);
+      });
+    });
+    elements.tabContent.querySelectorAll("[data-experiment-open-file]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (button.dataset.experimentOpenFile) window.quantlabDesktop.openPath(button.dataset.experimentOpenFile);
+      });
+    });
+    elements.tabContent.querySelectorAll("[data-open-path]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (button.dataset.openPath) window.quantlabDesktop.openPath(button.dataset.openPath);
+      });
+    });
+    elements.tabContent.querySelectorAll("[data-experiment-sweep]").forEach((button) => {
+      button.addEventListener("click", () => upsertTab({ id: tab.id, selectedSweepId: button.dataset.experimentSweep }));
+    });
+    elements.tabContent.querySelectorAll("[data-experiment-relaunch]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const configPath = button.dataset.experimentRelaunch;
+        if (!configPath) return;
+        await submitLaunchRequest({ command: "sweep", params: { config_path: configPath } }, "experiments");
+        await refreshExperimentsWorkspace({ focusTab: true, silent: true });
+      });
+    });
+  }
   if (tab.kind === "run") {
     bindRunContextActions(elements.tabContent, tab.runId);
   }
@@ -615,6 +675,15 @@ function bindTabContentEvents(tab) {
 function handleChatPrompt(prompt) {
   pushMessage("user", prompt);
   const normalized = prompt.trim().toLowerCase();
+  if (normalized.includes("open experiments") || normalized.includes("open sweeps") || normalized === "experiments") {
+    openExperimentsTab();
+    pushMessage("assistant", "Opened the native experiments workspace.");
+    return;
+  }
+  if (normalized.includes("refresh experiments") || normalized.includes("refresh sweeps")) {
+    refreshExperimentsWorkspace({ focusTab: true, silent: false });
+    return;
+  }
   if (normalized.includes("open launch") || normalized === "launch") {
     openResearchTab("launch", "Launch", "#/launch");
     pushMessage("assistant", "Opened the Launch surface inside a desktop tab.");
@@ -696,7 +765,7 @@ function handleChatPrompt(prompt) {
     submitLaunchRequest(launchSweepPayload, "chat");
     return;
   }
-  pushMessage("assistant", "This shell now supports real backend-backed actions. Try:\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/sweeps/example.yaml\n- open candidates\n- mark candidate <run_id>\n- mark baseline <run_id>\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure");
+  pushMessage("assistant", "This shell now supports real backend-backed actions. Try:\n- open experiments\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/experiments/eth_2023_grid.yaml\n- open candidates\n- mark candidate <run_id>\n- mark baseline <run_id>\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure");
 }
 
 async function submitLaunchRequest(payload, source) {
@@ -740,6 +809,19 @@ function focusChat() {
   state.activeTabId = null;
   renderTabs();
   pushMessage("assistant", "Chat stays at the center of the shell. Use it to launch work, open runs, compare, or inspect artifacts.");
+}
+
+async function openExperimentsTab() {
+  const current = state.tabs.find((tab) => tab.id === "experiments");
+  upsertTab({
+    id: "experiments",
+    kind: "experiments",
+    navKind: "experiments",
+    title: "Experiments",
+    selectedConfigPath: current?.selectedConfigPath || state.experimentsWorkspace.configs[0]?.path || null,
+    selectedSweepId: current?.selectedSweepId || state.experimentsWorkspace.sweeps[0]?.run_id || null,
+  });
+  await refreshExperimentsWorkspace({ focusTab: true, silent: true });
 }
 
 function openResearchTab(navKind, title, hash) {
@@ -1017,6 +1099,176 @@ function openArtifactsForJob(requestId) {
   pushMessage("assistant", `Job ${requestId} does not expose artifacts yet.`);
 }
 
+async function refreshExperimentsWorkspace({ focusTab = false, silent = true } = {}) {
+  state.experimentsWorkspace = {
+    ...state.experimentsWorkspace,
+    status: "loading",
+    error: null,
+  };
+  if (focusTab) renderTabs();
+  try {
+    const workspace = await buildExperimentsWorkspace();
+    state.experimentsWorkspace = {
+      status: "ready",
+      configs: workspace.configs,
+      sweeps: workspace.sweeps,
+      error: null,
+      updatedAt: new Date().toISOString(),
+    };
+    const experimentsTab = state.tabs.find((tab) => tab.id === "experiments");
+    if (experimentsTab) {
+      const nextTab = {
+        ...experimentsTab,
+        selectedConfigPath: experimentsTab.selectedConfigPath || workspace.configs[0]?.path || null,
+        selectedSweepId: experimentsTab.selectedSweepId || workspace.sweeps[0]?.run_id || null,
+      };
+      if (focusTab) {
+        upsertTab(nextTab);
+      } else {
+        state.tabs = state.tabs.map((tab) => (tab.id === "experiments" ? nextTab : tab));
+        if (state.activeTabId === "experiments") renderTabs();
+      }
+    } else if (focusTab) {
+      renderTabs();
+    }
+    if (!silent) {
+      pushMessage(
+        "assistant",
+        `Refreshed experiments workspace: ${workspace.configs.length} configs and ${workspace.sweeps.length} recent sweeps.`,
+      );
+    }
+  } catch (error) {
+    state.experimentsWorkspace = {
+      ...state.experimentsWorkspace,
+      status: "error",
+      error: error.message || "Could not refresh the experiments workspace.",
+    };
+    if (focusTab) renderTabs();
+    if (!silent) pushMessage("assistant", state.experimentsWorkspace.error);
+  }
+}
+
+async function buildExperimentsWorkspace() {
+  const [configsListing, sweepsListing] = await Promise.all([
+    window.quantlabDesktop.listDirectory(CONFIG.experimentsConfigDir, 0),
+    window.quantlabDesktop.listDirectory(CONFIG.sweepsOutputDir, 0),
+  ]);
+
+  const configEntries = (configsListing.entries || [])
+    .filter((entry) => entry.kind === "file" && /\.ya?ml$/i.test(entry.name))
+    .sort((left, right) => String(right.modified_at || "").localeCompare(String(left.modified_at || "")))
+    .slice(0, CONFIG.maxExperimentsConfigs);
+
+  const configs = await Promise.all(configEntries.map(async (entry) => ({
+    name: entry.name,
+    path: entry.path,
+    relativePath: entry.relative_path || entry.name,
+    modifiedAt: entry.modified_at,
+    sizeBytes: entry.size_bytes,
+    previewText: await loadExperimentConfigPreview(entry.path),
+  })));
+
+  const sweepDirectories = (sweepsListing.entries || [])
+    .filter((entry) => entry.kind === "directory" && entry.depth === 0)
+    .sort((left, right) => String(right.modified_at || "").localeCompare(String(left.modified_at || "")))
+    .slice(0, CONFIG.maxRecentSweeps);
+
+  const sweeps = await Promise.all(sweepDirectories.map((entry) => buildSweepSummary(entry)));
+  return {
+    configs,
+    sweeps: sweeps.filter(Boolean),
+  };
+}
+
+async function buildSweepSummary(entry) {
+  const rootPath = entry.path;
+  const fileListing = await window.quantlabDesktop.listDirectory(rootPath, 0).catch(() => ({ entries: [], truncated: false }));
+  const metaPath = `${rootPath}\\meta.json`;
+  const leaderboardPath = `${rootPath}\\leaderboard.csv`;
+  const experimentsPath = `${rootPath}\\experiments.csv`;
+  const walkforwardSummaryPath = `${rootPath}\\walkforward_summary.csv`;
+  const configResolvedPath = `${rootPath}\\config_resolved.yaml`;
+
+  const [meta, leaderboardText, experimentsText, walkforwardText] = await Promise.all([
+    readOptionalProjectJson(metaPath),
+    readOptionalProjectText(leaderboardPath),
+    readOptionalProjectText(experimentsPath),
+    readOptionalProjectText(walkforwardSummaryPath),
+  ]);
+
+  const leaderboardRows = parseCsvPreviewRows(leaderboardText, CONFIG.maxSweepRows);
+  const walkforwardRows = parseCsvPreviewRows(walkforwardText, CONFIG.maxSweepRows);
+  const experimentsRows = parseCsvPreviewRows(experimentsText, 1);
+  const firstRow = leaderboardRows[0] || experimentsRows[0] || null;
+
+  return {
+    run_id: meta?.run_id || basenameValue(rootPath),
+    path: rootPath,
+    modifiedAt: entry.modified_at,
+    createdAt: meta?.created_at || entry.modified_at,
+    mode: meta?.mode || inferSweepModeFromName(entry.name),
+    configPath: meta?.config_path || "",
+    configName: basenameValue(meta?.config_path || ""),
+    nRuns: meta?.n_runs ?? meta?.n_train_runs ?? null,
+    nSelected: meta?.n_selected ?? null,
+    nTrainRuns: meta?.n_train_runs ?? null,
+    nTestRuns: meta?.n_test_runs ?? null,
+    topResults: Array.isArray(meta?.top10) ? meta.top10.slice(0, CONFIG.maxSweepRows) : [],
+    leaderboardRows,
+    walkforwardRows,
+    files: fileListing.entries || [],
+    filesTruncated: Boolean(fileListing.truncated),
+    metaPath,
+    leaderboardPath,
+    experimentsPath,
+    walkforwardSummaryPath,
+    configResolvedPath,
+    headlineReturn: coerceNumber(firstRow?.total_return),
+    headlineSharpe: coerceNumber(firstRow?.sharpe_simple || firstRow?.best_test_sharpe),
+    headlineDrawdown: coerceNumber(firstRow?.max_drawdown),
+  };
+}
+
+async function readOptionalProjectText(targetPath) {
+  try {
+    return await window.quantlabDesktop.readProjectText(targetPath);
+  } catch (_error) {
+    return "";
+  }
+}
+
+async function readOptionalProjectJson(targetPath) {
+  try {
+    return await window.quantlabDesktop.readProjectJson(targetPath);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function coerceNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const parsed = Number(String(value ?? "").trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function inferSweepModeFromName(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized.includes("walkforward")) return "walkforward";
+  if (normalized.includes("grid")) return "grid";
+  return "sweep";
+}
+
+async function loadExperimentConfigPreview(configPath) {
+  if (!configPath) return "";
+  if (state.experimentConfigPreviewCache.has(configPath)) {
+    return state.experimentConfigPreviewCache.get(configPath);
+  }
+  const raw = await readOptionalProjectText(configPath);
+  const previewText = raw ? raw.split(/\r?\n/).slice(0, 48).join("\n") : "";
+  if (previewText) state.experimentConfigPreviewCache.set(configPath, previewText);
+  return previewText;
+}
+
 function closeTab(tabId) {
   state.tabs = state.tabs.filter((tab) => tab.id !== tabId);
   if (state.activeTabId === tabId) state.activeTabId = state.tabs[0]?.id || null;
@@ -1025,7 +1277,7 @@ function closeTab(tabId) {
 
 function syncNav(kind) {
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.remove("is-active"));
-  const mapping = { chat: "open-chat", launch: "open-launch", runs: "open-runs", candidates: "open-candidates", compare: "open-compare", ops: "open-ops" };
+  const mapping = { chat: "open-chat", experiments: "open-experiments", launch: "open-launch", runs: "open-runs", candidates: "open-candidates", compare: "open-compare", ops: "open-ops" };
   const target = document.querySelector(`.nav-item[data-action="${mapping[kind] || "open-chat"}"]`);
   if (target) target.classList.add("is-active");
 }
@@ -1111,6 +1363,10 @@ function renderRunTab(tab) {
   return renderRunTabView(tab, getRendererContext());
 }
 
+function renderExperimentsTab(tab) {
+  return renderExperimentsTabView(tab, getRendererContext());
+}
+
 function renderCompareTab(tab) {
   return renderCompareTabView(tab, getRendererContext());
 }
@@ -1143,6 +1399,7 @@ function getRendererContext() {
   return {
     store: state.candidatesStore,
     snapshot: state.snapshot,
+    experimentsWorkspace: state.experimentsWorkspace,
     maxLogPreviewChars: CONFIG.maxLogPreviewChars,
     decision: {
       getCandidateEntry: (store, runId) => decisionStore.getCandidateEntry(store, runId),
@@ -1172,7 +1429,7 @@ function upsertTab(nextTab) {
 }
 
 function rerenderContextualTabs() {
-  if (state.tabs.some((tab) => ["run", "compare", "artifacts", "candidates", "paper", "job"].includes(tab.kind))) renderTabs();
+  if (state.tabs.some((tab) => ["experiments", "run", "compare", "artifacts", "candidates", "paper", "job"].includes(tab.kind))) renderTabs();
 }
 
 function refreshLiveJobTabs() {
@@ -1231,6 +1488,7 @@ function getBrowserUrlForActiveContext() {
   if (!state.workspace.serverUrl) return "";
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
   if (activeTab?.kind === "iframe") return activeTab.url;
+  if (activeTab?.kind === "experiments") return `${state.workspace.serverUrl}/research_ui/index.html#/launch`;
   if (activeTab?.kind === "run") return getBrowserUrlForRun(activeTab.runId);
   if (activeTab?.kind === "paper") return `${state.workspace.serverUrl}/research_ui/index.html#/ops`;
   if (activeTab?.kind === "job") return `${state.workspace.serverUrl}/research_ui/index.html#/launch`;

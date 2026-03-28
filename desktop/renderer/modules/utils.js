@@ -172,3 +172,50 @@ export function stringifyValue(value) {
 export function uniqueRunIds(runIds) {
   return [...new Set((runIds || []).filter(Boolean))];
 }
+
+export function basenamePath(value) {
+  const normalized = String(value || "").replace(/\\/g, "/").replace(/\/+$/, "");
+  if (!normalized) return "";
+  const parts = normalized.split("/");
+  return parts[parts.length - 1] || "";
+}
+
+export function parseCsvRows(text, limit = Infinity) {
+  const source = String(text || "").trim();
+  if (!source) return [];
+  const lines = source.split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = splitCsvLine(lines[0]);
+  const rows = [];
+  for (const line of lines.slice(1)) {
+    const values = splitCsvLine(line);
+    const row = Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
+    rows.push(row);
+    if (rows.length >= limit) break;
+  }
+  return rows;
+}
+
+function splitCsvLine(line) {
+  const values = [];
+  let current = "";
+  let insideQuotes = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (char === '"') {
+      if (insideQuotes && line[index + 1] === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        insideQuotes = !insideQuotes;
+      }
+    } else if (char === "," && !insideQuotes) {
+      values.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  values.push(current);
+  return values.map((value) => value.trim());
+}
