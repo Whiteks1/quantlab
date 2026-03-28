@@ -38,6 +38,7 @@ npm start
 - The chat is deterministic and specialized for QuantLab commands.
 - It does not yet delegate real reasoning to Stepbit.
 - The shell reuses the existing `research_ui` as an embedded workspace surface.
+- The renderer is now split into focused ES modules under `desktop/renderer/modules/` so workflow logic, decision-store helpers, and tab renderers no longer live in one file.
 - The shell can now review recent launch jobs and explain the latest failure from local stdout/stderr logs.
 - The shell now persists decision state locally in `outputs/desktop/candidates_shortlist.json`.
 - `Run`, `Compare`, `Artifacts`, `Candidates`, and `Paper Ops` are now shell-native tabs designed to support launch -> inspect -> compare -> decide continuity.
