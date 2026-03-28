@@ -101,4 +101,3 @@ export function summarizeCandidateState(store, runId) {
   if (isCandidateRun(store, runId)) labels.push("candidate");
   return labels.length ? labels.join(" · ") : "not tracked";
 }
-
