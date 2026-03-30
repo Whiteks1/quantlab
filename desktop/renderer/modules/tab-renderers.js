@@ -112,6 +112,17 @@ export function renderRunTab(tab, ctx) {
   const fileEntries = detail.directoryEntries || [];
   const topResults = selectTopResults(report?.results, 4);
   const candidateEntry = ctx.decision.getCandidateEntry(ctx.store, run.run_id);
+  const relatedJobs = ctx.getRunRelatedJobs(run.run_id);
+  const latestRelatedJob = relatedJobs[0] || null;
+  const sweepEntries = ctx.getSweepDecisionEntriesForRun(run.run_id);
+  const hasDecisionPeers = ctx.decision.isBaselineRun(ctx.store, run.run_id)
+    ? ctx.decision.getCandidateEntriesResolved(ctx.store, ctx.findRun).length > 1
+    : Boolean(ctx.store.baseline_run_id || ctx.decision.isShortlistedRun(ctx.store, run.run_id));
+  const decisionNote = candidateEntry?.note ? escapeHtml(candidateEntry.note) : "No local decision note yet.";
+  const continuityState = latestRelatedJob
+    ? `${titleCase(latestRelatedJob.status || "unknown")} · ${formatDateTime(latestRelatedJob.created_at)}`
+    : "No linked launch job";
+  const relatedJobTone = latestRelatedJob?.status === "failed" ? "tone-down" : latestRelatedJob?.status === "succeeded" ? "tone-up" : "";
 
   return `
     <div class="tab-shell">
@@ -124,6 +135,8 @@ export function renderRunTab(tab, ctx) {
         <div class="workflow-actions">
           <button class="ghost-btn" type="button" data-open-browser-run="${escapeHtml(run.run_id)}">Browser view</button>
           <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(run.run_id)}">Artifacts</button>
+          <button class="ghost-btn" type="button" data-open-decision-compare="${escapeHtml(run.run_id)}">Decision compare</button>
+          ${latestRelatedJob ? `<button class="ghost-btn" type="button" data-open-related-job="${escapeHtml(run.run_id)}">Latest launch review</button>` : ""}
           <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(run.run_id)}">${ctx.decision.isCandidateRun(ctx.store, run.run_id) ? "Unmark candidate" : "Mark candidate"}</button>
           <button class="ghost-btn" type="button" data-shortlist-run="${escapeHtml(run.run_id)}">${ctx.decision.isShortlistedRun(ctx.store, run.run_id) ? "Remove shortlist" : "Add shortlist"}</button>
           <button class="ghost-btn" type="button" data-set-baseline="${escapeHtml(run.run_id)}">${ctx.decision.isBaselineRun(ctx.store, run.run_id) ? "Clear baseline" : "Set baseline"}</button>
@@ -137,6 +150,8 @@ export function renderRunTab(tab, ctx) {
         ${renderSummaryCard("Trades", formatCount(run.trades))}
         ${renderSummaryCard("Decision state", ctx.decision.summarizeCandidateState(ctx.store, run.run_id))}
         ${renderSummaryCard("Artifacts", fileEntries.length ? `${fileEntries.length} files` : "Pending")}
+        ${renderSummaryCard("Launch continuity", continuityState)}
+        ${renderSummaryCard("Sweep linkage", sweepEntries.length ? `${sweepEntries.length} tracked rows` : "None")}
       </div>
       <div class="artifact-grid">
         <section class="artifact-panel">
@@ -151,6 +166,20 @@ export function renderRunTab(tab, ctx) {
           </dl>
         </section>
         <section class="artifact-panel">
+          <div class="section-label">Decision continuity</div>
+          <h3>What should happen next</h3>
+          <div class="run-row-flags">${renderCandidateFlags(ctx.store, run.run_id, ctx.decision)}</div>
+          <div class="candidate-note">${decisionNote}</div>
+          <div class="workflow-actions">
+            <button class="ghost-btn" type="button" data-open-decision-compare="${escapeHtml(run.run_id)}" ${hasDecisionPeers ? "" : "disabled"}>Compare with decision set</button>
+            <button class="ghost-btn" type="button" data-open-candidates="true">Open candidates</button>
+            <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(run.run_id)}">Inspect artifacts</button>
+          </div>
+          ${hasDecisionPeers ? `<div class="artifact-meta">This run can be compared directly against the current shortlist or baseline.</div>` : `<div class="artifact-meta">Pin a baseline or shortlist another run to enable decision compare from here.</div>`}
+        </section>
+      </div>
+      <div class="artifact-grid">
+        <section class="artifact-panel">
           <div class="section-label">Execution</div>
           <h3>Header and reproduce</h3>
           <dl class="metric-list compact">
@@ -160,8 +189,6 @@ export function renderRunTab(tab, ctx) {
             ${compareMetric("Reproduce", report?.reproduce?.command || "-", "")}
           </dl>
         </section>
-      </div>
-      <div class="artifact-grid">
         <section class="artifact-panel">
           <div class="section-label">Primary result</div>
           <h3>${escapeHtml(primaryResult ? "Decision metric snapshot" : "No structured result available")}</h3>
@@ -188,6 +215,22 @@ export function renderRunTab(tab, ctx) {
       </div>
       <div class="artifact-grid">
         <section class="artifact-panel">
+          <div class="section-label">Launch review</div>
+          <h3>${escapeHtml(latestRelatedJob ? `Latest job ${latestRelatedJob.request_id}` : "No linked launch job")}</h3>
+          ${latestRelatedJob ? `
+            <dl class="metric-list compact">
+              ${compareMetric("Status", titleCase(latestRelatedJob.status || "unknown"), relatedJobTone)}
+              ${compareMetric("Created", formatDateTime(latestRelatedJob.created_at), "")}
+              ${compareMetric("Command", latestRelatedJob.command || "-", "")}
+              ${compareMetric("Request", latestRelatedJob.request_id || "-", "")}
+            </dl>
+            <div class="workflow-actions">
+              <button class="ghost-btn" type="button" data-open-related-job="${escapeHtml(run.run_id)}">Open launch review</button>
+              ${latestRelatedJob.stderr_href ? `<button class="ghost-btn" type="button" data-open-job-link="${escapeHtml(latestRelatedJob.stderr_href)}">Open stderr in browser</button>` : ""}
+            </div>
+          ` : `<div class="empty-state">This run does not currently expose a launch job in the local launch registry.</div>`}
+        </section>
+        <section class="artifact-panel">
           <div class="section-label">Top result rows</div>
           <h3>Best rows from report.json</h3>
           ${topResults.length ? `
@@ -208,6 +251,33 @@ export function renderRunTab(tab, ctx) {
               `).join("")}
             </div>
           ` : `<div class="empty-state">This run did not expose comparable result rows.</div>`}
+        </section>
+      </div>
+      <div class="artifact-grid">
+        <section class="artifact-panel">
+          <div class="section-label">Sweep linkage</div>
+          <h3>${escapeHtml(sweepEntries.length ? "Tracked sweep rows for this run" : "No sweep handoff rows")}</h3>
+          ${sweepEntries.length ? `
+            <div class="mini-table">
+              <div class="mini-table-row head">
+                <span>Entry</span>
+                <span>State</span>
+                <span>Sharpe</span>
+                <span>Return</span>
+              </div>
+              ${sweepEntries.slice(0, 4).map((entry) => `
+                <div class="mini-table-row">
+                  <span>${escapeHtml(entry.entry_id)}</span>
+                  <span>${escapeHtml(ctx.sweepDecision.summarizeState(ctx.sweepDecisionStore, entry.entry_id))}</span>
+                  <span>${escapeHtml(formatNumber(entry.row?.sharpe_simple ?? entry.row_snapshot?.sharpe_simple))}</span>
+                  <span>${escapeHtml(formatPercent(entry.row?.total_return ?? entry.row_snapshot?.total_return))}</span>
+                </div>
+              `).join("")}
+            </div>
+            <div class="workflow-actions">
+              <button class="ghost-btn" type="button" data-open-sweep-handoff="tracked">Open sweep handoff</button>
+            </div>
+          ` : `<div class="empty-state">This run is not currently represented in the local sweep handoff store.</div>`}
         </section>
         <section class="artifact-panel">
           <div class="section-label">Workspace files</div>

@@ -1818,7 +1818,9 @@ function getRendererContext() {
     getRuns,
     getJobs,
     getLatestRun,
+    getRunRelatedJobs,
     getSweepDecisionEntriesResolved,
+    getSweepDecisionEntriesForRun,
     getSweepDecisionCompareEntries,
     sweepDecision: {
       getEntry: (store, entryId) => sweepDecisionStore.getSweepDecisionEntry(store, entryId),
@@ -2024,6 +2026,16 @@ function getSweepDecisionCompareEntries() {
     findSweepDecisionRow,
     CONFIG.maxSweepDecisionCompare,
   );
+}
+
+function getRunRelatedJobs(runId) {
+  return getJobs()
+    .filter((job) => job.run_id === runId)
+    .sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")));
+}
+
+function getSweepDecisionEntriesForRun(runId) {
+  return getSweepDecisionEntriesResolved().filter((entry) => entry.sweep_run_id === runId);
 }
 
 function findRun(runId) {
@@ -2325,6 +2337,24 @@ function summarizeCandidateState(runId) {
   return decisionStore.summarizeCandidateState(state.candidatesStore, runId);
 }
 
+function openRunDecisionCompare(runId) {
+  const relatedRunIds = uniqueRunIds([runId, ...getDecisionCompareRunIds().filter((candidateId) => candidateId !== runId)]);
+  if (relatedRunIds.length < 2) {
+    pushMessage("assistant", "Run compare needs this run plus at least one baseline or shortlisted peer.");
+    return;
+  }
+  openCompareSelectionTab(relatedRunIds.slice(0, CONFIG.maxCandidateCompare), "decision-linked runs");
+}
+
+function openLatestRelatedLaunchJobForRun(runId) {
+  const relatedJob = getRunRelatedJobs(runId)[0] || null;
+  if (!relatedJob?.request_id) {
+    pushMessage("assistant", `Run ${runId} does not currently expose a linked launch job.`);
+    return;
+  }
+  openJobTab(relatedJob.request_id);
+}
+
 function bindRunContextActions(container, runId) {
   container.querySelectorAll("[data-open-artifacts]").forEach((button) => {
     button.addEventListener("click", () => openArtifactsTabForRun(button.dataset.openArtifacts || runId));
@@ -2344,6 +2374,24 @@ function bindRunContextActions(container, runId) {
   container.querySelectorAll("[data-open-browser-run]").forEach((button) => {
     button.addEventListener("click", () => {
       const url = getBrowserUrlForRun(button.dataset.openBrowserRun || runId);
+      if (url) window.quantlabDesktop.openExternal(url);
+    });
+  });
+  container.querySelectorAll("[data-open-decision-compare]").forEach((button) => {
+    button.addEventListener("click", () => openRunDecisionCompare(button.dataset.openDecisionCompare || runId));
+  });
+  container.querySelectorAll("[data-open-related-job]").forEach((button) => {
+    button.addEventListener("click", () => openLatestRelatedLaunchJobForRun(button.dataset.openRelatedJob || runId));
+  });
+  container.querySelectorAll("[data-open-sweep-handoff]").forEach((button) => {
+    button.addEventListener("click", () => openSweepDecisionTab(button.dataset.openSweepHandoff || "tracked"));
+  });
+  container.querySelectorAll("[data-open-candidates]").forEach((button) => {
+    button.addEventListener("click", () => openCandidatesTab());
+  });
+  container.querySelectorAll("[data-open-job-link]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const url = absoluteUrl(button.dataset.openJobLink);
       if (url) window.quantlabDesktop.openExternal(url);
     });
   });
