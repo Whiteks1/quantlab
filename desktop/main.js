@@ -12,6 +12,7 @@ const OUTPUTS_ROOT = path.join(PROJECT_ROOT, "outputs");
 const DESKTOP_OUTPUTS_ROOT = path.join(OUTPUTS_ROOT, "desktop");
 const CANDIDATES_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "candidates_shortlist.json");
 const SWEEP_DECISION_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "sweep_decision_handoff.json");
+const WORKSPACE_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "workspace_state.json");
 const STEPBIT_APP_ROOT = path.join(WORKSPACE_ROOT, "stepbit-app");
 const STEPBIT_APP_CONFIG_PATH = path.join(STEPBIT_APP_ROOT, "config.yaml");
 const MAX_DIRECTORY_ENTRIES = 240;
@@ -146,6 +147,121 @@ async function writeSweepDecisionStore(store) {
   normalized.updated_at = new Date().toISOString();
   await fsp.mkdir(path.dirname(SWEEP_DECISION_STORE_PATH), { recursive: true });
   await fsp.writeFile(SWEEP_DECISION_STORE_PATH, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  return normalized;
+}
+
+function defaultShellWorkspaceStore() {
+  return {
+    version: 1,
+    updated_at: null,
+    active_tab_id: null,
+    selected_run_ids: [],
+    tabs: [],
+    launch_form: {
+      command: "run",
+      ticker: "",
+      start: "",
+      end: "",
+      interval: "",
+      cash: "",
+      paper: false,
+      config_path: "",
+      out_dir: "",
+    },
+  };
+}
+
+function normalizeShellTab(tab) {
+  if (!tab || typeof tab !== "object" || typeof tab.id !== "string" || typeof tab.kind !== "string") return null;
+  const base = {
+    id: String(tab.id),
+    kind: String(tab.kind),
+    navKind: typeof tab.navKind === "string" ? tab.navKind : "",
+    title: typeof tab.title === "string" ? tab.title : "",
+  };
+
+  if (base.kind === "iframe") {
+    if (typeof tab.url !== "string" || !tab.url) return null;
+    return { ...base, url: tab.url };
+  }
+  if (base.kind === "run" || base.kind === "artifacts") {
+    if (typeof tab.runId !== "string" || !tab.runId) return null;
+    return { ...base, runId: tab.runId };
+  }
+  if (base.kind === "compare") {
+    const runIds = Array.isArray(tab.runIds) ? tab.runIds.filter((value) => typeof value === "string" && value) : [];
+    if (!runIds.length) return null;
+    return { ...base, runIds, rankMetric: typeof tab.rankMetric === "string" ? tab.rankMetric : "" };
+  }
+  if (base.kind === "candidates") {
+    return { ...base, filter: typeof tab.filter === "string" ? tab.filter : "all" };
+  }
+  if (base.kind === "experiments") {
+    return {
+      ...base,
+      selectedConfigPath: typeof tab.selectedConfigPath === "string" ? tab.selectedConfigPath : "",
+      selectedSweepId: typeof tab.selectedSweepId === "string" ? tab.selectedSweepId : "",
+    };
+  }
+  if (base.kind === "sweep-decision") {
+    return { ...base, rankMetric: typeof tab.rankMetric === "string" ? tab.rankMetric : "" };
+  }
+  if (base.kind === "job") {
+    if (typeof tab.requestId !== "string" || !tab.requestId) return null;
+    return { ...base, requestId: tab.requestId };
+  }
+  if (base.kind === "paper") return base;
+  return null;
+}
+
+function normalizeShellWorkspaceStore(store) {
+  const fallback = defaultShellWorkspaceStore();
+  if (!store || typeof store !== "object") return fallback;
+
+  const selectedRunIds = Array.isArray(store.selected_run_ids)
+    ? store.selected_run_ids.filter((value) => typeof value === "string" && value).slice(0, 4)
+    : [];
+  const launchForm = store.launch_form && typeof store.launch_form === "object"
+    ? {
+        command: store.launch_form.command === "sweep" ? "sweep" : "run",
+        ticker: typeof store.launch_form.ticker === "string" ? store.launch_form.ticker : "",
+        start: typeof store.launch_form.start === "string" ? store.launch_form.start : "",
+        end: typeof store.launch_form.end === "string" ? store.launch_form.end : "",
+        interval: typeof store.launch_form.interval === "string" ? store.launch_form.interval : "",
+        cash: typeof store.launch_form.cash === "string" ? store.launch_form.cash : "",
+        paper: Boolean(store.launch_form.paper),
+        config_path: typeof store.launch_form.config_path === "string" ? store.launch_form.config_path : "",
+        out_dir: typeof store.launch_form.out_dir === "string" ? store.launch_form.out_dir : "",
+      }
+    : fallback.launch_form;
+  const tabs = Array.isArray(store.tabs) ? store.tabs.map(normalizeShellTab).filter(Boolean) : [];
+  const activeTabId = typeof store.active_tab_id === "string" ? store.active_tab_id : null;
+
+  return {
+    version: 1,
+    updated_at: store.updated_at || null,
+    active_tab_id: tabs.some((tab) => tab.id === activeTabId) ? activeTabId : tabs[0]?.id || null,
+    selected_run_ids: selectedRunIds,
+    tabs,
+    launch_form: launchForm,
+  };
+}
+
+async function readShellWorkspaceStore() {
+  try {
+    const raw = await fsp.readFile(WORKSPACE_STORE_PATH, "utf8");
+    return normalizeShellWorkspaceStore(JSON.parse(raw));
+  } catch (error) {
+    if (error && error.code === "ENOENT") return defaultShellWorkspaceStore();
+    throw error;
+  }
+}
+
+async function writeShellWorkspaceStore(store) {
+  const normalized = normalizeShellWorkspaceStore(store);
+  normalized.updated_at = new Date().toISOString();
+  await fsp.mkdir(path.dirname(WORKSPACE_STORE_PATH), { recursive: true });
+  await fsp.writeFile(WORKSPACE_STORE_PATH, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
   return normalized;
 }
 
@@ -552,6 +668,10 @@ ipcMain.handle("quantlab:save-candidates-store", async (_event, payload) => writ
 ipcMain.handle("quantlab:get-sweep-decision-store", async () => readSweepDecisionStore());
 
 ipcMain.handle("quantlab:save-sweep-decision-store", async (_event, payload) => writeSweepDecisionStore(payload));
+
+ipcMain.handle("quantlab:get-shell-workspace-store", async () => readShellWorkspaceStore());
+
+ipcMain.handle("quantlab:save-shell-workspace-store", async (_event, payload) => writeShellWorkspaceStore(payload));
 
 ipcMain.handle("quantlab:list-directory", async (_event, targetPath, maxDepth = 2) => {
   return listDirectoryEntries(targetPath, maxDepth);
