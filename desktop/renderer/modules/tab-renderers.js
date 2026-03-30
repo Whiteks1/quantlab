@@ -444,6 +444,9 @@ export function renderExperimentsTab(tab, ctx) {
   const selectedConfig = configs.find((entry) => entry.path === tab.selectedConfigPath) || configs[0] || null;
   const selectedSweep = sweeps.find((entry) => entry.run_id === tab.selectedSweepId) || sweeps[0] || null;
   const latestSweep = sweeps[0] || null;
+  const sweepDecisionEntries = ctx.sweepDecision.getEntriesResolved(ctx.sweepDecisionStore, ctx.findSweepDecisionRow);
+  const sweepShortlistEntries = sweepDecisionEntries.filter((entry) => entry.shortlisted);
+  const sweepBaselineEntry = sweepDecisionEntries.find((entry) => entry.entry_id === ctx.sweepDecisionStore?.baseline_entry_id) || null;
 
   if (workspace.status === "loading" && !configs.length && !sweeps.length) {
     return `<div class="tab-placeholder">Reading experiment configs and recent sweep artifacts from the local workspace...</div>`;
@@ -478,6 +481,8 @@ export function renderExperimentsTab(tab, ctx) {
         ${renderSummaryCard("Recent sweeps", String(sweeps.length))}
         ${renderSummaryCard("Latest mode", latestSweep ? titleCase(latestSweep.mode || "unknown") : "None")}
         ${renderSummaryCard("Latest sweep", latestSweep?.run_id || "None")}
+        ${renderSummaryCard("Tracked sweep rows", String(sweepDecisionEntries.length))}
+        ${renderSummaryCard("Sweep shortlist", String(sweepShortlistEntries.length))}
       </div>
       <div class="artifact-grid experiments-grid">
         <section class="artifact-panel">
@@ -568,6 +573,7 @@ export function renderExperimentsTab(tab, ctx) {
               ${fileByName("leaderboard.csv") ? `<button class="ghost-btn" type="button" data-experiment-open-file="${escapeHtml(fileByName("leaderboard.csv").path)}">leaderboard.csv</button>` : ""}
               ${fileByName("experiments.csv") ? `<button class="ghost-btn" type="button" data-experiment-open-file="${escapeHtml(fileByName("experiments.csv").path)}">experiments.csv</button>` : ""}
               ${fileByName("config_resolved.yaml") ? `<button class="ghost-btn" type="button" data-experiment-open-file="${escapeHtml(fileByName("config_resolved.yaml").path)}">config_resolved.yaml</button>` : ""}
+              <button class="ghost-btn" type="button" data-open-sweep-handoff="tracked">Open sweep handoff</button>
             </div>
             <div class="artifact-grid">
               <section class="artifact-panel">
@@ -616,6 +622,20 @@ export function renderExperimentsTab(tab, ctx) {
               </section>
             </div>
             <section class="artifact-panel">
+              <div class="section-label">Decision handoff</div>
+              <h3>Track top sweep rows</h3>
+              <div class="tab-summary-grid">
+                ${renderSummaryCard("Tracked", String(sweepDecisionEntries.length))}
+                ${renderSummaryCard("Shortlisted", String(sweepShortlistEntries.length))}
+                ${renderSummaryCard("Baseline", sweepBaselineEntry?.entry_id || "None")}
+              </div>
+              ${selectedSweep.decisionRows?.length ? `
+                <div class="candidate-list">
+                  ${selectedSweep.decisionRows.map((row) => renderSweepDecisionCard(row, ctx)).join("")}
+                </div>
+              ` : `<div class="empty-state">This sweep did not expose comparable leaderboard rows for handoff.</div>`}
+            </section>
+            <section class="artifact-panel">
               <div class="section-label">Workspace files</div>
               <h3>Local sweep directory</h3>
               ${renderLocalFilesList(selectedSweepFiles.slice(0, 12), selectedSweep.filesTruncated)}
@@ -623,7 +643,110 @@ export function renderExperimentsTab(tab, ctx) {
           ` : `<div class="empty-state">Select a recent sweep to inspect its local outputs.</div>`}
         </section>
       </div>
+      <section class="artifact-panel">
+        <div class="section-label">Tracked handoff</div>
+        <h3>Sweep shortlist and baseline</h3>
+        <div class="workflow-actions">
+          <button class="ghost-btn" type="button" data-open-sweep-handoff="tracked">Open sweep handoff</button>
+        </div>
+        ${sweepDecisionEntries.length ? `<div class="candidate-list">${sweepDecisionEntries.map((entry) => renderSweepDecisionCard(entry, ctx)).join("")}</div>` : `<div class="empty-state">No sweep rows are tracked yet. Track a top row from the selected sweep to start the handoff layer.</div>`}
+      </section>
     </div>
+  `;
+}
+
+export function renderSweepDecisionTab(tab, ctx) {
+  const rankMetric = tab.rankMetric || "sharpe_simple";
+  const entries = ctx.getSweepDecisionCompareEntries();
+  if (entries.length < 2) {
+    return `<div class="tab-placeholder">Sweep handoff needs at least two tracked rows in shortlist or baseline before it can compare them.</div>`;
+  }
+
+  const rankedEntries = [...entries].sort((left, right) => {
+    const leftRow = left.row || {};
+    const rightRow = right.row || {};
+    const leftValue = Number(leftRow[rankMetric] ?? Number.NEGATIVE_INFINITY);
+    const rightValue = Number(rightRow[rankMetric] ?? Number.NEGATIVE_INFINITY);
+    return rightValue - leftValue;
+  });
+  const winner = rankedEntries[0];
+  const baseline = rankedEntries.find((entry) => ctx.sweepDecision.isBaseline(ctx.sweepDecisionStore, entry.entry_id)) || null;
+
+  return `
+    <div class="tab-shell">
+      <div class="artifact-top">
+        <div>
+          <div class="section-label">Sweep handoff</div>
+          <h3>Decision compare</h3>
+          <div class="artifact-meta">Local decision surface for tracked sweep rows. This is intentionally lighter than the run compare surface.</div>
+        </div>
+        <div class="workflow-actions compare-rank-actions">
+          ${["sharpe_simple", "total_return", "max_drawdown", "trades"].map((metric) => `
+            <button class="ghost-btn ${rankMetric === metric ? "is-selected" : ""}" type="button" data-sweep-rank="${escapeHtml(metric)}">${escapeHtml(titleCase(metric.replace("_", " ")))}</button>
+          `).join("")}
+        </div>
+      </div>
+      <div class="tab-summary-grid">
+        ${renderSummaryCard("Compared rows", String(rankedEntries.length))}
+        ${renderSummaryCard("Ranking metric", titleCase(rankMetric.replace("_", " ")))}
+        ${renderSummaryCard("Winner", `${winner.entry_id} · ${formatMetricForDisplay(winner.row?.[rankMetric], rankMetric)}`, toneClass(Number(winner.row?.[rankMetric]), rankMetric !== "max_drawdown"))}
+        ${renderSummaryCard("Baseline", baseline?.entry_id || "None")}
+      </div>
+      <section class="artifact-panel">
+        <div class="section-label">Tracked rows</div>
+        <h3>Compare and decide</h3>
+        <div class="candidate-list">
+          ${rankedEntries.map((entry) => renderSweepDecisionCard(entry, ctx)).join("")}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderSweepDecisionFlags(store, decision, entryId) {
+  const labels = [];
+  if (decision.isBaseline(store, entryId)) labels.push('<span class="candidate-flag baseline">Baseline</span>');
+  if (decision.isShortlisted(store, entryId)) labels.push('<span class="candidate-flag shortlist">Shortlist</span>');
+  if (decision.isTracked(store, entryId)) labels.push('<span class="candidate-flag candidate">Tracked</span>');
+  return labels.length ? labels.join("") : '<span class="candidate-flag neutral">Untracked</span>';
+}
+
+function renderSweepDecisionCard(entry, ctx) {
+  const storedEntry = ctx.sweepDecision.getEntry(ctx.sweepDecisionStore, entry.entry_id);
+  const row = entry.row || entry.row_snapshot || entry;
+  const sweepRunId = entry.sweep_run_id || row.sweep_run_id || row.sweep?.run_id || "-";
+  const sweep = row.sweep || ctx.findSweep(sweepRunId) || null;
+  const configPath = entry.config_path || row.config_path || sweep?.configPath || "";
+  const note = storedEntry?.note || entry.note || "";
+  return `
+    <article class="candidate-card">
+      <div class="run-row-top">
+        <div class="run-row-title">
+          <strong>${escapeHtml(entry.entry_id)}</strong>
+          <div class="run-row-meta">
+            <span>${escapeHtml(sweepRunId)}</span>
+            <span>${escapeHtml(sweep?.configName || configPath || "-")}</span>
+            <span>${escapeHtml(entry.label || row.label || `Row #${(entry.row_index ?? 0) + 1}`)}</span>
+          </div>
+        </div>
+        <div class="run-row-flags">${renderSweepDecisionFlags(ctx.sweepDecisionStore, ctx.sweepDecision, entry.entry_id)}</div>
+      </div>
+      <div class="run-row-metrics">
+        <span class="metric-chip ${toneClass(Number(row.total_return), true)}">Return ${formatPercent(Number(row.total_return))}</span>
+        <span class="metric-chip">Sharpe ${formatNumber(Number(row.sharpe_simple ?? row.best_test_sharpe))}</span>
+        <span class="metric-chip ${toneClass(Number(row.max_drawdown), false)}">Drawdown ${formatPercent(Number(row.max_drawdown))}</span>
+        <span class="metric-chip">Trades ${formatCount(Number(row.trades ?? row.n_test_runs))}</span>
+      </div>
+      ${note ? `<div class="candidate-note">${escapeHtml(note)}</div>` : ""}
+      <div class="workflow-actions">
+        <button class="ghost-btn" type="button" data-sweep-track-entry="${escapeHtml(entry.entry_id)}">${ctx.sweepDecision.isTracked(ctx.sweepDecisionStore, entry.entry_id) ? "Untrack" : "Track"}</button>
+        <button class="ghost-btn" type="button" data-sweep-shortlist-entry="${escapeHtml(entry.entry_id)}">${ctx.sweepDecision.isShortlisted(ctx.sweepDecisionStore, entry.entry_id) ? "Remove shortlist" : "Add shortlist"}</button>
+        <button class="ghost-btn" type="button" data-sweep-baseline-entry="${escapeHtml(entry.entry_id)}">${ctx.sweepDecision.isBaseline(ctx.sweepDecisionStore, entry.entry_id) ? "Clear baseline" : "Set baseline"}</button>
+        <button class="ghost-btn" type="button" data-sweep-note-entry="${escapeHtml(entry.entry_id)}">${note ? "Edit note" : "Add note"}</button>
+        ${configPath ? `<button class="ghost-btn" type="button" data-experiment-launch-config="${escapeHtml(configPath)}">Launch sweep</button>` : ""}
+        ${sweep?.path ? `<button class="ghost-btn" type="button" data-experiment-open-path="${escapeHtml(sweep.path)}">Open folder</button>` : ""}
+      </div>
+    </article>
   `;
 }
 

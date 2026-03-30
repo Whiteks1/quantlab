@@ -1,4 +1,5 @@
 import * as decisionStore from "./modules/decision-store.js";
+import * as sweepDecisionStore from "./modules/sweep-decision-store.js";
 import {
   absoluteUrl as buildAbsoluteUrl,
   basenamePath as basenameValue,
@@ -29,6 +30,7 @@ import {
   renderJobTab as renderJobTabView,
   renderPaperOpsTab as renderPaperOpsTabView,
   renderRunTab as renderRunTabView,
+  renderSweepDecisionTab as renderSweepDecisionTabView,
   renderSummaryCard as renderSummaryCardView,
 } from "./modules/tab-renderers.js";
 
@@ -49,6 +51,7 @@ const CONFIG = {
   maxExperimentsConfigs: 12,
   maxRecentSweeps: 8,
   maxSweepRows: 5,
+  maxSweepDecisionCompare: 4,
 };
 
 const state = {
@@ -56,6 +59,8 @@ const state = {
   snapshot: null,
   candidatesStore: defaultCandidatesStore(),
   candidatesLoaded: false,
+  sweepDecisionStore: defaultSweepDecisionStore(),
+  sweepDecisionLoaded: false,
   selectedRunIds: [],
   detailCache: new Map(),
   experimentsWorkspace: { status: "idle", configs: [], sweeps: [], error: null, updatedAt: null },
@@ -67,7 +72,7 @@ const state = {
     {
       role: "assistant",
       content:
-        "QuantLab Desktop now supports a real workflow.\n\nTry:\n- open experiments\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/experiments/eth_2023_grid.yaml\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure",
+        "QuantLab Desktop now supports a real workflow.\n\nTry:\n- open experiments\n- open sweep handoff\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/experiments/eth_2023_grid.yaml\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure",
     },
   ],
   tabs: [],
@@ -119,6 +124,7 @@ const elements = {
 const paletteActions = [
   ["chat", "Open Chat", "Return focus to the command bus.", () => focusChat()],
   ["experiments", "Open Experiments", "Open the native experiments and sweeps workspace.", () => openExperimentsTab()],
+  ["sweep-handoff", "Open Sweep Handoff", "Open the local sweep decision handoff compare.", () => openSweepDecisionTab()],
   ["launch", "Open Launch", "Open the QuantLab launch surface.", () => openResearchTab("launch", "Launch", "#/launch")],
   ["runs", "Open Runs", "Open the run explorer.", () => openResearchTab("runs", "Runs", "#/")],
   ["candidates", "Open Candidates", "Open the shortlist and baseline surface.", () => openCandidatesTab()],
@@ -142,6 +148,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     state.candidatesStore = defaultCandidatesStore();
   } finally {
     state.candidatesLoaded = true;
+  }
+  try {
+    state.sweepDecisionStore = normalizeSweepDecisionStore(await window.quantlabDesktop.getSweepDecisionStore());
+  } catch (_error) {
+    state.sweepDecisionStore = defaultSweepDecisionStore();
+  } finally {
+    state.sweepDecisionLoaded = true;
   }
   const initialState = await window.quantlabDesktop.getWorkspaceState();
   state.workspace = initialState;
@@ -267,7 +280,7 @@ async function refreshSnapshot() {
     renderWorkflow();
     refreshLiveJobTabs();
     rerenderContextualTabs();
-    if (state.tabs.some((tab) => tab.kind === "experiments")) {
+    if (state.tabs.some((tab) => ["experiments", "sweep-decision"].includes(tab.kind))) {
       refreshExperimentsWorkspace({ focusTab: false, silent: true });
     }
   } catch (_error) {
@@ -348,6 +361,8 @@ function renderTabs() {
     elements.tabContent.innerHTML = `<iframe class="tab-frame" src="${escapeHtml(activeTab.url)}" title="${escapeHtml(activeTab.title)}"></iframe>`;
   } else if (activeTab.kind === "experiments") {
     elements.tabContent.innerHTML = renderExperimentsTab(activeTab);
+  } else if (activeTab.kind === "sweep-decision") {
+    elements.tabContent.innerHTML = renderSweepDecisionTab(activeTab);
   } else if (activeTab.kind === "run") {
     elements.tabContent.innerHTML = renderRunTab(activeTab);
   } else if (activeTab.kind === "compare") {
@@ -573,6 +588,24 @@ function bindTabContentEvents(tab) {
         await refreshExperimentsWorkspace({ focusTab: true, silent: true });
       });
     });
+    elements.tabContent.querySelectorAll("[data-sweep-track-entry]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const row = findSweepDecisionRow(button.dataset.sweepTrackEntry);
+        if (row) toggleSweepDecisionEntry(row);
+      });
+    });
+    elements.tabContent.querySelectorAll("[data-sweep-shortlist-entry]").forEach((button) => {
+      button.addEventListener("click", () => toggleSweepDecisionShortlist(button.dataset.sweepShortlistEntry));
+    });
+    elements.tabContent.querySelectorAll("[data-sweep-baseline-entry]").forEach((button) => {
+      button.addEventListener("click", () => setSweepDecisionBaseline(button.dataset.sweepBaselineEntry));
+    });
+    elements.tabContent.querySelectorAll("[data-sweep-note-entry]").forEach((button) => {
+      button.addEventListener("click", () => editSweepDecisionNote(button.dataset.sweepNoteEntry));
+    });
+    elements.tabContent.querySelectorAll("[data-open-sweep-handoff]").forEach((button) => {
+      button.addEventListener("click", () => openSweepDecisionTab(button.dataset.openSweepHandoff || "tracked"));
+    });
   }
   if (tab.kind === "run") {
     bindRunContextActions(elements.tabContent, tab.runId);
@@ -670,6 +703,39 @@ function bindTabContentEvents(tab) {
       });
     });
   }
+  if (tab.kind === "sweep-decision") {
+    elements.tabContent.querySelectorAll("[data-sweep-rank]").forEach((button) => {
+      button.addEventListener("click", () => upsertTab({ id: tab.id, rankMetric: button.dataset.sweepRank }));
+    });
+    elements.tabContent.querySelectorAll("[data-sweep-track-entry]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const row = findSweepDecisionRow(button.dataset.sweepTrackEntry) || getSweepDecisionResolvedEntry(button.dataset.sweepTrackEntry)?.row;
+        if (row) toggleSweepDecisionEntry(row);
+      });
+    });
+    elements.tabContent.querySelectorAll("[data-sweep-shortlist-entry]").forEach((button) => {
+      button.addEventListener("click", () => toggleSweepDecisionShortlist(button.dataset.sweepShortlistEntry));
+    });
+    elements.tabContent.querySelectorAll("[data-sweep-baseline-entry]").forEach((button) => {
+      button.addEventListener("click", () => setSweepDecisionBaseline(button.dataset.sweepBaselineEntry));
+    });
+    elements.tabContent.querySelectorAll("[data-sweep-note-entry]").forEach((button) => {
+      button.addEventListener("click", () => editSweepDecisionNote(button.dataset.sweepNoteEntry));
+    });
+    elements.tabContent.querySelectorAll("[data-experiment-open-path]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (button.dataset.experimentOpenPath) window.quantlabDesktop.openPath(button.dataset.experimentOpenPath);
+      });
+    });
+    elements.tabContent.querySelectorAll("[data-experiment-launch-config]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const configPath = button.dataset.experimentLaunchConfig;
+        if (!configPath) return;
+        await submitLaunchRequest({ command: "sweep", params: { config_path: configPath } }, "sweep-handoff");
+        await refreshExperimentsWorkspace({ focusTab: false, silent: true });
+      });
+    });
+  }
 }
 
 function handleChatPrompt(prompt) {
@@ -678,6 +744,10 @@ function handleChatPrompt(prompt) {
   if (normalized.includes("open experiments") || normalized.includes("open sweeps") || normalized === "experiments") {
     openExperimentsTab();
     pushMessage("assistant", "Opened the native experiments workspace.");
+    return;
+  }
+  if (normalized.includes("open sweep handoff") || normalized.includes("open sweep decision")) {
+    openSweepDecisionTab();
     return;
   }
   if (normalized.includes("refresh experiments") || normalized.includes("refresh sweeps")) {
@@ -765,7 +835,7 @@ function handleChatPrompt(prompt) {
     submitLaunchRequest(launchSweepPayload, "chat");
     return;
   }
-  pushMessage("assistant", "This shell now supports real backend-backed actions. Try:\n- open experiments\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/experiments/eth_2023_grid.yaml\n- open candidates\n- mark candidate <run_id>\n- mark baseline <run_id>\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure");
+  pushMessage("assistant", "This shell now supports real backend-backed actions. Try:\n- open experiments\n- open sweep handoff\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/experiments/eth_2023_grid.yaml\n- open candidates\n- mark candidate <run_id>\n- mark baseline <run_id>\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure");
 }
 
 async function submitLaunchRequest(payload, source) {
@@ -822,6 +892,23 @@ async function openExperimentsTab() {
     selectedSweepId: current?.selectedSweepId || state.experimentsWorkspace.sweeps[0]?.run_id || null,
   });
   await refreshExperimentsWorkspace({ focusTab: true, silent: true });
+}
+
+function openSweepDecisionTab(mode = "tracked") {
+  const entries = getSweepDecisionCompareEntries();
+  if (entries.length < 2) {
+    pushMessage("assistant", "Sweep handoff needs at least two tracked rows across the current shortlist or baseline.");
+    return;
+  }
+  upsertTab({
+    id: "sweep-decision",
+    kind: "sweep-decision",
+    navKind: "experiments",
+    title: "Sweep Handoff",
+    mode,
+    rankMetric: "sharpe_simple",
+  });
+  pushMessage("assistant", "Opened the sweep decision handoff surface.");
 }
 
 function openResearchTab(navKind, title, hash) {
@@ -1131,6 +1218,7 @@ async function refreshExperimentsWorkspace({ focusTab = false, silent = true } =
     } else if (focusTab) {
       renderTabs();
     }
+    rerenderContextualTabs();
     if (!silent) {
       pushMessage(
         "assistant",
@@ -1200,6 +1288,11 @@ async function buildSweepSummary(entry) {
   const walkforwardRows = parseCsvPreviewRows(walkforwardText, CONFIG.maxSweepRows);
   const experimentsRows = parseCsvPreviewRows(experimentsText, 1);
   const firstRow = leaderboardRows[0] || experimentsRows[0] || null;
+  const decisionRows = buildSweepDecisionRows(
+    meta?.run_id || basenameValue(rootPath),
+    meta?.config_path || "",
+    Array.isArray(meta?.top10) && meta.top10.length ? meta.top10.slice(0, CONFIG.maxSweepRows) : leaderboardRows,
+  );
 
   return {
     run_id: meta?.run_id || basenameValue(rootPath),
@@ -1214,6 +1307,7 @@ async function buildSweepSummary(entry) {
     nTrainRuns: meta?.n_train_runs ?? null,
     nTestRuns: meta?.n_test_runs ?? null,
     topResults: Array.isArray(meta?.top10) ? meta.top10.slice(0, CONFIG.maxSweepRows) : [],
+    decisionRows,
     leaderboardRows,
     walkforwardRows,
     files: fileListing.entries || [],
@@ -1267,6 +1361,28 @@ async function loadExperimentConfigPreview(configPath) {
   const previewText = raw ? raw.split(/\r?\n/).slice(0, 48).join("\n") : "";
   if (previewText) state.experimentConfigPreviewCache.set(configPath, previewText);
   return previewText;
+}
+
+function buildSweepDecisionRows(sweepRunId, configPath, rows) {
+  return (rows || []).map((row, index) => {
+    const totalReturn = coerceNumber(row?.total_return);
+    const sharpe = coerceNumber(row?.sharpe_simple ?? row?.best_test_sharpe);
+    const drawdown = coerceNumber(row?.max_drawdown);
+    const trades = coerceNumber(row?.trades ?? row?.n_test_runs);
+    return {
+      entry_id: `${sweepRunId}:leaderboard:${index}`,
+      sweep_run_id: sweepRunId,
+      source: "leaderboard",
+      row_index: index,
+      config_path: configPath || "",
+      total_return: totalReturn,
+      sharpe_simple: sharpe,
+      max_drawdown: drawdown,
+      trades,
+      label: `Row #${index + 1}`,
+      row_snapshot: row,
+    };
+  });
 }
 
 function closeTab(tabId) {
@@ -1367,6 +1483,10 @@ function renderExperimentsTab(tab) {
   return renderExperimentsTabView(tab, getRendererContext());
 }
 
+function renderSweepDecisionTab(tab) {
+  return renderSweepDecisionTabView(tab, getRendererContext());
+}
+
 function renderCompareTab(tab) {
   return renderCompareTabView(tab, getRendererContext());
 }
@@ -1400,6 +1520,7 @@ function getRendererContext() {
     store: state.candidatesStore,
     snapshot: state.snapshot,
     experimentsWorkspace: state.experimentsWorkspace,
+    sweepDecisionStore: state.sweepDecisionStore,
     maxLogPreviewChars: CONFIG.maxLogPreviewChars,
     decision: {
       getCandidateEntry: (store, runId) => decisionStore.getCandidateEntry(store, runId),
@@ -1412,10 +1533,22 @@ function getRendererContext() {
       summarizeCandidateState: (store, runId) => decisionStore.summarizeCandidateState(store, runId),
     },
     findRun,
+    findSweep,
+    findSweepDecisionRow,
     findJob,
     getRuns,
     getJobs,
     getLatestRun,
+    getSweepDecisionEntriesResolved,
+    getSweepDecisionCompareEntries,
+    sweepDecision: {
+      getEntry: (store, entryId) => sweepDecisionStore.getSweepDecisionEntry(store, entryId),
+      getEntriesResolved: (store, findRowFn) => sweepDecisionStore.getSweepDecisionEntriesResolved(store, findRowFn),
+      isTracked: (store, entryId) => sweepDecisionStore.isTrackedSweepEntry(store, entryId),
+      isShortlisted: (store, entryId) => sweepDecisionStore.isShortlistedSweepEntry(store, entryId),
+      isBaseline: (store, entryId) => sweepDecisionStore.isBaselineSweepEntry(store, entryId),
+      summarizeState: (store, entryId) => sweepDecisionStore.summarizeSweepDecisionState(store, entryId),
+    },
     buildFailureExplanation,
   };
 }
@@ -1429,7 +1562,7 @@ function upsertTab(nextTab) {
 }
 
 function rerenderContextualTabs() {
-  if (state.tabs.some((tab) => ["experiments", "run", "compare", "artifacts", "candidates", "paper", "job"].includes(tab.kind))) renderTabs();
+  if (state.tabs.some((tab) => ["experiments", "sweep-decision", "run", "compare", "artifacts", "candidates", "paper", "job"].includes(tab.kind))) renderTabs();
 }
 
 function refreshLiveJobTabs() {
@@ -1489,6 +1622,7 @@ function getBrowserUrlForActiveContext() {
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
   if (activeTab?.kind === "iframe") return activeTab.url;
   if (activeTab?.kind === "experiments") return `${state.workspace.serverUrl}/research_ui/index.html#/launch`;
+  if (activeTab?.kind === "sweep-decision") return `${state.workspace.serverUrl}/research_ui/index.html#/launch`;
   if (activeTab?.kind === "run") return getBrowserUrlForRun(activeTab.runId);
   if (activeTab?.kind === "paper") return `${state.workspace.serverUrl}/research_ui/index.html#/ops`;
   if (activeTab?.kind === "job") return `${state.workspace.serverUrl}/research_ui/index.html#/launch`;
@@ -1514,6 +1648,14 @@ function defaultCandidatesStore() {
 
 function normalizeCandidatesStore(store) {
   return decisionStore.normalizeCandidatesStore(store);
+}
+
+function defaultSweepDecisionStore() {
+  return sweepDecisionStore.defaultSweepDecisionStore();
+}
+
+function normalizeSweepDecisionStore(store) {
+  return sweepDecisionStore.normalizeSweepDecisionStore(store);
 }
 
 function getLatestRun() {
@@ -1568,12 +1710,72 @@ function getDecisionCompareRunIds() {
   return decisionStore.getDecisionCompareRunIds(state.candidatesStore, findRun, uniqueRunIds, CONFIG.maxCandidateCompare);
 }
 
+function getSweepDecisionEntries() {
+  return sweepDecisionStore.getSweepDecisionEntries(state.sweepDecisionStore);
+}
+
+function getSweepDecisionEntry(entryId) {
+  return sweepDecisionStore.getSweepDecisionEntry(state.sweepDecisionStore, entryId);
+}
+
+function getSweepDecisionResolvedEntry(entryId) {
+  return sweepDecisionStore.getSweepDecisionEntriesResolved(state.sweepDecisionStore, findSweepDecisionRow)
+    .find((entry) => entry.entry_id === entryId) || null;
+}
+
+function getSweepDecisionEntriesResolved() {
+  return sweepDecisionStore.getSweepDecisionEntriesResolved(state.sweepDecisionStore, findSweepDecisionRow);
+}
+
+function isTrackedSweepEntry(entryId) {
+  return sweepDecisionStore.isTrackedSweepEntry(state.sweepDecisionStore, entryId);
+}
+
+function isShortlistedSweepEntry(entryId) {
+  return sweepDecisionStore.isShortlistedSweepEntry(state.sweepDecisionStore, entryId);
+}
+
+function isBaselineSweepEntry(entryId) {
+  return sweepDecisionStore.isBaselineSweepEntry(state.sweepDecisionStore, entryId);
+}
+
+function getSweepDecisionCompareEntries() {
+  return sweepDecisionStore.getSweepDecisionCompareEntries(
+    state.sweepDecisionStore,
+    findSweepDecisionRow,
+    CONFIG.maxSweepDecisionCompare,
+  );
+}
+
 function findRun(runId) {
   return getRuns().find((run) => run.run_id === runId) || null;
 }
 
 function findJob(requestId) {
   return getJobs().find((job) => job.request_id === requestId) || null;
+}
+
+function findSweep(sweepRunId) {
+  return (state.experimentsWorkspace.sweeps || []).find((sweep) => sweep.run_id === sweepRunId) || null;
+}
+
+function findSweepDecisionRow(entryId) {
+  for (const sweep of state.experimentsWorkspace.sweeps || []) {
+    const row = (sweep.decisionRows || []).find((item) => item.entry_id === entryId);
+    if (row) {
+      return {
+        ...row,
+        sweep: {
+          run_id: sweep.run_id,
+          mode: sweep.mode,
+          path: sweep.path,
+          configPath: sweep.configPath,
+          configName: sweep.configName,
+        },
+      };
+    }
+  }
+  return null;
 }
 
 async function saveCandidatesStore(nextStore, message = "") {
@@ -1584,6 +1786,16 @@ async function saveCandidatesStore(nextStore, message = "") {
     if (message) pushMessage("assistant", message);
   } catch (error) {
     pushMessage("assistant", error.message || "Could not persist the candidates store.");
+  }
+}
+
+async function saveSweepDecisionStore(nextStore, message = "") {
+  try {
+    state.sweepDecisionStore = normalizeSweepDecisionStore(await window.quantlabDesktop.saveSweepDecisionStore(nextStore));
+    rerenderContextualTabs();
+    if (message) pushMessage("assistant", message);
+  } catch (error) {
+    pushMessage("assistant", error.message || "Could not persist the sweep decision handoff store.");
   }
 }
 
@@ -1691,6 +1903,142 @@ async function editCandidateNote(runId) {
       entries,
     },
     nextNote.trim() ? `Updated the note for ${runId}.` : `Cleared the note for ${runId}.`,
+  );
+}
+
+async function toggleSweepDecisionEntry(row, forceValue = null) {
+  if (!row?.entry_id || !row?.sweep_run_id) return;
+  const existing = getSweepDecisionEntry(row.entry_id);
+  const shouldExist = forceValue === null ? !existing : Boolean(forceValue);
+  const entries = getSweepDecisionEntries().filter((entry) => entry.entry_id !== row.entry_id);
+  if (shouldExist) {
+    entries.push({
+      entry_id: row.entry_id,
+      sweep_run_id: row.sweep_run_id,
+      source: row.source || "leaderboard",
+      row_index: row.row_index || 0,
+      note: existing?.note || "",
+      shortlisted: existing?.shortlisted || false,
+      config_path: row.config_path || row.sweep?.configPath || "",
+      row_snapshot: row.row_snapshot || row,
+      created_at: existing?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  }
+  const nextStore = {
+    ...state.sweepDecisionStore,
+    entries,
+    baseline_entry_id:
+      shouldExist || state.sweepDecisionStore.baseline_entry_id !== row.entry_id
+        ? state.sweepDecisionStore.baseline_entry_id
+        : null,
+  };
+  await saveSweepDecisionStore(
+    nextStore,
+    shouldExist
+      ? `Tracked ${row.entry_id} in the sweep handoff.`
+      : `Removed ${row.entry_id} from the sweep handoff.`,
+  );
+}
+
+async function toggleSweepDecisionShortlist(entryId) {
+  const resolved = getSweepDecisionResolvedEntry(entryId);
+  if (!resolved?.row) {
+    pushMessage("assistant", `Sweep row ${entryId} is no longer available in the current experiments workspace.`);
+    return;
+  }
+  const existing = getSweepDecisionEntry(entryId);
+  const entries = getSweepDecisionEntries().filter((entry) => entry.entry_id !== entryId);
+  entries.push({
+    entry_id: resolved.entry_id,
+    sweep_run_id: resolved.sweep_run_id,
+    source: resolved.source,
+    row_index: resolved.row_index,
+    note: existing?.note || "",
+    shortlisted: !existing?.shortlisted,
+    config_path: resolved.config_path || resolved.row?.config_path || "",
+    row_snapshot: resolved.row_snapshot || resolved.row,
+    created_at: existing?.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  await saveSweepDecisionStore(
+    {
+      ...state.sweepDecisionStore,
+      entries,
+    },
+    existing?.shortlisted
+      ? `Removed ${entryId} from the sweep shortlist.`
+      : `Added ${entryId} to the sweep shortlist.`,
+  );
+}
+
+async function setSweepDecisionBaseline(entryId) {
+  const resolved = getSweepDecisionResolvedEntry(entryId);
+  if (!resolved?.row) {
+    pushMessage("assistant", `Sweep row ${entryId} is no longer available in the current experiments workspace.`);
+    return;
+  }
+  const nextBaseline = state.sweepDecisionStore.baseline_entry_id === entryId ? null : entryId;
+  const existing = getSweepDecisionEntry(entryId);
+  const entries = getSweepDecisionEntries().filter((entry) => entry.entry_id !== entryId);
+  if (nextBaseline) {
+    entries.push({
+      entry_id: resolved.entry_id,
+      sweep_run_id: resolved.sweep_run_id,
+      source: resolved.source,
+      row_index: resolved.row_index,
+      note: existing?.note || "",
+      shortlisted: existing?.shortlisted || false,
+      config_path: resolved.config_path || resolved.row?.config_path || "",
+      row_snapshot: resolved.row_snapshot || resolved.row,
+      created_at: existing?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  } else if (existing) {
+    entries.push(existing);
+  }
+  await saveSweepDecisionStore(
+    {
+      ...state.sweepDecisionStore,
+      baseline_entry_id: nextBaseline,
+      entries,
+    },
+    nextBaseline
+      ? `Pinned ${entryId} as the sweep handoff baseline.`
+      : "Cleared the sweep handoff baseline.",
+  );
+}
+
+async function editSweepDecisionNote(entryId) {
+  const existing = getSweepDecisionEntry(entryId);
+  const resolved = getSweepDecisionResolvedEntry(entryId);
+  if (!resolved?.row) {
+    pushMessage("assistant", `Sweep row ${entryId} is no longer available in the current experiments workspace.`);
+    return;
+  }
+  const nextNote = window.prompt(`Sweep handoff note for ${entryId}`, existing?.note || "");
+  if (nextNote === null) return;
+  const entries = getSweepDecisionEntries().filter((entry) => entry.entry_id !== entryId);
+  entries.push({
+    entry_id: resolved.entry_id,
+    sweep_run_id: resolved.sweep_run_id,
+    source: resolved.source,
+    row_index: resolved.row_index,
+    note: nextNote.trim(),
+    shortlisted: existing?.shortlisted || false,
+    config_path: resolved.config_path || resolved.row?.config_path || "",
+    row_snapshot: resolved.row_snapshot || resolved.row,
+    created_at: existing?.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  await saveSweepDecisionStore(
+    {
+      ...state.sweepDecisionStore,
+      entries,
+    },
+    nextNote.trim()
+      ? `Updated the sweep note for ${entryId}.`
+      : `Cleared the sweep note for ${entryId}.`,
   );
 }
 
