@@ -825,38 +825,175 @@ export function renderPaperOpsTab(ctx) {
   const broker = ctx.snapshot?.brokerHealth || null;
   const stepbit = ctx.snapshot?.stepbitWorkspace || null;
   const latestJob = ctx.getJobs()[0] || null;
+  const latestFailedJob = ctx.getLatestFailedJob?.() || null;
+  const latestRun = ctx.getLatestRun?.() || null;
+  const decisionCompareRunIds = ctx.getDecisionCompareRunIds?.() || [];
+  const candidateEntries = ctx.decision.getCandidateEntriesResolved(ctx.store, ctx.findRun);
+  const shortlistCount = candidateEntries.filter((entry) => entry.shortlisted && entry.run).length;
+  const baselineRunId = ctx.store?.baseline_run_id || "";
+  const paperReady = Boolean(paper?.available && paper?.total_sessions);
+  const brokerReady = Boolean(broker?.available);
+  const brokerHasAlerts = Boolean(broker?.has_alerts);
+  const stepbitLive = Boolean(stepbit?.live_urls?.frontend_reachable && stepbit?.live_urls?.backend_reachable);
+
+  const nowItems = [
+    {
+      tone: paperReady ? "positive" : "warning",
+      label: "Paper track",
+      title: paperReady ? `${paper.total_sessions} sessions tracked` : "No paper sessions tracked yet",
+      meta: paper?.latest_session_status
+        ? `Latest status ${titleCase(paper.latest_session_status)}${paper?.latest_session_at ? ` · ${formatDateTime(paper.latest_session_at)}` : ""}`
+        : "Paper execution has not produced visible sessions yet.",
+    },
+    {
+      tone: brokerHasAlerts ? "negative" : brokerReady ? "positive" : "warning",
+      label: "Broker boundary",
+      title: brokerHasAlerts ? "Broker alerts require review" : brokerReady ? "Broker validations are visible" : "Broker validations not present yet",
+      meta: brokerHasAlerts
+        ? `${formatCount((broker?.alerts || []).length)} active alerts across the submission boundary.`
+        : brokerReady
+          ? `${formatCount(broker?.total_sessions || 0)} broker validation sessions indexed.`
+          : broker?.message || "No broker order-validation surface is indexed yet.",
+    },
+    {
+      tone: decisionCompareRunIds.length >= 2 ? "positive" : candidateEntries.length ? "warning" : "",
+      label: "Decision queue",
+      title: decisionCompareRunIds.length >= 2 ? `${decisionCompareRunIds.length} runs ready to compare` : candidateEntries.length ? "Decision memory is partial" : "No decision queue yet",
+      meta: `Candidates ${formatCount(candidateEntries.length)} · Shortlist ${formatCount(shortlistCount)} · Baseline ${baselineRunId || "none"}`,
+    },
+  ];
+
+  const watchItems = [
+    paper?.latest_issue_session_id
+      ? {
+          tone: "negative",
+          label: "Paper issue",
+          body: `${paper.latest_issue_session_id}${paper?.latest_issue_error_type ? ` · ${paper.latest_issue_error_type}` : ""}`,
+        }
+      : {
+          tone: "positive",
+          label: "Paper issue watch",
+          body: "No failing paper session is currently surfaced.",
+        },
+    brokerHasAlerts
+      ? {
+          tone: "negative",
+          label: "Broker alerts",
+          body: (broker?.alerts || []).slice(0, 2).map((alert) => `${alert.code || "alert"}${alert.session_id ? ` · ${alert.session_id}` : ""}`).join(" | "),
+        }
+      : {
+          tone: brokerReady ? "positive" : "warning",
+          label: "Broker alert watch",
+          body: brokerReady ? "No broker alerts are active right now." : "Broker alerting will appear here once validations exist.",
+        },
+    latestFailedJob
+      ? {
+          tone: "warning",
+          label: "Latest failed launch",
+          body: `${latestFailedJob.request_id || "-"} · ${titleCase(latestFailedJob.command || "unknown")}${latestFailedJob?.ended_at ? ` · ${formatDateTime(latestFailedJob.ended_at)}` : ""}`,
+        }
+      : {
+          tone: "positive",
+          label: "Launch failure watch",
+          body: "No failed launch job is currently visible in the recent job window.",
+        },
+    {
+      tone: stepbit?.live_urls?.core_ready ? "positive" : stepbitLive ? "warning" : "",
+      label: "Optional Stepbit boundary",
+      body: stepbit?.live_urls?.core_ready
+        ? "Stepbit app and core are available as an optional copiloted layer."
+        : stepbitLive
+          ? "Stepbit app is reachable but chat is not ready because core is unavailable."
+          : "Stepbit remains optional and currently inactive from the shell perspective.",
+    },
+  ];
+
+  const nextAction = selectPaperOpsNextAction({
+    paper,
+    broker,
+    latestFailedJob,
+    latestJob,
+    latestRun,
+    decisionCompareRunIds,
+    baselineRunId,
+  });
+
   return `
     <div class="tab-shell">
       <div class="artifact-top">
         <div>
           <div class="section-label">Operational surface</div>
           <h3>Paper ops</h3>
-          <div class="artifact-meta">Read-only runtime visibility for paper, broker boundary, launch state, and Stepbit readiness.</div>
+          <div class="artifact-meta">Runtime continuity for paper readiness, broker boundary, launch review, and decision follow-through.</div>
         </div>
         <div class="workflow-actions">
           <button class="ghost-btn" type="button" data-open-browser-ops="/research_ui/index.html#/ops">Browser ops</button>
           ${latestJob ? `<button class="ghost-btn" type="button" data-open-job="${escapeHtml(latestJob.request_id || "")}">Latest launch review</button>` : ""}
-          ${ctx.getLatestRun()?.run_id ? `<button class="ghost-btn" type="button" data-open-run="${escapeHtml(ctx.getLatestRun().run_id)}">Latest run</button>` : ""}
+          ${latestRun?.run_id ? `<button class="ghost-btn" type="button" data-open-run="${escapeHtml(latestRun.run_id)}">Latest run</button>` : ""}
+          ${latestRun?.run_id ? `<button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(latestRun.run_id)}">Latest artifacts</button>` : ""}
         </div>
       </div>
       <div class="tab-summary-grid">
-        ${renderSummaryCard("Paper sessions", String(paper?.total_sessions ?? 0))}
-        ${renderSummaryCard("Latest paper status", titleCase(paper?.latest_session_status || "none"))}
-        ${renderSummaryCard("Broker validations", String(broker?.total_sessions ?? 0))}
+        ${renderSummaryCard("Paper sessions", String(paper?.total_sessions ?? 0), paperReady ? "tone-positive" : "")}
+        ${renderSummaryCard("Latest paper status", titleCase(paper?.latest_session_status || "none"), paper?.latest_issue_session_id ? "tone-negative" : paperReady ? "tone-positive" : "")}
+        ${renderSummaryCard("Broker boundary", brokerReady ? "Visible" : "Missing", brokerHasAlerts ? "tone-negative" : brokerReady ? "tone-positive" : "tone-warning")}
         ${renderSummaryCard("Broker alerts", broker?.has_alerts ? "Present" : "None", broker?.has_alerts ? "tone-negative" : "tone-positive")}
+        ${renderSummaryCard("Decision compare", decisionCompareRunIds.length ? String(decisionCompareRunIds.length) : "0", decisionCompareRunIds.length >= 2 ? "tone-positive" : "")}
+        ${renderSummaryCard("Latest failed launch", latestFailedJob ? titleCase(latestFailedJob.command || "failed") : "None", latestFailedJob ? "tone-warning" : "tone-positive")}
         ${renderSummaryCard("Stepbit frontend", stepbit?.live_urls?.frontend_reachable ? "Up" : "Down", stepbit?.live_urls?.frontend_reachable ? "tone-positive" : "tone-negative")}
         ${renderSummaryCard("Stepbit core", stepbit?.live_urls?.core_ready ? "Ready" : stepbit?.live_urls?.core_reachable ? "Up" : "Down", stepbit?.live_urls?.core_ready ? "tone-positive" : stepbit?.live_urls?.core_reachable ? "" : "tone-negative")}
       </div>
       <div class="artifact-grid">
         <section class="artifact-panel">
+          <div class="section-label">Now</div>
+          <h3>Current operational picture</h3>
+          <div class="ops-state-list">
+            ${nowItems.map((item) => `
+              <article class="ops-state-card tone-${escapeHtml(item.tone || "neutral")}">
+                <div class="eyebrow">${escapeHtml(item.label)}</div>
+                <strong>${escapeHtml(item.title)}</strong>
+                <p>${escapeHtml(item.meta)}</p>
+              </article>
+            `).join("")}
+          </div>
+        </section>
+        <section class="artifact-panel">
+          <div class="section-label">Watch</div>
+          <h3>Items worth attention</h3>
+          <div class="ops-watch-list">
+            ${watchItems.map((item) => `
+              <article class="ops-watch-item tone-${escapeHtml(item.tone || "neutral")}">
+                <strong>${escapeHtml(item.label)}</strong>
+                <p>${escapeHtml(item.body)}</p>
+              </article>
+            `).join("")}
+          </div>
+        </section>
+      </div>
+      <section class="artifact-panel ops-next-panel">
+        <div class="section-label">Next</div>
+        <h3>Suggested next move</h3>
+        <div class="ops-callout tone-${escapeHtml(nextAction.tone)}">${escapeHtml(nextAction.message)}</div>
+        <div class="workflow-actions">
+          ${latestFailedJob ? `<button class="ghost-btn" type="button" data-open-job="${escapeHtml(latestFailedJob.request_id || "")}">Review failed launch</button>` : ""}
+          ${latestRun?.run_id ? `<button class="ghost-btn" type="button" data-open-run="${escapeHtml(latestRun.run_id)}">Open latest run</button>` : ""}
+          ${latestRun?.run_id ? `<button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(latestRun.run_id)}">Open latest artifacts</button>` : ""}
+          ${decisionCompareRunIds.length >= 2 ? `<button class="ghost-btn" type="button" data-open-shortlist-compare="true">Open decision compare</button>` : ""}
+          ${baselineRunId ? `<button class="ghost-btn" type="button" data-open-run="${escapeHtml(baselineRunId)}">Open baseline</button>` : ""}
+          <button class="ghost-btn" type="button" data-open-browser-ops="/research_ui/index.html#/ops">Browser ops</button>
+        </div>
+      </section>
+      <div class="artifact-grid">
+        <section class="artifact-panel">
           <div class="section-label">Paper boundary</div>
-          <h3>Health snapshot</h3>
+          <h3>Session health</h3>
           <dl class="metric-list compact">
             ${compareMetric("Root", paper?.root_dir || "-", "")}
             ${compareMetric("Latest session", paper?.latest_session_id || "-", "")}
             ${compareMetric("Latest issue", paper?.latest_issue_session_id || "-", "")}
             ${compareMetric("Latest issue type", paper?.latest_issue_error_type || "-", "")}
           </dl>
+          ${renderOpsChipRow("Paper counts", paper?.status_counts)}
         </section>
         <section class="artifact-panel">
           <div class="section-label">Broker boundary</div>
@@ -867,6 +1004,8 @@ export function renderPaperOpsTab(ctx) {
             ${compareMetric("Order state", broker?.latest_order_state || "-", "")}
             ${compareMetric("Latest issue", broker?.latest_issue_code || "-", "")}
           </dl>
+          ${renderOpsChipRow("Broker counts", broker?.status_counts)}
+          ${renderOpsChipRow("Alert counts", broker?.alert_counts)}
         </section>
       </div>
       <div class="artifact-grid">
@@ -895,6 +1034,68 @@ export function renderPaperOpsTab(ctx) {
       </div>
     </div>
   `;
+}
+
+function renderOpsChipRow(label, counts) {
+  const entries = Object.entries(counts || {}).filter(([, value]) => Number(value) > 0);
+  if (!entries.length) return "";
+  return `
+    <div class="ops-chip-row">
+      <div class="eyebrow">${escapeHtml(label)}</div>
+      <div class="run-row-flags">
+        ${entries.map(([key, value]) => `<span class="metric-chip">${escapeHtml(titleCase(String(key).replace(/_/g, " ")))} ${escapeHtml(formatCount(Number(value)))}</span>`).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function selectPaperOpsNextAction({ paper, broker, latestFailedJob, latestJob, latestRun, decisionCompareRunIds, baselineRunId }) {
+  if (latestFailedJob) {
+    return {
+      tone: "warning",
+      message: `Start by reviewing failed launch ${latestFailedJob.request_id || "-"}. Paper health may look stable while the newest launch path is still broken.`,
+    };
+  }
+  if (broker?.has_alerts) {
+    return {
+      tone: "negative",
+      message: "Broker alerts are present. Inspect the broker boundary before trusting any submission-ready flow.",
+    };
+  }
+  if (decisionCompareRunIds.length >= 2) {
+    return {
+      tone: "positive",
+      message: "You already have enough decision runs to compare. Use shortlist compare and decide whether to keep or replace the current baseline.",
+    };
+  }
+  if (latestRun?.run_id) {
+    return {
+      tone: "neutral",
+      message: `Open the latest run ${latestRun.run_id} and inspect its artifacts before promoting anything toward paper.`,
+    };
+  }
+  if (paper?.available && paper?.total_sessions) {
+    return {
+      tone: "neutral",
+      message: `Paper health is visible with ${paper.total_sessions} tracked sessions. Next useful step is to connect that visibility back to a concrete run or decision candidate.`,
+    };
+  }
+  if (latestJob) {
+    return {
+      tone: "neutral",
+      message: `Recent launch activity exists (${latestJob.request_id || "-"}) but paper continuity is still thin. Review the job and then the resulting run.`,
+    };
+  }
+  if (baselineRunId) {
+    return {
+      tone: "neutral",
+      message: `A baseline run is pinned (${baselineRunId}). Open it and decide whether it should remain the reference before launching new paper work.`,
+    };
+  }
+  return {
+    tone: "warning",
+    message: "Paper Ops is ready, but there is not enough operational history yet. Launch a run or sweep first, then come back here to review continuity.",
+  };
 }
 
 export function renderJobTab(tab, ctx) {
