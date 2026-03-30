@@ -68,6 +68,8 @@ const state = {
   launchFeedback: "Use deterministic inputs or ask from chat.",
   refreshTimer: null,
   isStepbitSubmitting: false,
+  snapshotStatus: { status: "idle", error: null, lastSuccessAt: null },
+  isRetryingWorkspace: false,
   chatMessages: [
     {
       role: "assistant",
@@ -87,6 +89,8 @@ const state = {
 const elements = {
   runtimeSummary: document.getElementById("runtime-summary"),
   runtimeMeta: document.getElementById("runtime-meta"),
+  runtimeAlert: document.getElementById("runtime-alert"),
+  runtimeRetry: document.getElementById("runtime-retry"),
   runtimeChips: document.getElementById("runtime-chips"),
   chatLog: document.getElementById("chat-log"),
   chatForm: document.getElementById("chat-form"),
@@ -266,6 +270,7 @@ function bindEvents() {
     input.addEventListener("input", () => scheduleShellWorkspacePersist());
   });
   elements.workflowLaunchPaper.addEventListener("change", () => scheduleShellWorkspacePersist());
+  elements.runtimeRetry.addEventListener("click", () => retryWorkspaceRuntime());
   elements.workflowOpenCompare.addEventListener("click", () => openCompareSelectionTab());
   elements.workflowClearSelection.addEventListener("click", () => {
     state.selectedRunIds = [];
@@ -313,6 +318,7 @@ async function refreshSnapshot() {
       brokerHealth: extra[2].status === "fulfilled" ? extra[2].value : state.snapshot?.brokerHealth || null,
       stepbitWorkspace: extra[3].status === "fulfilled" ? extra[3].value : state.snapshot?.stepbitWorkspace || null,
     };
+    state.snapshotStatus = { status: "ok", error: null, lastSuccessAt: new Date().toISOString() };
     const validIds = new Set(getRuns().map((run) => run.run_id));
     const filteredSelection = state.selectedRunIds.filter((runId) => validIds.has(runId));
     if (filteredSelection.length !== state.selectedRunIds.length) {
@@ -326,7 +332,13 @@ async function refreshSnapshot() {
     if (state.tabs.some((tab) => ["experiments", "sweep-decision"].includes(tab.kind))) {
       refreshExperimentsWorkspace({ focusTab: false, silent: true });
     }
-  } catch (_error) {
+  } catch (error) {
+    state.snapshotStatus = {
+      status: "error",
+      error: error?.message || "The local API is unavailable.",
+      lastSuccessAt: state.snapshotStatus.lastSuccessAt,
+    };
+    renderWorkspaceState();
     // Keep the shell usable even if optional surfaces are down.
   }
 }
@@ -542,7 +554,7 @@ function renderMarkupInto(container, markup) {
 }
 
 function renderWorkspaceState() {
-  const { status, serverUrl, error } = state.workspace;
+  const { status, serverUrl, error, source } = state.workspace;
   const runs = getRuns();
   const stepbit = state.snapshot?.stepbitWorkspace?.live_urls || {};
   const paperCount = state.snapshot?.paperHealth?.total_sessions || 0;
@@ -557,18 +569,69 @@ function renderWorkspaceState() {
   elements.runtimeMeta.textContent = error
     ? error
     : serverUrl
-    ? `${serverUrl}/research_ui/index.html`
+    ? `${serverUrl}/research_ui/index.html${source === "external" ? " · external server" : ""}`
     : "Waiting for localhost server URL.";
+  const runtimeAlert = buildRuntimeAlert();
+  elements.runtimeAlert.textContent = runtimeAlert.message;
+  elements.runtimeAlert.classList.toggle("hidden", !runtimeAlert.message);
+  elements.runtimeAlert.classList.toggle("warn", runtimeAlert.tone === "warn");
+  elements.runtimeAlert.classList.toggle("down", runtimeAlert.tone === "down");
+  elements.runtimeRetry.textContent = runtimeAlert.actionLabel;
+  elements.runtimeRetry.classList.toggle("hidden", !runtimeAlert.actionLabel);
+  elements.runtimeRetry.disabled = state.isRetryingWorkspace;
   appendChildren(
     elements.runtimeChips,
     createRuntimeChipNode("QuantLab", status === "ready" ? "up" : status === "starting" ? "starting" : "down", status === "ready" ? "up" : status === "starting" ? "warn" : "down"),
     createRuntimeChipNode("Runs", `${runs.length} indexed`, runs.length ? "up" : "warn"),
     createRuntimeChipNode("Paper", String(paperCount), paperCount ? "up" : "warn"),
     createRuntimeChipNode("Broker", String(brokerCount), brokerCount ? "up" : "warn"),
+    createRuntimeChipNode("API", state.snapshotStatus.status === "error" ? "degraded" : state.snapshotStatus.lastSuccessAt ? "ok" : "pending", state.snapshotStatus.status === "error" ? "down" : state.snapshotStatus.lastSuccessAt ? "up" : "warn"),
     createRuntimeChipNode("Stepbit app", stepbit.frontend_reachable ? "up" : "down", stepbit.frontend_reachable ? "up" : "down"),
     createRuntimeChipNode("Stepbit core", stepbit.core_ready ? "ready" : stepbit.core_reachable ? "up" : "down", stepbit.core_ready ? "up" : stepbit.core_reachable ? "warn" : "down"),
   );
   renderChatAdapterStatus();
+}
+
+function buildRuntimeAlert() {
+  if (state.workspace.status === "error" || state.workspace.status === "stopped") {
+    const recentLogs = (state.workspace.logs || []).slice(-4).join("\n");
+    return {
+      tone: "down",
+      actionLabel: "Retry boot",
+      message: `${state.workspace.status === "error" ? "Boot failed" : "Runtime stopped"}${state.workspace.error ? `: ${state.workspace.error}` : "."}${recentLogs ? `\n\nRecent log:\n${recentLogs}` : ""}`,
+    };
+  }
+  if (state.snapshotStatus.status === "error") {
+    return {
+      tone: "warn",
+      actionLabel: "Retry API",
+      message: `API unavailable: ${state.snapshotStatus.error || "local request failed."}`,
+    };
+  }
+  if (state.workspace.status === "starting") {
+    return {
+      tone: "warn",
+      actionLabel: "",
+      message: "QuantLab Desktop is waiting for the local research surface to become reachable.",
+    };
+  }
+  return { tone: "", actionLabel: "", message: "" };
+}
+
+async function retryWorkspaceRuntime() {
+  if (state.isRetryingWorkspace) return;
+  state.isRetryingWorkspace = true;
+  renderWorkspaceState();
+  try {
+    if (state.workspace.status === "error" || state.workspace.status === "stopped" || !state.workspace.serverUrl) {
+      state.workspace = await window.quantlabDesktop.restartWorkspaceServer();
+      renderWorkspaceState();
+    }
+    await refreshSnapshot();
+  } finally {
+    state.isRetryingWorkspace = false;
+    renderWorkspaceState();
+  }
 }
 
 function renderChat() {

@@ -6,7 +6,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron ."
+    "dev": "electron .",
+    "smoke": "node scripts/smoke.js"
   },
   "devDependencies": {
     "electron": "^37.2.0"
