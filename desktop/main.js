@@ -6,11 +6,14 @@ const { spawn } = require("child_process");
 
 const DESKTOP_ROOT = __dirname;
 const PROJECT_ROOT = path.resolve(DESKTOP_ROOT, "..");
+const WORKSPACE_ROOT = path.resolve(PROJECT_ROOT, "..");
 const SERVER_SCRIPT = path.join(PROJECT_ROOT, "research_ui", "server.py");
 const OUTPUTS_ROOT = path.join(PROJECT_ROOT, "outputs");
 const DESKTOP_OUTPUTS_ROOT = path.join(OUTPUTS_ROOT, "desktop");
 const CANDIDATES_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "candidates_shortlist.json");
 const SWEEP_DECISION_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "sweep_decision_handoff.json");
+const STEPBIT_APP_ROOT = path.join(WORKSPACE_ROOT, "stepbit-app");
+const STEPBIT_APP_CONFIG_PATH = path.join(STEPBIT_APP_ROOT, "config.yaml");
 const MAX_DIRECTORY_ENTRIES = 240;
 
 let mainWindow = null;
@@ -209,6 +212,184 @@ async function readProjectJson(targetPath) {
       .replace(/\bInfinity\b/g, "null");
     return JSON.parse(sanitized);
   }
+}
+
+function parseYamlSectionValue(raw, sectionName, keyName) {
+  const sectionPattern = new RegExp(`^${sectionName}:\\s*\\r?\\n([\\s\\S]*?)(?=^\\S|\\Z)`, "m");
+  const sectionMatch = String(raw || "").match(sectionPattern);
+  if (!sectionMatch) return "";
+  const keyPattern = new RegExp(`^\\s*${keyName}:\\s*"?([^"\\r\\n]+)"?`, "m");
+  const keyMatch = sectionMatch[1].match(keyPattern);
+  return keyMatch ? String(keyMatch[1]).trim() : "";
+}
+
+function normalizeStepbitHost(rawHost) {
+  const fallback = "127.0.0.1";
+  const value = String(rawHost || "").trim();
+  if (!value) return fallback;
+  return value.replace(/^https?:\/\//i, "").replace(/\/+$/, "") || fallback;
+}
+
+function normalizeStepbitPort(rawPort) {
+  const match = String(rawPort || "").match(/(\d{2,5})/);
+  return match ? match[1] : "8080";
+}
+
+async function readStepbitAppConfig() {
+  const fallback = {
+    host: "127.0.0.1",
+    port: "8080",
+    apiKey: "sk-dev-key-123",
+    apiBaseUrl: "http://127.0.0.1:8080/api",
+  };
+  try {
+    const raw = await fsp.readFile(STEPBIT_APP_CONFIG_PATH, "utf8");
+    const host = normalizeStepbitHost(parseYamlSectionValue(raw, "server", "host"));
+    const port = normalizeStepbitPort(parseYamlSectionValue(raw, "server", "port"));
+    const apiKey = parseYamlSectionValue(raw, "server", "key") || fallback.apiKey;
+    return {
+      host,
+      port,
+      apiKey,
+      apiBaseUrl: `http://${host}:${port}/api`,
+    };
+  } catch (error) {
+    if (error && error.code === "ENOENT") return fallback;
+    throw error;
+  }
+}
+
+function extractStepbitDelta(payload) {
+  const choice = payload?.choices?.[0];
+  if (!choice || typeof choice !== "object") return { content: "", reasoning: "", error: payload?.error || "" };
+  const delta = choice.delta && typeof choice.delta === "object" ? choice.delta : {};
+  return {
+    content: typeof delta.content === "string" ? delta.content : "",
+    reasoning: typeof delta.reasoning_content === "string" ? delta.reasoning_content : "",
+    error: typeof payload.error === "string" ? payload.error : "",
+  };
+}
+
+async function readStepbitSseResponse(response) {
+  if (!response.body || typeof response.body.getReader !== "function") {
+    throw new Error("Stepbit returned an unreadable response body.");
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let content = "";
+  let reasoningSeen = false;
+  let tokenEvents = 0;
+
+  function processEventBlock(block) {
+    const lines = String(block || "").split(/\r?\n/);
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload) continue;
+      if (payload === "[DONE]") return true;
+      let parsed;
+      try {
+        parsed = JSON.parse(payload);
+      } catch (_error) {
+        continue;
+      }
+      const delta = extractStepbitDelta(parsed);
+      if (delta.error) {
+        throw new Error(delta.error);
+      }
+      if (delta.reasoning) reasoningSeen = true;
+      if (delta.content) {
+        content += delta.content;
+        tokenEvents += 1;
+      }
+    }
+    return false;
+  }
+
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    let boundaryIndex = buffer.indexOf("\n\n");
+    while (boundaryIndex >= 0) {
+      const block = buffer.slice(0, boundaryIndex);
+      buffer = buffer.slice(boundaryIndex + 2);
+      if (processEventBlock(block)) {
+        return {
+          content: content.trim(),
+          reasoningSeen,
+          tokenEvents,
+        };
+      }
+      boundaryIndex = buffer.indexOf("\n\n");
+    }
+    if (done) break;
+  }
+
+  if (buffer.trim()) processEventBlock(buffer);
+  return {
+    content: content.trim(),
+    reasoningSeen,
+    tokenEvents,
+  };
+}
+
+async function askStepbitChat(payload) {
+  const prompt = String(payload?.prompt || "").trim();
+  const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+  if (!prompt || !messages.length) {
+    throw new Error("Stepbit adapter needs a prompt and at least one message.");
+  }
+
+  const config = await readStepbitAppConfig();
+  const endpoint = `${config.apiBaseUrl}/v1/chat/completions`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify({
+      model: typeof payload?.model === "string" ? payload.model : "",
+      messages,
+      stream: true,
+      search: Boolean(payload?.search),
+      reason: Boolean(payload?.reason),
+      max_tokens: Number.isFinite(Number(payload?.max_tokens)) ? Number(payload.max_tokens) : undefined,
+      temperature: Number.isFinite(Number(payload?.temperature)) ? Number(payload.temperature) : undefined,
+    }),
+  });
+
+  if (!response.ok) {
+    let errorMessage = `Stepbit chat returned ${response.status}.`;
+    try {
+      const bodyText = await response.text();
+      if (bodyText) {
+        try {
+          const data = JSON.parse(bodyText);
+          errorMessage = data.error || data.message || errorMessage;
+        } catch (_error) {
+          errorMessage = bodyText.trim() || errorMessage;
+        }
+      }
+    } catch (_error) {
+      // Ignore body parse failures and return the HTTP-derived message.
+    }
+    if (response.status === 401) {
+      throw new Error("Stepbit rejected the local API key from config.yaml.");
+    }
+    throw new Error(errorMessage);
+  }
+
+  const result = await readStepbitSseResponse(response);
+  if (!result.content) {
+    throw new Error("Stepbit returned no final content for this request.");
+  }
+  return {
+    ...result,
+    endpoint,
+  };
 }
 
 function appendLog(line) {
@@ -411,6 +592,10 @@ ipcMain.handle("quantlab:open-path", async (_event, targetPath) => {
   const errorMessage = await shell.openPath(safePath);
   if (errorMessage) throw new Error(errorMessage);
   return { ok: true };
+});
+
+ipcMain.handle("quantlab:ask-stepbit-chat", async (_event, payload) => {
+  return askStepbitChat(payload);
 });
 
 app.whenReady().then(() => {

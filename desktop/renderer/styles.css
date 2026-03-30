@@ -107,6 +107,10 @@ button, input, textarea { font: inherit; }
     background: linear-gradient(135deg, rgba(107, 227, 214, 0.2), rgba(45, 196, 178, 0.14));
     border-color: rgba(107, 227, 214, 0.28);
 }
+button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
 
 .main-content {
     padding: 24px;
@@ -189,6 +193,13 @@ button, input, textarea { font: inherit; }
 .message-body { white-space: pre-wrap; line-height: 1.55; }
 
 .chat-form { display: grid; gap: 12px; margin-top: 16px; }
+.assistant-status {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 12px;
+    color: var(--muted);
+    background: rgba(8, 14, 22, 0.7);
+}
 
 .tabs-shell {
     display: grid;
