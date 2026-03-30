@@ -13,7 +13,6 @@ import {
   formatNumber as formatNumericValue,
   formatPercent as formatPercentValue,
   parseCsvRows as parseCsvPreviewRows,
-  runtimeChip as renderRuntimeChip,
   shortCommit as shortenCommit,
   stripWrappingQuotes as stripQuotes,
   titleCase as titleCaseValue,
@@ -24,7 +23,6 @@ import {
   compareMetric as renderMetricRow,
   renderArtifactsTab as renderArtifactsTabView,
   renderCandidatesTab as renderCandidatesTabView,
-  renderCandidateFlags as renderCandidateFlagsView,
   renderCompareTab as renderCompareTabView,
   renderExperimentsTab as renderExperimentsTabView,
   renderJobTab as renderJobTabView,
@@ -295,6 +293,57 @@ function renderAll() {
   renderWorkflow();
 }
 
+function clearElement(element) {
+  element.replaceChildren();
+}
+
+function appendChildren(element, ...children) {
+  const fragment = document.createDocumentFragment();
+  children.flat().filter(Boolean).forEach((child) => fragment.appendChild(child));
+  element.replaceChildren(fragment);
+}
+
+function createElementNode(tagName, options = {}, children = []) {
+  const {
+    className = "",
+    text = null,
+    attrs = {},
+    dataset = {},
+    type = null,
+    disabled = null,
+    checked = null,
+  } = options;
+  const element = document.createElement(tagName);
+  if (className) element.className = className;
+  if (text !== null && text !== undefined) element.textContent = String(text);
+  if (type) element.type = type;
+  if (disabled !== null) element.disabled = Boolean(disabled);
+  if (checked !== null) element.checked = Boolean(checked);
+  Object.entries(attrs).forEach(([key, value]) => {
+    if (value !== null && value !== undefined) element.setAttribute(key, String(value));
+  });
+  Object.entries(dataset).forEach(([key, value]) => {
+    if (value !== null && value !== undefined) element.dataset[key] = String(value);
+  });
+  children.flat().filter(Boolean).forEach((child) => element.appendChild(child));
+  return element;
+}
+
+function createTextDiv(className, text) {
+  return createElementNode("div", { className, text });
+}
+
+function createEmptyStateNode(text) {
+  return createElementNode("div", { className: "empty-state", text });
+}
+
+function renderMarkupInto(container, markup) {
+  const range = document.createRange();
+  range.selectNodeContents(container);
+  const fragment = range.createContextualFragment(markup);
+  container.replaceChildren(fragment);
+}
+
 function renderWorkspaceState() {
   const { status, serverUrl, error } = state.workspace;
   const runs = getRuns();
@@ -313,70 +362,94 @@ function renderWorkspaceState() {
     : serverUrl
     ? `${serverUrl}/research_ui/index.html`
     : "Waiting for localhost server URL.";
-  elements.runtimeChips.innerHTML = [
-    runtimeChip("QuantLab", status === "ready" ? "up" : status === "starting" ? "starting" : "down", status === "ready" ? "up" : status === "starting" ? "warn" : "down"),
-    runtimeChip("Runs", `${runs.length} indexed`, runs.length ? "up" : "warn"),
-    runtimeChip("Paper", String(paperCount), paperCount ? "up" : "warn"),
-    runtimeChip("Broker", String(brokerCount), brokerCount ? "up" : "warn"),
-    runtimeChip("Stepbit app", stepbit.frontend_reachable ? "up" : "down", stepbit.frontend_reachable ? "up" : "down"),
-    runtimeChip("Stepbit core", stepbit.core_ready ? "ready" : stepbit.core_reachable ? "up" : "down", stepbit.core_ready ? "up" : stepbit.core_reachable ? "warn" : "down"),
-  ].join("");
+  appendChildren(
+    elements.runtimeChips,
+    createRuntimeChipNode("QuantLab", status === "ready" ? "up" : status === "starting" ? "starting" : "down", status === "ready" ? "up" : status === "starting" ? "warn" : "down"),
+    createRuntimeChipNode("Runs", `${runs.length} indexed`, runs.length ? "up" : "warn"),
+    createRuntimeChipNode("Paper", String(paperCount), paperCount ? "up" : "warn"),
+    createRuntimeChipNode("Broker", String(brokerCount), brokerCount ? "up" : "warn"),
+    createRuntimeChipNode("Stepbit app", stepbit.frontend_reachable ? "up" : "down", stepbit.frontend_reachable ? "up" : "down"),
+    createRuntimeChipNode("Stepbit core", stepbit.core_ready ? "ready" : stepbit.core_reachable ? "up" : "down", stepbit.core_ready ? "up" : stepbit.core_reachable ? "warn" : "down"),
+  );
 }
 
 function renderChat() {
-  elements.chatLog.innerHTML = state.chatMessages.map((message) => `
-    <article class="message ${message.role}">
-      <div class="message-role">${escapeHtml(message.role)}</div>
-      <div class="message-body">${escapeHtml(message.content)}</div>
-    </article>
-  `).join("");
+  appendChildren(
+    elements.chatLog,
+    state.chatMessages.map((message) =>
+      createElementNode("article", { className: `message ${message.role}` }, [
+        createTextDiv("message-role", message.role),
+        createTextDiv("message-body", message.content),
+      ]),
+    ),
+  );
   elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
 }
 
 function renderTabs() {
   if (!state.tabs.length) {
-    elements.tabsBar.innerHTML = "";
-    elements.tabContent.innerHTML = `
-      <div class="tab-placeholder">
-        No context tab is open yet.
-
-        Use chat, quick command, or the workflow panel to launch work, open runs, compare candidates, or inspect artifacts.
-      </div>
-    `;
+    clearElement(elements.tabsBar);
+    appendChildren(
+      elements.tabContent,
+      createElementNode(
+        "div",
+        {
+          className: "tab-placeholder",
+          text: "No context tab is open yet.\n\nUse chat, quick command, or the workflow panel to launch work, open runs, compare candidates, or inspect artifacts.",
+        },
+      ),
+    );
     elements.topbarTitle.textContent = "Chat";
     syncNav("chat");
     return;
   }
-  elements.tabsBar.innerHTML = state.tabs.map((tab) => `
-    <button class="tab-pill ${tab.id === state.activeTabId ? "is-active" : ""}" data-tab-id="${escapeHtml(tab.id)}" type="button">
-      <span>${escapeHtml(tab.title)}</span>
-      <span class="tab-close" data-close-tab="${escapeHtml(tab.id)}">×</span>
-    </button>
-  `).join("");
+  appendChildren(
+    elements.tabsBar,
+    state.tabs.map((tab) =>
+      createElementNode(
+        "button",
+        {
+          className: `tab-pill ${tab.id === state.activeTabId ? "is-active" : ""}`,
+          dataset: { tabId: tab.id },
+          type: "button",
+        },
+        [
+          createElementNode("span", { text: tab.title }),
+          createElementNode("span", { className: "tab-close", text: "×", dataset: { closeTab: tab.id } }),
+        ],
+      ),
+    ),
+  );
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) || state.tabs[0];
   state.activeTabId = activeTab.id;
   elements.topbarTitle.textContent = activeTab.title;
   syncNav(activeTab.navKind || activeTab.kind);
   if (activeTab.kind === "iframe") {
-    elements.tabContent.innerHTML = `<iframe class="tab-frame" src="${escapeHtml(activeTab.url)}" title="${escapeHtml(activeTab.title)}"></iframe>`;
+    appendChildren(
+      elements.tabContent,
+      createElementNode("iframe", {
+        className: "tab-frame",
+        attrs: { src: activeTab.url, title: activeTab.title },
+      }),
+    );
   } else if (activeTab.kind === "experiments") {
-    elements.tabContent.innerHTML = renderExperimentsTab(activeTab);
+    renderMarkupInto(elements.tabContent, renderExperimentsTab(activeTab));
   } else if (activeTab.kind === "sweep-decision") {
-    elements.tabContent.innerHTML = renderSweepDecisionTab(activeTab);
+    renderMarkupInto(elements.tabContent, renderSweepDecisionTab(activeTab));
   } else if (activeTab.kind === "run") {
-    elements.tabContent.innerHTML = renderRunTab(activeTab);
+    renderMarkupInto(elements.tabContent, renderRunTab(activeTab));
   } else if (activeTab.kind === "compare") {
-    elements.tabContent.innerHTML = renderCompareTab(activeTab);
+    renderMarkupInto(elements.tabContent, renderCompareTab(activeTab));
   } else if (activeTab.kind === "artifacts") {
-    elements.tabContent.innerHTML = renderArtifactsTab(activeTab);
+    renderMarkupInto(elements.tabContent, renderArtifactsTab(activeTab));
   } else if (activeTab.kind === "candidates") {
-    elements.tabContent.innerHTML = renderCandidatesTab(activeTab);
+    renderMarkupInto(elements.tabContent, renderCandidatesTab(activeTab));
   } else if (activeTab.kind === "paper") {
-    elements.tabContent.innerHTML = renderPaperOpsTab(activeTab);
+    renderMarkupInto(elements.tabContent, renderPaperOpsTab(activeTab));
   } else if (activeTab.kind === "job") {
-    elements.tabContent.innerHTML = renderJobTab(activeTab);
+    renderMarkupInto(elements.tabContent, renderJobTab(activeTab));
   } else {
-    elements.tabContent.innerHTML = `<div class="tab-placeholder">${escapeHtml(activeTab.content || "")}</div>`;
+    appendChildren(elements.tabContent, createElementNode("div", { className: "tab-placeholder", text: activeTab.content || "" }));
   }
   bindTabChromeEvents();
   bindTabContentEvents(activeTab);
@@ -393,14 +466,22 @@ function renderPalette() {
     if (!query) return true;
     return `${action.label} ${action.description}`.toLowerCase().includes(query);
   });
-  elements.paletteResults.innerHTML = visibleActions.map((action) => `
-    <button class="palette-item" data-palette-action="${escapeHtml(action.id)}" type="button">
-      <strong>${escapeHtml(action.label)}</strong>
-      <span>${escapeHtml(action.description)}</span>
-    </button>
-  `).join("");
   if (!visibleActions.length) {
-    elements.paletteResults.innerHTML = `<div class="empty-state">No matching action. Try shortlist, baseline, compare, or paper.</div>`;
+    appendChildren(elements.paletteResults, createEmptyStateNode("No matching action. Try shortlist, baseline, compare, or paper."));
+  } else {
+    appendChildren(
+      elements.paletteResults,
+      visibleActions.map((action) =>
+        createElementNode(
+          "button",
+          { className: "palette-item", dataset: { paletteAction: action.id }, type: "button" },
+          [
+            createElementNode("strong", { text: action.label }),
+            createElementNode("span", { text: action.description }),
+          ],
+        ),
+      ),
+    );
   }
   elements.paletteResults.querySelectorAll("[data-palette-action]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -440,29 +521,101 @@ function renderWorkflow() {
   renderRunsWorklist(runs.slice(0, CONFIG.maxWorklistRuns));
 }
 
+function createRuntimeChipNode(label, value, tone) {
+  return createElementNode("div", { className: `runtime-chip ${tone || ""}` }, [
+    createElementNode("strong", { text: label }),
+    createElementNode("span", { text: value }),
+  ]);
+}
+
+function createCandidateFlagsNode(runId) {
+  const fragment = document.createDocumentFragment();
+  const labels = [];
+  if (isBaselineRun(runId)) labels.push(["Baseline", "baseline"]);
+  if (isShortlistedRun(runId)) labels.push(["Shortlist", "shortlist"]);
+  if (isCandidateRun(runId)) labels.push(["Candidate", "candidate"]);
+  if (!labels.length) labels.push(["Untracked", "neutral"]);
+  labels.forEach(([text, tone]) => {
+    fragment.appendChild(createElementNode("span", { className: `candidate-flag ${tone}`, text }));
+  });
+  return fragment;
+}
+
+function createMetricChipNode(label, value, extraTone = "") {
+  return createElementNode("span", { className: `metric-chip${extraTone ? ` ${extraTone}` : ""}`, text: `${label} ${value}` });
+}
+
+function createJobCardNode(job) {
+  const actions = createElementNode("div", { className: "workflow-actions" });
+  actions.appendChild(createElementNode("button", { className: "ghost-btn", type: "button", text: "Review job", dataset: { openJob: job.request_id || "" } }));
+  if (job.run_id) {
+    actions.appendChild(createElementNode("button", { className: "ghost-btn", type: "button", text: "Open run", dataset: { openRun: job.run_id } }));
+  }
+  if (job.artifacts_href) {
+    actions.appendChild(createElementNode("button", { className: "ghost-btn", type: "button", text: "Artifacts", dataset: { openJobArtifacts: job.request_id || "" } }));
+  }
+  return createElementNode("article", { className: "job-card" }, [
+    createElementNode("div", { className: "job-top" }, [
+      createElementNode("div", { className: "job-name" }, [
+        createElementNode("strong", { text: titleCase(job.command || "unknown") }),
+        createElementNode("span", { className: "job-meta", text: job.request_id || "-" }),
+      ]),
+      createElementNode("span", { className: `job-status ${job.status || "unknown"}`, text: titleCase(job.status || "unknown") }),
+    ]),
+    createElementNode("div", { text: job.summary || "-" }),
+    createElementNode("div", { className: "job-meta", text: `${formatDateTime(job.started_at)}${job.ended_at ? ` · ended ${formatDateTime(job.ended_at)}` : " · running"}` }),
+    actions,
+  ]);
+}
+
+function createRunWorklistNode(run) {
+  const selected = state.selectedRunIds.includes(run.run_id);
+  const disableSelection = !selected && state.selectedRunIds.length >= 4;
+  const selectLabel = createElementNode("label", { className: "select-run" }, [
+    createElementNode("input", {
+      type: "checkbox",
+      dataset: { selectRun: run.run_id },
+      checked: selected,
+      disabled: disableSelection,
+    }),
+    createElementNode("span", { text: "Select" }),
+  ]);
+  const flags = createElementNode("div", { className: "run-row-flags" });
+  flags.appendChild(createCandidateFlagsNode(run.run_id));
+  return createElementNode("article", { className: "run-row" }, [
+    createElementNode("div", { className: "run-row-top" }, [
+      createElementNode("div", { className: "run-row-title" }, [
+        createElementNode("strong", { text: run.run_id }),
+        createElementNode("div", { className: "run-row-meta" }, [
+          createElementNode("span", { text: titleCase(run.mode || "unknown") }),
+          createElementNode("span", { text: run.ticker || "-" }),
+          createElementNode("span", { text: formatDateTime(run.created_at) }),
+        ]),
+      ]),
+      createElementNode("span", { className: "mode-chip", text: shortCommit(run.git_commit) || "no commit" }),
+    ]),
+    createElementNode("div", { className: "run-row-metrics" }, [
+      createMetricChipNode("Return", formatPercent(run.total_return), toneClass(run.total_return, true)),
+      createMetricChipNode("Sharpe", formatNumber(run.sharpe_simple)),
+      createMetricChipNode("Drawdown", formatPercent(run.max_drawdown), toneClass(run.max_drawdown, false)),
+      createMetricChipNode("Trades", formatCount(run.trades)),
+    ]),
+    flags,
+    createElementNode("div", { className: "run-row-actions" }, [
+      selectLabel,
+      createElementNode("button", { className: "ghost-btn", type: "button", text: "Open run", dataset: { openRun: run.run_id } }),
+      createElementNode("button", { className: "ghost-btn", type: "button", text: isCandidateRun(run.run_id) ? "Unmark candidate" : "Mark candidate", dataset: { toggleCandidate: run.run_id } }),
+      createElementNode("button", { className: "ghost-btn", type: "button", text: "Artifacts", dataset: { openArtifacts: run.run_id } }),
+    ]),
+  ]);
+}
+
 function renderJobList(jobs) {
   if (!jobs.length) {
-    elements.workflowJobsList.innerHTML = `<div class="empty-state">Launches from the shell or browser surface will appear here.</div>`;
+    appendChildren(elements.workflowJobsList, createEmptyStateNode("Launches from the shell or browser surface will appear here."));
     return;
   }
-  elements.workflowJobsList.innerHTML = jobs.slice(0, CONFIG.maxRecentJobs).map((job) => `
-    <article class="job-card">
-      <div class="job-top">
-        <div class="job-name">
-          <strong>${escapeHtml(titleCase(job.command || "unknown"))}</strong>
-          <span class="job-meta">${escapeHtml(job.request_id || "-")}</span>
-        </div>
-        <span class="job-status ${escapeHtml(job.status || "unknown")}">${escapeHtml(titleCase(job.status || "unknown"))}</span>
-      </div>
-      <div>${escapeHtml(job.summary || "-")}</div>
-      <div class="job-meta">${escapeHtml(formatDateTime(job.started_at))}${job.ended_at ? ` · ended ${escapeHtml(formatDateTime(job.ended_at))}` : " · running"}</div>
-      <div class="workflow-actions">
-        <button class="ghost-btn" type="button" data-open-job="${escapeHtml(job.request_id || "")}">Review job</button>
-        ${job.run_id ? `<button class="ghost-btn" type="button" data-open-run="${escapeHtml(job.run_id)}">Open run</button>` : ""}
-        ${job.artifacts_href ? `<button class="ghost-btn" type="button" data-open-job-artifacts="${escapeHtml(job.request_id || "")}">Artifacts</button>` : ""}
-      </div>
-    </article>
-  `).join("");
+  appendChildren(elements.workflowJobsList, jobs.slice(0, CONFIG.maxRecentJobs).map((job) => createJobCardNode(job)));
   elements.workflowJobsList.querySelectorAll("[data-open-job]").forEach((button) => {
     button.addEventListener("click", () => openJobTab(button.dataset.openJob));
   });
@@ -476,46 +629,10 @@ function renderJobList(jobs) {
 
 function renderRunsWorklist(runs) {
   if (!runs.length) {
-    elements.workflowRunsList.innerHTML = `<div class="empty-state">The run index is still empty. Launch a run or wait for artifacts to appear.</div>`;
+    appendChildren(elements.workflowRunsList, createEmptyStateNode("The run index is still empty. Launch a run or wait for artifacts to appear."));
     return;
   }
-  elements.workflowRunsList.innerHTML = runs.map((run) => {
-    const selected = state.selectedRunIds.includes(run.run_id);
-    const disableSelection = !selected && state.selectedRunIds.length >= 4;
-    return `
-      <article class="run-row">
-        <div class="run-row-top">
-          <div class="run-row-title">
-            <strong>${escapeHtml(run.run_id)}</strong>
-            <div class="run-row-meta">
-              <span>${escapeHtml(titleCase(run.mode || "unknown"))}</span>
-              <span>${escapeHtml(run.ticker || "-")}</span>
-              <span>${escapeHtml(formatDateTime(run.created_at))}</span>
-            </div>
-          </div>
-          <span class="mode-chip">${escapeHtml(shortCommit(run.git_commit) || "no commit")}</span>
-        </div>
-        <div class="run-row-metrics">
-          <span class="metric-chip ${toneClass(run.total_return, true)}">Return ${formatPercent(run.total_return)}</span>
-          <span class="metric-chip">Sharpe ${formatNumber(run.sharpe_simple)}</span>
-          <span class="metric-chip ${toneClass(run.max_drawdown, false)}">Drawdown ${formatPercent(run.max_drawdown)}</span>
-          <span class="metric-chip">Trades ${formatCount(run.trades)}</span>
-        </div>
-        <div class="run-row-flags">
-          ${renderCandidateFlags(run.run_id)}
-        </div>
-        <div class="run-row-actions">
-          <label class="select-run">
-            <input type="checkbox" data-select-run="${escapeHtml(run.run_id)}" ${selected ? "checked" : ""} ${disableSelection ? "disabled" : ""}>
-            <span>Select</span>
-          </label>
-          <button class="ghost-btn" type="button" data-open-run="${escapeHtml(run.run_id)}">Open run</button>
-          <button class="ghost-btn" type="button" data-toggle-candidate="${escapeHtml(run.run_id)}">${isCandidateRun(run.run_id) ? "Unmark candidate" : "Mark candidate"}</button>
-          <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(run.run_id)}">Artifacts</button>
-        </div>
-      </article>
-    `;
-  }).join("");
+  appendChildren(elements.workflowRunsList, runs.map((run) => createRunWorklistNode(run)));
   elements.workflowRunsList.querySelectorAll("[data-select-run]").forEach((input) => {
     input.addEventListener("change", () => toggleRunSelection(input.dataset.selectRun, input.checked));
   });
@@ -2046,10 +2163,6 @@ function summarizeCandidateState(runId) {
   return decisionStore.summarizeCandidateState(state.candidatesStore, runId);
 }
 
-function renderCandidateFlags(runId) {
-  return renderCandidateFlagsView(state.candidatesStore, runId, decisionStore);
-}
-
 function bindRunContextActions(container, runId) {
   container.querySelectorAll("[data-open-artifacts]").forEach((button) => {
     button.addEventListener("click", () => openArtifactsTabForRun(button.dataset.openArtifacts || runId));
@@ -2130,10 +2243,6 @@ function buildFailureExplanation(job, stderrText) {
 
 function formatLogPreview(text) {
   return formatLogText(text, CONFIG.maxLogPreviewChars);
-}
-
-function runtimeChip(label, value, tone) {
-  return renderRuntimeChip(label, value, tone);
 }
 
 function titleCase(value) {
