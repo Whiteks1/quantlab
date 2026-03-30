@@ -10,6 +10,7 @@ const SERVER_SCRIPT = path.join(PROJECT_ROOT, "research_ui", "server.py");
 const OUTPUTS_ROOT = path.join(PROJECT_ROOT, "outputs");
 const DESKTOP_OUTPUTS_ROOT = path.join(OUTPUTS_ROOT, "desktop");
 const CANDIDATES_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "candidates_shortlist.json");
+const SWEEP_DECISION_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "sweep_decision_handoff.json");
 const MAX_DIRECTORY_ENTRIES = 240;
 
 let mainWindow = null;
@@ -84,6 +85,64 @@ async function writeCandidatesStore(store) {
   normalized.updated_at = new Date().toISOString();
   await fsp.mkdir(path.dirname(CANDIDATES_STORE_PATH), { recursive: true });
   await fsp.writeFile(CANDIDATES_STORE_PATH, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  return normalized;
+}
+
+function defaultSweepDecisionStore() {
+  return {
+    version: 1,
+    updated_at: null,
+    baseline_entry_id: null,
+    entries: [],
+  };
+}
+
+function normalizeSweepDecisionEntry(entry) {
+  if (!entry || typeof entry !== "object" || !entry.entry_id || !entry.sweep_run_id) return null;
+  const now = new Date().toISOString();
+  return {
+    entry_id: String(entry.entry_id),
+    sweep_run_id: String(entry.sweep_run_id),
+    source: typeof entry.source === "string" ? entry.source : "leaderboard",
+    row_index: Number.isFinite(Number(entry.row_index)) ? Number(entry.row_index) : 0,
+    note: typeof entry.note === "string" ? entry.note : "",
+    shortlisted: Boolean(entry.shortlisted),
+    config_path: typeof entry.config_path === "string" ? entry.config_path : "",
+    row_snapshot: entry.row_snapshot && typeof entry.row_snapshot === "object" ? entry.row_snapshot : null,
+    created_at: entry.created_at || now,
+    updated_at: entry.updated_at || now,
+  };
+}
+
+function normalizeSweepDecisionStore(store) {
+  const fallback = defaultSweepDecisionStore();
+  if (!store || typeof store !== "object") return fallback;
+  const entries = Array.isArray(store.entries)
+    ? store.entries.map(normalizeSweepDecisionEntry).filter(Boolean)
+    : [];
+  return {
+    version: 1,
+    updated_at: store.updated_at || null,
+    baseline_entry_id: store.baseline_entry_id ? String(store.baseline_entry_id) : null,
+    entries,
+  };
+}
+
+async function readSweepDecisionStore() {
+  try {
+    const raw = await fsp.readFile(SWEEP_DECISION_STORE_PATH, "utf8");
+    return normalizeSweepDecisionStore(JSON.parse(raw));
+  } catch (error) {
+    if (error && error.code === "ENOENT") return defaultSweepDecisionStore();
+    throw error;
+  }
+}
+
+async function writeSweepDecisionStore(store) {
+  const normalized = normalizeSweepDecisionStore(store);
+  normalized.updated_at = new Date().toISOString();
+  await fsp.mkdir(path.dirname(SWEEP_DECISION_STORE_PATH), { recursive: true });
+  await fsp.writeFile(SWEEP_DECISION_STORE_PATH, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
   return normalized;
 }
 
@@ -308,6 +367,10 @@ ipcMain.handle("quantlab:request-text", async (_event, relativePath) => {
 ipcMain.handle("quantlab:get-candidates-store", async () => readCandidatesStore());
 
 ipcMain.handle("quantlab:save-candidates-store", async (_event, payload) => writeCandidatesStore(payload));
+
+ipcMain.handle("quantlab:get-sweep-decision-store", async () => readSweepDecisionStore());
+
+ipcMain.handle("quantlab:save-sweep-decision-store", async (_event, payload) => writeSweepDecisionStore(payload));
 
 ipcMain.handle("quantlab:list-directory", async (_event, targetPath, maxDepth = 2) => {
   return listDirectoryEntries(targetPath, maxDepth);
