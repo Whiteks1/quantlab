@@ -56,6 +56,7 @@
                     <button class="chip" data-prompt="Explain latest failure">Explain latest failure</button>
                     <button class="chip" data-prompt="Show runtime status">Show runtime status</button>
                     <button class="chip" data-prompt="Open latest run">Open latest run</button>
+                    <button class="chip" data-prompt="Ask Stepbit explain the latest failed launch and suggest the next debugging step">Ask Stepbit</button>
                 </div>
             </section>
         </aside>
@@ -88,6 +89,7 @@
                                 <div class="section-label">QuantLab assistant</div>
                                 <h2>Command bus</h2>
                             </div>
+                            <div id="chat-adapter-status" class="assistant-status">Stepbit adapter offline.</div>
                         </div>
 
                         <div id="chat-log" class="chat-log"></div>
@@ -95,6 +97,7 @@
                         <form id="chat-form" class="chat-form">
                             <textarea id="chat-input" rows="3" placeholder="Ask for a deterministic action: open compare, show runtime status, open latest run..."></textarea>
                             <div class="chat-actions">
+                                <button id="chat-stepbit" class="ghost-btn" type="button">Ask Stepbit</button>
                                 <button class="primary-btn" type="submit">Send</button>
                             </div>
                         </form>

@@ -66,11 +66,13 @@ const state = {
   isSubmittingLaunch: false,
   launchFeedback: "Use deterministic inputs or ask from chat.",
   refreshTimer: null,
+  isStepbitSubmitting: false,
   chatMessages: [
     {
       role: "assistant",
+      label: "quantlab",
       content:
-        "QuantLab Desktop now supports a real workflow.\n\nTry:\n- open experiments\n- open sweep handoff\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/experiments/eth_2023_grid.yaml\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure",
+        "QuantLab Desktop now supports a real workflow.\n\nTry:\n- open experiments\n- open sweep handoff\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/experiments/eth_2023_grid.yaml\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure\n- ask stepbit explain the latest failed launch",
     },
   ],
   tabs: [],
@@ -86,6 +88,8 @@ const elements = {
   chatLog: document.getElementById("chat-log"),
   chatForm: document.getElementById("chat-form"),
   chatInput: document.getElementById("chat-input"),
+  chatStepbit: document.getElementById("chat-stepbit"),
+  chatAdapterStatus: document.getElementById("chat-adapter-status"),
   tabsBar: document.getElementById("tabs-bar"),
   tabContent: document.getElementById("tab-content"),
   topbarTitle: document.getElementById("topbar-title"),
@@ -133,6 +137,7 @@ const paletteActions = [
   ["latest-run", "Open Latest Run", "Open the latest run detail.", () => openLatestRunTab()],
   ["latest-failed", "Open Latest Failed Launch", "Review the most recent failed launch job.", () => openLatestFailedLaunchTab()],
   ["explain-failure", "Explain Latest Failure", "Summarize the latest failed launch from stderr and job state.", () => explainLatestFailureInChat()],
+  ["stepbit-failure", "Ask Stepbit About Failure", "Use the Stepbit-backed adapter to inspect the latest failed launch.", () => askStepbitAboutLatestFailure()],
   ["artifacts", "Show Artifacts", "Open artifacts for the selected or latest run.", () => openArtifactsForPreferredRun()],
   ["runtime", "Show Runtime Status", "Summarize runtime health in chat.", () => summarizeRuntimeInChat()],
 ].map(([id, label, description, run]) => ({ id, label, description, run }));
@@ -195,6 +200,12 @@ function bindEvents() {
     const prompt = elements.chatInput.value.trim();
     if (!prompt) return;
     handleChatPrompt(prompt);
+    elements.chatInput.value = "";
+  });
+  elements.chatStepbit.addEventListener("click", () => {
+    const prompt = elements.chatInput.value.trim();
+    if (!prompt) return;
+    handleStepbitPrompt(prompt);
     elements.chatInput.value = "";
   });
   elements.runCommand.addEventListener("click", () => {
@@ -291,6 +302,7 @@ function renderAll() {
   renderTabs();
   renderPalette();
   renderWorkflow();
+  renderChatAdapterStatus();
 }
 
 function clearElement(element) {
@@ -371,6 +383,7 @@ function renderWorkspaceState() {
     createRuntimeChipNode("Stepbit app", stepbit.frontend_reachable ? "up" : "down", stepbit.frontend_reachable ? "up" : "down"),
     createRuntimeChipNode("Stepbit core", stepbit.core_ready ? "ready" : stepbit.core_reachable ? "up" : "down", stepbit.core_ready ? "up" : stepbit.core_reachable ? "warn" : "down"),
   );
+  renderChatAdapterStatus();
 }
 
 function renderChat() {
@@ -378,12 +391,37 @@ function renderChat() {
     elements.chatLog,
     state.chatMessages.map((message) =>
       createElementNode("article", { className: `message ${message.role}` }, [
-        createTextDiv("message-role", message.role),
+        createTextDiv("message-role", message.label || message.role),
         createTextDiv("message-body", message.content),
       ]),
     ),
   );
   elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
+}
+
+function getStepbitChatAvailability() {
+  const stepbit = state.snapshot?.stepbitWorkspace?.live_urls || {};
+  return {
+    frontendReachable: Boolean(stepbit.frontend_reachable),
+    backendReachable: Boolean(stepbit.backend_reachable),
+    coreReachable: Boolean(stepbit.core_reachable),
+    coreReady: Boolean(stepbit.core_ready),
+  };
+}
+
+function renderChatAdapterStatus() {
+  const availability = getStepbitChatAvailability();
+  const isReady = availability.backendReachable && availability.coreReachable;
+  elements.chatStepbit.disabled = !isReady || state.isStepbitSubmitting;
+  elements.chatAdapterStatus.textContent = state.isStepbitSubmitting
+    ? "Stepbit adapter running..."
+    : isReady
+    ? availability.coreReady
+      ? "Stepbit adapter ready."
+      : "Stepbit adapter up, core warming."
+    : availability.backendReachable
+    ? "Stepbit backend up, core unavailable."
+    : "Stepbit adapter offline.";
 }
 
 function renderTabs() {
@@ -855,9 +893,133 @@ function bindTabContentEvents(tab) {
   }
 }
 
-function handleChatPrompt(prompt) {
+function extractStepbitPrompt(prompt) {
+  const trimmed = String(prompt || "").trim();
+  const prefixes = ["ask stepbit", "use stepbit", "stepbit:"];
+  for (const prefix of prefixes) {
+    if (trimmed.toLowerCase().startsWith(prefix)) {
+      return prefix.endsWith(":") ? trimmed.slice(prefix.length).trim() : trimmed.slice(prefix.length).trim();
+    }
+  }
+  return "";
+}
+
+function buildStepbitContextLines() {
+  const runs = getRuns();
+  const latestRun = getLatestRun();
+  const selectedRunIds = getSelectedRuns().map((run) => run.run_id);
+  const latestFailedJob = getLatestFailedJob();
+  return [
+    `QuantLab server status: ${state.workspace.status}`,
+    `Indexed runs: ${runs.length}`,
+    `Selected runs: ${selectedRunIds.join(", ") || "none"}`,
+    `Candidate count: ${getCandidateEntries().length}`,
+    `Shortlisted runs: ${getShortlistRunIds().join(", ") || "none"}`,
+    `Baseline run: ${state.candidatesStore.baseline_run_id || "none"}`,
+    `Latest run: ${latestRun?.run_id || "none"}`,
+    `Latest failed launch: ${latestFailedJob?.request_id || "none"}`,
+  ];
+}
+
+async function buildStepbitMessages(prompt) {
+  const messages = [
+    {
+      role: "system",
+      content: [
+        "You are QuantLab Assistant running inside QuantLab Desktop.",
+        "QuantLab is the sovereign research and execution engine.",
+        "Stepbit is only the reasoning layer behind this answer.",
+        "Be concise, operator-facing, and grounded in the local QuantLab workflow.",
+        "Do not invent state changes, launches, promotions, or executions that have not happened.",
+        "If you recommend an action, phrase it as a next step inside QuantLab.",
+      ].join(" "),
+    },
+    {
+      role: "system",
+      content: `Workspace context:\n${buildStepbitContextLines().join("\n")}`,
+    },
+  ];
+
+  if (/latest failure|failed launch|failed job/i.test(prompt)) {
+    const job = getLatestFailedJob();
+    if (job) {
+      const stderrText = await loadOptionalText(job.stderr_href);
+      messages.push({
+        role: "system",
+        content: `Latest failure context:\n${buildFailureExplanation(job, stderrText)}`,
+      });
+    }
+  }
+
+  messages.push({
+    role: "user",
+    content: prompt,
+  });
+  return messages;
+}
+
+async function submitStepbitPrompt(prompt, source = "chat") {
+  const trimmedPrompt = String(prompt || "").trim();
+  if (!trimmedPrompt) return;
+  const availability = getStepbitChatAvailability();
+  if (!availability.backendReachable) {
+    pushMessage("assistant", "Stepbit backend is down. Start Stepbit from QuantLab before using the adapter.", "stepbit");
+    return;
+  }
+  if (!availability.coreReachable) {
+    pushMessage("assistant", "Stepbit core is down, so reasoning is unavailable right now. QuantLab actions still work without it.", "stepbit");
+    return;
+  }
+
+  state.isStepbitSubmitting = true;
+  renderChatAdapterStatus();
+  pushMessage("assistant", `Routing this ${source} prompt through the Stepbit-backed QuantLab adapter...`, "stepbit");
+  try {
+    const messages = await buildStepbitMessages(trimmedPrompt);
+    const result = await window.quantlabDesktop.askStepbitChat({
+      prompt: trimmedPrompt,
+      messages,
+      search: false,
+      reason: false,
+    });
+    const preface = result.reasoningSeen ? "Stepbit reasoning completed.\n\n" : "";
+    pushMessage("assistant", `${preface}${result.content}`, "stepbit");
+  } catch (error) {
+    pushMessage("assistant", error.message || "Stepbit reasoning failed.", "stepbit");
+  } finally {
+    state.isStepbitSubmitting = false;
+    renderChatAdapterStatus();
+  }
+}
+
+function handleStepbitPrompt(prompt) {
+  const trimmedPrompt = String(prompt || "").trim();
+  if (!trimmedPrompt) return;
+  pushMessage("user", trimmedPrompt);
+  void submitStepbitPrompt(trimmedPrompt, "chat");
+}
+
+function askStepbitAboutLatestFailure() {
+  const job = getLatestFailedJob();
+  if (!job) {
+    pushMessage("assistant", "No failed launch job is currently available, so there is nothing to route through Stepbit.", "stepbit");
+    return;
+  }
+  const prompt = "Explain the latest failed launch in QuantLab, summarize the likely root cause, and suggest the next debugging step.";
   pushMessage("user", prompt);
-  const normalized = prompt.trim().toLowerCase();
+  void submitStepbitPrompt(prompt, "palette");
+}
+
+async function handleChatPrompt(prompt) {
+  const trimmedPrompt = String(prompt || "").trim();
+  if (!trimmedPrompt) return;
+  pushMessage("user", trimmedPrompt);
+  const stepbitPrompt = extractStepbitPrompt(trimmedPrompt);
+  if (stepbitPrompt) {
+    await submitStepbitPrompt(stepbitPrompt, "chat");
+    return;
+  }
+  const normalized = trimmedPrompt.toLowerCase();
   if (normalized.includes("open experiments") || normalized.includes("open sweeps") || normalized === "experiments") {
     openExperimentsTab();
     pushMessage("assistant", "Opened the native experiments workspace.");
@@ -925,7 +1087,7 @@ function handleChatPrompt(prompt) {
     return;
   }
   if (normalized.startsWith("mark candidate")) {
-    const runId = extractRunIdAfterPrefix(prompt, "mark candidate").trim();
+    const runId = extractRunIdAfterPrefix(trimmedPrompt, "mark candidate").trim();
     if (!runId) {
       pushMessage("assistant", "Use `mark candidate <run_id>` to promote a run into the shortlist workflow.");
       return;
@@ -934,7 +1096,7 @@ function handleChatPrompt(prompt) {
     return;
   }
   if (normalized.startsWith("mark baseline")) {
-    const runId = extractRunIdAfterPrefix(prompt, "mark baseline").trim();
+    const runId = extractRunIdAfterPrefix(trimmedPrompt, "mark baseline").trim();
     if (!runId) {
       pushMessage("assistant", "Use `mark baseline <run_id>` to pin the reference run.");
       return;
@@ -942,17 +1104,17 @@ function handleChatPrompt(prompt) {
     setBaseline(runId);
     return;
   }
-  const launchRunPayload = parseLaunchRunPrompt(prompt);
+  const launchRunPayload = parseLaunchRunPrompt(trimmedPrompt);
   if (launchRunPayload) {
     submitLaunchRequest(launchRunPayload, "chat");
     return;
   }
-  const launchSweepPayload = parseLaunchSweepPrompt(prompt);
+  const launchSweepPayload = parseLaunchSweepPrompt(trimmedPrompt);
   if (launchSweepPayload) {
     submitLaunchRequest(launchSweepPayload, "chat");
     return;
   }
-  pushMessage("assistant", "This shell now supports real backend-backed actions. Try:\n- open experiments\n- open sweep handoff\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/experiments/eth_2023_grid.yaml\n- open candidates\n- mark candidate <run_id>\n- mark baseline <run_id>\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure");
+  pushMessage("assistant", "This shell now supports real backend-backed actions. Try:\n- open experiments\n- open sweep handoff\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/experiments/eth_2023_grid.yaml\n- open candidates\n- mark candidate <run_id>\n- mark baseline <run_id>\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure\n- ask stepbit explain the latest failed launch");
 }
 
 async function submitLaunchRequest(payload, source) {
@@ -1515,8 +1677,8 @@ function syncNav(kind) {
   if (target) target.classList.add("is-active");
 }
 
-function pushMessage(role, content) {
-  state.chatMessages.push({ role, content });
+function pushMessage(role, content, label = role) {
+  state.chatMessages.push({ role, content, label });
   renderChat();
 }
 
