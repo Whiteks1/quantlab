@@ -276,6 +276,7 @@ button:disabled {
 }
 
 .tone-positive { color: var(--success); }
+.tone-warning { color: var(--warning); }
 .tone-negative { color: var(--danger); }
 
 .compare-shell,
@@ -696,6 +697,66 @@ button:disabled {
 .config-preview {
     min-height: 280px;
     max-height: 420px;
+}
+
+.ops-state-list,
+.ops-watch-list {
+    display: grid;
+    gap: 12px;
+}
+
+.ops-state-card,
+.ops-watch-item,
+.ops-callout {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: rgba(8, 14, 22, 0.82);
+    padding: 14px 16px;
+}
+
+.ops-state-card strong,
+.ops-watch-item strong {
+    display: block;
+    margin-top: 6px;
+    margin-bottom: 8px;
+    font-size: 1rem;
+}
+
+.ops-state-card p,
+.ops-watch-item p,
+.ops-callout {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.55;
+}
+
+.ops-state-card.tone-positive,
+.ops-watch-item.tone-positive,
+.ops-callout.tone-positive {
+    border-color: rgba(118, 211, 156, 0.3);
+}
+
+.ops-state-card.tone-warning,
+.ops-watch-item.tone-warning,
+.ops-callout.tone-warning {
+    border-color: rgba(240, 179, 93, 0.32);
+}
+
+.ops-state-card.tone-negative,
+.ops-watch-item.tone-negative,
+.ops-callout.tone-negative {
+    border-color: rgba(242, 125, 136, 0.32);
+}
+
+.ops-next-panel {
+    display: grid;
+    gap: 14px;
+}
+
+.ops-chip-row {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
 }
 
 @media (max-width: 1200px) {

@@ -837,6 +837,12 @@ function bindTabContentEvents(tab) {
     elements.tabContent.querySelectorAll("[data-open-run]").forEach((button) => {
       button.addEventListener("click", () => openRunDetailTab(button.dataset.openRun));
     });
+    elements.tabContent.querySelectorAll("[data-open-artifacts]").forEach((button) => {
+      button.addEventListener("click", () => openArtifactsTabForRun(button.dataset.openArtifacts));
+    });
+    elements.tabContent.querySelectorAll("[data-open-shortlist-compare]").forEach((button) => {
+      button.addEventListener("click", () => openShortlistCompareTab());
+    });
     elements.tabContent.querySelectorAll("[data-open-browser-ops]").forEach((button) => {
       button.addEventListener("click", () => {
         const url = absoluteUrl(button.dataset.openBrowserOps);
@@ -1818,6 +1824,8 @@ function getRendererContext() {
     getRuns,
     getJobs,
     getLatestRun,
+    getLatestFailedJob,
+    getDecisionCompareRunIds,
     getRunRelatedJobs,
     getSweepDecisionEntriesResolved,
     getSweepDecisionEntriesForRun,
