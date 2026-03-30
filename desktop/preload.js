@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld("quantlabDesktop", {
   saveCandidatesStore: (store) => ipcRenderer.invoke("quantlab:save-candidates-store", store),
   getSweepDecisionStore: () => ipcRenderer.invoke("quantlab:get-sweep-decision-store"),
   saveSweepDecisionStore: (store) => ipcRenderer.invoke("quantlab:save-sweep-decision-store", store),
+  getShellWorkspaceStore: () => ipcRenderer.invoke("quantlab:get-shell-workspace-store"),
+  saveShellWorkspaceStore: (store) => ipcRenderer.invoke("quantlab:save-shell-workspace-store", store),
   listDirectory: (targetPath, maxDepth) => ipcRenderer.invoke("quantlab:list-directory", targetPath, maxDepth),
   readProjectText: (targetPath) => ipcRenderer.invoke("quantlab:read-project-text", targetPath),
   readProjectJson: (targetPath) => ipcRenderer.invoke("quantlab:read-project-json", targetPath),

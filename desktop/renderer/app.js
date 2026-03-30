@@ -50,6 +50,7 @@ const CONFIG = {
   maxRecentSweeps: 8,
   maxSweepRows: 5,
   maxSweepDecisionCompare: 4,
+  persistDebounceMs: 400,
 };
 
 const state = {
@@ -79,6 +80,8 @@ const state = {
   activeTabId: null,
   paletteOpen: false,
   paletteQuery: "",
+  workspaceStoreLoaded: false,
+  workspacePersistTimer: null,
 };
 
 const elements = {
@@ -144,6 +147,13 @@ const paletteActions = [
 
 document.addEventListener("DOMContentLoaded", async () => {
   bindEvents();
+  try {
+    restoreShellWorkspaceStore(await window.quantlabDesktop.getShellWorkspaceStore());
+  } catch (_error) {
+    // Workspace restore is optional; the shell can still boot from a cold state.
+  } finally {
+    state.workspaceStoreLoaded = true;
+  }
   renderAll();
   try {
     state.candidatesStore = normalizeCandidatesStore(await window.quantlabDesktop.getCandidatesStore());
@@ -173,6 +183,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 window.addEventListener("beforeunload", () => {
   if (state.refreshTimer) window.clearInterval(state.refreshTimer);
+  if (state.workspacePersistTimer) window.clearTimeout(state.workspacePersistTimer);
+  if (state.workspaceStoreLoaded) {
+    window.quantlabDesktop.saveShellWorkspaceStore(serializeShellWorkspaceStore()).catch(() => {});
+  }
 });
 
 function bindEvents() {
@@ -236,11 +250,27 @@ function bindEvents() {
     const payload = buildLaunchPayloadFromForm();
     if (payload) await submitLaunchRequest(payload, "form");
   });
-  elements.workflowLaunchCommand.addEventListener("change", renderWorkflow);
+  elements.workflowLaunchCommand.addEventListener("change", () => {
+    renderWorkflow();
+    scheduleShellWorkspacePersist();
+  });
+  [
+    elements.workflowLaunchTicker,
+    elements.workflowLaunchStart,
+    elements.workflowLaunchEnd,
+    elements.workflowLaunchInterval,
+    elements.workflowLaunchCash,
+    elements.workflowLaunchConfigPath,
+    elements.workflowLaunchOutDir,
+  ].forEach((input) => {
+    input.addEventListener("input", () => scheduleShellWorkspacePersist());
+  });
+  elements.workflowLaunchPaper.addEventListener("change", () => scheduleShellWorkspacePersist());
   elements.workflowOpenCompare.addEventListener("click", () => openCompareSelectionTab());
   elements.workflowClearSelection.addEventListener("click", () => {
     state.selectedRunIds = [];
     renderWorkflow();
+    scheduleShellWorkspacePersist();
   });
   document.addEventListener("keydown", (event) => {
     const isModifierPressed = event.ctrlKey || event.metaKey;
@@ -284,7 +314,11 @@ async function refreshSnapshot() {
       stepbitWorkspace: extra[3].status === "fulfilled" ? extra[3].value : state.snapshot?.stepbitWorkspace || null,
     };
     const validIds = new Set(getRuns().map((run) => run.run_id));
-    state.selectedRunIds = state.selectedRunIds.filter((runId) => validIds.has(runId));
+    const filteredSelection = state.selectedRunIds.filter((runId) => validIds.has(runId));
+    if (filteredSelection.length !== state.selectedRunIds.length) {
+      state.selectedRunIds = filteredSelection;
+      scheduleShellWorkspacePersist();
+    }
     renderWorkspaceState();
     renderWorkflow();
     refreshLiveJobTabs();
@@ -303,6 +337,157 @@ function renderAll() {
   renderPalette();
   renderWorkflow();
   renderChatAdapterStatus();
+}
+
+function defaultShellWorkspaceStore() {
+  return {
+    version: 1,
+    active_tab_id: null,
+    selected_run_ids: [],
+    tabs: [],
+    launch_form: {
+      command: "run",
+      ticker: "",
+      start: "",
+      end: "",
+      interval: "",
+      cash: "",
+      paper: false,
+      config_path: "",
+      out_dir: "",
+    },
+  };
+}
+
+function normalizeShellWorkspaceStore(store) {
+  const fallback = defaultShellWorkspaceStore();
+  if (!store || typeof store !== "object") return fallback;
+  const tabs = Array.isArray(store.tabs) ? store.tabs.map(normalizeShellTab).filter(Boolean) : [];
+  const activeTabId = typeof store.active_tab_id === "string" ? store.active_tab_id : null;
+  return {
+    version: 1,
+    active_tab_id: tabs.some((tab) => tab.id === activeTabId) ? activeTabId : tabs[0]?.id || null,
+    selected_run_ids: Array.isArray(store.selected_run_ids)
+      ? store.selected_run_ids.filter((value) => typeof value === "string" && value).slice(0, 4)
+      : [],
+    tabs,
+    launch_form: normalizeLaunchFormState(store.launch_form),
+  };
+}
+
+function normalizeShellTab(tab) {
+  if (!tab || typeof tab !== "object" || typeof tab.id !== "string" || typeof tab.kind !== "string") return null;
+  const base = {
+    id: String(tab.id),
+    kind: String(tab.kind),
+    navKind: typeof tab.navKind === "string" ? tab.navKind : "",
+    title: typeof tab.title === "string" ? tab.title : "",
+  };
+  if (base.kind === "iframe") {
+    if (typeof tab.url !== "string" || !tab.url) return null;
+    return { ...base, url: tab.url };
+  }
+  if (base.kind === "run" || base.kind === "artifacts") {
+    if (typeof tab.runId !== "string" || !tab.runId) return null;
+    return { ...base, runId: tab.runId };
+  }
+  if (base.kind === "compare") {
+    const runIds = Array.isArray(tab.runIds) ? uniqueRunIds(tab.runIds.filter((value) => typeof value === "string" && value)).slice(0, CONFIG.maxCandidateCompare) : [];
+    if (!runIds.length) return null;
+    return { ...base, runIds, rankMetric: typeof tab.rankMetric === "string" ? tab.rankMetric : "" };
+  }
+  if (base.kind === "candidates") {
+    return { ...base, filter: typeof tab.filter === "string" ? tab.filter : "all" };
+  }
+  if (base.kind === "experiments") {
+    return {
+      ...base,
+      selectedConfigPath: typeof tab.selectedConfigPath === "string" ? tab.selectedConfigPath : "",
+      selectedSweepId: typeof tab.selectedSweepId === "string" ? tab.selectedSweepId : "",
+    };
+  }
+  if (base.kind === "sweep-decision") {
+    return { ...base, rankMetric: typeof tab.rankMetric === "string" ? tab.rankMetric : "" };
+  }
+  if (base.kind === "job") {
+    if (typeof tab.requestId !== "string" || !tab.requestId) return null;
+    return { ...base, requestId: tab.requestId };
+  }
+  if (base.kind === "paper") return base;
+  return null;
+}
+
+function normalizeLaunchFormState(formState) {
+  const fallback = defaultShellWorkspaceStore().launch_form;
+  if (!formState || typeof formState !== "object") return fallback;
+  return {
+    command: formState.command === "sweep" ? "sweep" : "run",
+    ticker: typeof formState.ticker === "string" ? formState.ticker : "",
+    start: typeof formState.start === "string" ? formState.start : "",
+    end: typeof formState.end === "string" ? formState.end : "",
+    interval: typeof formState.interval === "string" ? formState.interval : "",
+    cash: typeof formState.cash === "string" ? formState.cash : "",
+    paper: Boolean(formState.paper),
+    config_path: typeof formState.config_path === "string" ? formState.config_path : "",
+    out_dir: typeof formState.out_dir === "string" ? formState.out_dir : "",
+  };
+}
+
+function collectLaunchFormState() {
+  return normalizeLaunchFormState({
+    command: elements.workflowLaunchCommand.value || "run",
+    ticker: elements.workflowLaunchTicker.value,
+    start: elements.workflowLaunchStart.value,
+    end: elements.workflowLaunchEnd.value,
+    interval: elements.workflowLaunchInterval.value,
+    cash: elements.workflowLaunchCash.value,
+    paper: elements.workflowLaunchPaper.checked,
+    config_path: elements.workflowLaunchConfigPath.value,
+    out_dir: elements.workflowLaunchOutDir.value,
+  });
+}
+
+function applyLaunchFormState(formState) {
+  const normalized = normalizeLaunchFormState(formState);
+  elements.workflowLaunchCommand.value = normalized.command;
+  elements.workflowLaunchTicker.value = normalized.ticker;
+  elements.workflowLaunchStart.value = normalized.start;
+  elements.workflowLaunchEnd.value = normalized.end;
+  elements.workflowLaunchInterval.value = normalized.interval;
+  elements.workflowLaunchCash.value = normalized.cash;
+  elements.workflowLaunchPaper.checked = normalized.paper;
+  elements.workflowLaunchConfigPath.value = normalized.config_path;
+  elements.workflowLaunchOutDir.value = normalized.out_dir;
+}
+
+function serializeTabForWorkspace(tab) {
+  return normalizeShellTab(tab);
+}
+
+function serializeShellWorkspaceStore() {
+  return normalizeShellWorkspaceStore({
+    active_tab_id: state.activeTabId,
+    selected_run_ids: state.selectedRunIds,
+    tabs: state.tabs.map(serializeTabForWorkspace).filter(Boolean),
+    launch_form: collectLaunchFormState(),
+  });
+}
+
+function restoreShellWorkspaceStore(store) {
+  const restored = normalizeShellWorkspaceStore(store);
+  state.tabs = restored.tabs;
+  state.activeTabId = restored.active_tab_id;
+  state.selectedRunIds = restored.selected_run_ids;
+  applyLaunchFormState(restored.launch_form);
+}
+
+function scheduleShellWorkspacePersist() {
+  if (!state.workspaceStoreLoaded) return;
+  if (state.workspacePersistTimer) window.clearTimeout(state.workspacePersistTimer);
+  state.workspacePersistTimer = window.setTimeout(() => {
+    state.workspacePersistTimer = null;
+    window.quantlabDesktop.saveShellWorkspaceStore(serializeShellWorkspaceStore()).catch(() => {});
+  }, CONFIG.persistDebounceMs);
 }
 
 function clearElement(element) {
@@ -690,6 +875,7 @@ function bindTabChromeEvents() {
     button.addEventListener("click", () => {
       state.activeTabId = button.dataset.tabId;
       renderTabs();
+      scheduleShellWorkspacePersist();
     });
   });
   elements.tabsBar.querySelectorAll("[data-close-tab]").forEach((button) => {
@@ -1674,6 +1860,7 @@ function closeTab(tabId) {
   state.tabs = state.tabs.filter((tab) => tab.id !== tabId);
   if (state.activeTabId === tabId) state.activeTabId = state.tabs[0]?.id || null;
   renderTabs();
+  scheduleShellWorkspacePersist();
 }
 
 function syncNav(kind) {
@@ -1848,6 +2035,7 @@ function upsertTab(nextTab) {
   else state.tabs.push(nextTab);
   state.activeTabId = nextTab.id;
   renderTabs();
+  scheduleShellWorkspacePersist();
 }
 
 function rerenderContextualTabs() {
@@ -1904,6 +2092,7 @@ function toggleRunSelection(runId, selected) {
     state.selectedRunIds = state.selectedRunIds.filter((value) => value !== runId);
   }
   renderWorkflow();
+  scheduleShellWorkspacePersist();
 }
 
 function getBrowserUrlForActiveContext() {
