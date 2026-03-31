@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from quantlab.brokers import ExecutionContext, ExecutionIntent, ExecutionPolicy
 from quantlab.brokers.hyperliquid import (
     HyperliquidBrokerAdapter,
@@ -478,10 +480,16 @@ def test_hyperliquid_signed_action_report_signs_with_local_private_key():
         signing_private_key=signer_private_key,
     ).to_dict()
 
+    json.dumps(report)
     assert report["readiness_allowed"] is True
     assert report["signer_backend"] == "hyperliquid_local_private_key"
     assert report["signature_envelope"]["signature_state"] == "signed"
     assert report["signature_envelope"]["signature_present"] is True
+    assert isinstance(report["signature_envelope"]["action_hash"], str)
+    assert isinstance(report["signature_envelope"]["derived_signer_address"], str)
+    assert isinstance(report["signature_envelope"]["signature"]["r"], str)
+    assert isinstance(report["signature_envelope"]["signature"]["s"], str)
+    assert isinstance(report["signature_envelope"]["eip712_payload"]["message"]["connectionId"], str)
     recovered = recover_hyperliquid_l1_action_signer(
         action_payload=report["action_payload"],
         signature=report["signature_envelope"]["signature"],
@@ -571,11 +579,17 @@ def test_hyperliquid_signed_action_report_signs_with_env_private_key_when_signer
         signing_private_key_env="QL_HL_TEST_KEY",
     ).to_dict()
 
+    json.dumps(report)
     assert report["readiness_allowed"] is False
     assert report["action_payload"] is not None
     assert report["signer_backend"] == "hyperliquid_local_private_key"
     assert report["signature_envelope"]["signature_state"] == "signed"
     assert report["signature_envelope"]["signature_present"] is True
+    assert isinstance(report["signature_envelope"]["action_hash"], str)
+    assert isinstance(report["signature_envelope"]["derived_signer_address"], str)
+    assert isinstance(report["signature_envelope"]["signature"]["r"], str)
+    assert isinstance(report["signature_envelope"]["signature"]["s"], str)
+    assert isinstance(report["signature_envelope"]["eip712_payload"]["message"]["connectionId"], str)
     assert "signer_role_unknown" in report["readiness_reasons"]
     assert "action_payload_not_ready" not in report["errors"]
 

@@ -2576,6 +2576,18 @@ def sign_hyperliquid_l1_action(
         "s": to_hex(signed.s),
         "v": signed.v,
     }
+    json_safe_eip712_payload = {
+        "domain": dict(eip712_payload["domain"]),
+        "types": {
+            "Agent": [dict(item) for item in eip712_payload["types"]["Agent"]],
+            "EIP712Domain": [dict(item) for item in eip712_payload["types"]["EIP712Domain"]],
+        },
+        "primaryType": eip712_payload["primaryType"],
+        "message": {
+            "source": phantom_agent["source"],
+            "connectionId": action_hash.hex(),
+        },
+    }
     return {
         "signer_address": wallet.address,
         "action_hash": action_hash.hex(),
@@ -2583,7 +2595,7 @@ def sign_hyperliquid_l1_action(
             "source": phantom_agent["source"],
             "connectionId": action_hash.hex(),
         },
-        "eip712_payload": eip712_payload,
+        "eip712_payload": json_safe_eip712_payload,
         "signature": signature,
     }
 
