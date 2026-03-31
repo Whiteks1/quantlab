@@ -54,7 +54,20 @@ def paper_sessions_root(tmp_path: Path) -> Path:
                     "command": "paper",
                     "status": status,
                     "request_id": request_id,
+                    "started_at": created_at,
                     "updated_at": updated_at,
+                    "finished_at": None if status == "running" else updated_at,
+                    "terminal": status != "running",
+                    "status_reason": (
+                        "completed"
+                        if status == "success"
+                        else "exception"
+                        if status == "failed"
+                        else "operator_abort"
+                        if status == "aborted"
+                        else "active"
+                    ),
+                    "duration_seconds": None if status == "running" else 300.0,
                     "message": (
                         "boom"
                         if status == "failed"
@@ -133,6 +146,7 @@ class TestPaperSessionsHealth:
         assert health["latest_session_status"] == "running"
         assert health["latest_issue_session_id"] == "paper_004"
         assert health["latest_issue_status"] == "running"
+        assert health["active_sessions"] == ["paper_004"]
 
     def test_prints_health_summary(self, paper_sessions_root: Path, capsys):
         args = _make_args(paper_sessions_health=str(paper_sessions_root))
@@ -145,6 +159,7 @@ class TestPaperSessionsHealth:
         assert "paper_004" in out
         assert "failed" in out
         assert "running" in out
+        assert "active_sessions" in out
 
     def test_invalid_root_raises_config_error(self, tmp_path: Path):
         args = _make_args(paper_sessions_health=str(tmp_path / "missing"))
@@ -227,6 +242,10 @@ class TestPaperSessionsIndex:
         assert payload["sessions"][1]["status"] == "failed"
         assert payload["sessions"][1]["error_type"] == "DataError"
         assert payload["sessions"][0]["report_contract_type"] == "quantlab.paper.result"
+        assert payload["sessions"][0]["terminal"] is True
+        assert payload["sessions"][0]["status_reason"] == "completed"
+        assert payload["sessions"][3]["terminal"] is False
+        assert payload["sessions"][3]["status_reason"] == "active"
 
     def test_writes_index_artifacts_and_prints_paths(self, paper_sessions_root: Path, capsys):
         args = _make_args(paper_sessions_index=str(paper_sessions_root))
@@ -271,7 +290,12 @@ class TestPaperSessionsIndex:
                     "command": "paper",
                     "status": "success",
                     "request_id": "req_005",
+                    "started_at": "2026-03-25T12:40:00",
                     "updated_at": "2026-03-25T12:45:00",
+                    "finished_at": "2026-03-25T12:45:00",
+                    "terminal": True,
+                    "status_reason": "completed",
+                    "duration_seconds": 300.0,
                 }
             ),
             encoding="utf-8",
@@ -281,6 +305,8 @@ class TestPaperSessionsIndex:
         indexed = {row["session_id"]: row for row in payload["sessions"]}
         assert indexed["paper_005"]["report_contract_type"] is None
         assert indexed["paper_005"]["status"] == "success"
+        assert indexed["paper_005"]["terminal"] is True
+        assert indexed["paper_005"]["status_reason"] == "completed"
 
 
 class TestNoMatch:

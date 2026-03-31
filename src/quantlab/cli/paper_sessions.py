@@ -85,6 +85,7 @@ def handle_paper_session_commands(args) -> bool:
         print(f"  latest_issue_state  : {health.get('latest_issue_status')}")
         print(f"  latest_issue_at     : {health.get('latest_issue_at')}")
         print(f"  latest_issue_error  : {health.get('latest_issue_error_type')}")
+        print(f"  active_sessions     : {health.get('active_sessions')}")
         return True
 
     if getattr(args, "paper_sessions_alerts", None):
@@ -142,6 +143,20 @@ def load_paper_session_summary(session_dir: str | Path) -> dict[str, Any]:
         or report.get("header", {}).get("run_id")
         or path.name
     )
+    resolved_status = status.get("status") or metadata.get("status") or report.get("status")
+    terminal = status.get("terminal")
+    if terminal is None:
+        terminal = str(resolved_status or "").lower() in {"success", "failed", "aborted"}
+    status_reason = status.get("status_reason")
+    if status_reason is None:
+        if resolved_status == "success":
+            status_reason = "completed"
+        elif resolved_status == "failed":
+            status_reason = "exception"
+        elif resolved_status == "aborted":
+            status_reason = "operator_abort"
+        else:
+            status_reason = "active"
     report_contract = report.get("machine_contract", {}).get("contract_type")
 
     artifacts = {
@@ -155,9 +170,14 @@ def load_paper_session_summary(session_dir: str | Path) -> dict[str, Any]:
 
     return {
         "session_id": session_id,
-        "status": status.get("status") or metadata.get("status") or report.get("status"),
+        "status": resolved_status,
         "created_at": metadata.get("created_at"),
+        "started_at": status.get("started_at") or metadata.get("created_at"),
         "updated_at": status.get("updated_at"),
+        "finished_at": status.get("finished_at"),
+        "terminal": terminal,
+        "status_reason": status_reason,
+        "duration_seconds": status.get("duration_seconds"),
         "request_id": metadata.get("request_id") or status.get("request_id"),
         "command": metadata.get("command") or "paper",
         "mode": metadata.get("mode") or report.get("header", {}).get("mode") or "paper",
@@ -198,6 +218,11 @@ def build_paper_sessions_health(root_dir: str | Path) -> dict[str, Any]:
         "latest_issue_status": latest_issue.get("status") if latest_issue else None,
         "latest_issue_at": _activity_at(latest_issue) if latest_issue else None,
         "latest_issue_error_type": latest_issue.get("error_type") if latest_issue else None,
+        "active_sessions": [
+            session["session_id"]
+            for session in sessions
+            if not session.get("terminal", False)
+        ],
     }
 
 

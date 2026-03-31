@@ -69,7 +69,7 @@ outputs/paper_sessions/<session_id>/
 The minimum operator-facing files are:
 
 - `session_metadata.json`: identity, creation context, request id
-- `session_status.json`: latest lifecycle status, last update time, error info if present
+- `session_status.json`: lifecycle status, start/finish timing, terminal flag, status reason, and error info if present
 - `report.json`: canonical result artifact
 - `trades.csv`: paper trade log
 
@@ -91,6 +91,8 @@ Use `--paper-sessions-show` when you need:
 
 - the exact session id
 - current status
+- whether the session is terminal
+- how long it ran
 - request id
 - artifact paths
 - error type or failure message
@@ -149,6 +151,11 @@ outputs/paper_sessions/
 ```
 
 Use this when you want a compact export surface for repeated review, local handoff, or downstream local tooling.
+
+Note:
+
+- successful, failed, and aborted paper runs now refresh `paper_sessions_index.*` automatically
+- manual refresh remains useful if you have edited artifacts outside the normal `run --paper` flow
 
 ## 8. Operator Response Guide
 
