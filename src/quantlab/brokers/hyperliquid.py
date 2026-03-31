@@ -958,7 +958,7 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             readiness_reasons.append("execution_account_missing")
 
         if resolved_context.signer_type in {"api_wallet", "agent_wallet"}:
-            if resolved_context.signer_role is None:
+            if resolved_context.signer_role in {None, "missing"}:
                 readiness_reasons.append("signer_role_unknown")
             elif resolved_context.signer_role != "agent":
                 readiness_reasons.append("signer_role_mismatch")
