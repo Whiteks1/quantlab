@@ -223,6 +223,34 @@ def test_hyperliquid_account_readiness_rejects_agent_wallet_without_execution_ac
     assert "missing_execution_account_id" in report["readiness_reasons"]
 
 
+def test_hyperliquid_account_readiness_allows_visible_account_route_when_role_is_missing():
+    adapter = HyperliquidBrokerAdapter()
+    context = ExecutionContext(
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        signer_type="direct",
+        routing_target="account",
+        transport_preference="websocket",
+    )
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "userRole":
+            return {"role": "missing"}
+        if payload["type"] == "openOrders":
+            return []
+        if payload["type"] == "frontendOpenOrders":
+            return []
+        raise AssertionError(payload)
+
+    report = adapter.build_account_readiness_report(
+        context=context,
+        fetch_json=fake_fetch_json,
+    ).to_dict()
+
+    assert report["account_visibility_available"] is True
+    assert report["readiness_allowed"] is True
+    assert "execution_account_missing" not in report["readiness_reasons"]
+
+
 def test_hyperliquid_account_readiness_rejects_signer_role_mismatch():
     adapter = HyperliquidBrokerAdapter()
     context = ExecutionContext(
@@ -250,6 +278,38 @@ def test_hyperliquid_account_readiness_rejects_signer_role_mismatch():
     ).to_dict()
 
     assert report["readiness_allowed"] is False
+    assert "signer_role_mismatch" in report["readiness_reasons"]
+
+
+def test_hyperliquid_account_readiness_still_rejects_signer_mismatch_when_account_route_is_visible():
+    adapter = HyperliquidBrokerAdapter()
+    context = ExecutionContext(
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        signer_id="0x2222222222222222222222222222222222222222",
+        signer_type="agent_wallet",
+        routing_target="account",
+        transport_preference="websocket",
+    )
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "userRole" and payload["user"] == "0x1111111111111111111111111111111111111111":
+            return {"role": "missing"}
+        if payload["type"] == "userRole" and payload["user"] == "0x2222222222222222222222222222222222222222":
+            return {"role": "user"}
+        if payload["type"] == "openOrders":
+            return []
+        if payload["type"] == "frontendOpenOrders":
+            return []
+        raise AssertionError(payload)
+
+    report = adapter.build_account_readiness_report(
+        context=context,
+        fetch_json=fake_fetch_json,
+    ).to_dict()
+
+    assert report["account_visibility_available"] is True
+    assert report["readiness_allowed"] is False
+    assert "execution_account_missing" not in report["readiness_reasons"]
     assert "signer_role_mismatch" in report["readiness_reasons"]
 
 

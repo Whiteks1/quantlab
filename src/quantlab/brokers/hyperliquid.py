@@ -948,7 +948,13 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
                 readiness_reasons.append("account_visibility_unavailable")
                 errors.append(failure_reason)
 
-        if resolved_context.execution_account_role == "missing":
+        if (
+            resolved_context.execution_account_role == "missing"
+            and not (
+                resolved_context.routing_target == "account"
+                and account_visibility_available
+            )
+        ):
             readiness_reasons.append("execution_account_missing")
 
         if resolved_context.signer_type in {"api_wallet", "agent_wallet"}:
