@@ -97,6 +97,12 @@ def handle_paper_session_commands(args) -> bool:
         print(json.dumps(alerts, indent=2, sort_keys=True))
         return True
 
+    if getattr(args, "paper_sessions_promotion", None):
+        root_dir = _require_directory(args.paper_sessions_promotion, "Paper sessions root")
+        promotion = build_paper_sessions_promotion_report(root_dir)
+        print(json.dumps(promotion, indent=2, sort_keys=True))
+        return True
+
     if getattr(args, "paper_sessions_index", None):
         from quantlab.reporting.paper_session_index import write_paper_sessions_index
 
@@ -325,6 +331,66 @@ def build_paper_sessions_alerts(
     }
 
 
+def build_paper_sessions_promotion_report(root_dir: str | Path, *, max_candidates: int = 2) -> dict[str, Any]:
+    """
+    Build an operator-facing promotion report for paper sessions ready to move
+    toward the broker boundary.
+    """
+    if max_candidates <= 0:
+        raise ConfigError("max_candidates must be a positive integer.")
+
+    root = _require_directory(root_dir, "Paper sessions root")
+    sessions = [load_paper_session_summary(path) for path in scan_paper_sessions(root)]
+
+    evaluated_sessions: list[dict[str, Any]] = []
+    for session in sessions:
+        promotion_ready, promotion_reasons, promotion_blockers = _evaluate_paper_session_promotion(session)
+        evaluated_sessions.append(
+            {
+                **session,
+                "broker_promotion_ready": promotion_ready,
+                "broker_promotion_reasons": promotion_reasons,
+                "broker_promotion_blockers": promotion_blockers,
+            }
+        )
+
+    ready_sessions = [session for session in evaluated_sessions if session["broker_promotion_ready"]]
+    blocked_sessions = [session for session in evaluated_sessions if not session["broker_promotion_ready"]]
+
+    ready_sessions = sorted(ready_sessions, key=_session_activity_sort_key, reverse=True)
+    blocked_sessions = sorted(blocked_sessions, key=_session_activity_sort_key, reverse=True)
+    ready_candidates = ready_sessions[:max_candidates]
+
+    latest_ready = ready_sessions[0] if ready_sessions else None
+    latest_blocked = blocked_sessions[0] if blocked_sessions else None
+
+    return {
+        "root_dir": str(root),
+        "generated_at": datetime.now().replace(microsecond=0).isoformat(),
+        "max_candidates": max_candidates,
+        "total_sessions": len(sessions),
+        "promotion_ready_count": len(ready_sessions),
+        "promotion_blocked_count": len(blocked_sessions),
+        "ready_candidates": ready_candidates,
+        "blocked_sessions": blocked_sessions,
+        "criteria": {
+            "required_status": "success",
+            "required_terminal": True,
+            "required_mode": "paper",
+            "required_report_contract_type": "quantlab.paper.result",
+            "required_report_present": True,
+            "required_no_error_type": True,
+        },
+        "latest_ready_session_id": latest_ready.get("session_id") if latest_ready else None,
+        "latest_ready_at": _activity_at(latest_ready) if latest_ready else None,
+        "latest_blocked_session_id": latest_blocked.get("session_id") if latest_blocked else None,
+        "latest_blocked_at": _activity_at(latest_blocked) if latest_blocked else None,
+        "latest_blocked_reason": (
+            ", ".join(latest_blocked.get("broker_promotion_blockers", [])) if latest_blocked else None
+        ),
+    }
+
+
 def _is_valid_paper_session_dir(path: Path) -> bool:
     return any(
         (path / name).exists()
@@ -419,6 +485,46 @@ def _build_alert_entry(
         "message": message,
         "path": session.get("path"),
     }
+
+
+def _evaluate_paper_session_promotion(session: dict[str, Any]) -> tuple[bool, list[str], list[str]]:
+    reasons: list[str] = []
+    blockers: list[str] = []
+
+    status = str(session.get("status") or "unknown").lower()
+    if status == "success":
+        reasons.append("status_success")
+    else:
+        blockers.append(f"status_{status}")
+
+    if bool(session.get("terminal", False)):
+        reasons.append("terminal_session")
+    else:
+        blockers.append("non_terminal")
+
+    mode = str(session.get("mode") or "").lower()
+    if mode == "paper":
+        reasons.append("paper_mode")
+    else:
+        blockers.append("non_paper_mode")
+
+    if session.get("report_present"):
+        reasons.append("report_present")
+    else:
+        blockers.append("missing_report")
+
+    if session.get("report_contract_type") == "quantlab.paper.result":
+        reasons.append("paper_result_contract")
+    else:
+        blockers.append("unexpected_report_contract")
+
+    if not session.get("error_type"):
+        reasons.append("no_error_type")
+    else:
+        blockers.append("has_error_type")
+
+    promotion_ready = not blockers
+    return promotion_ready, reasons, blockers
 
 
 def _alert_sort_key(alert: dict[str, Any]) -> datetime:

@@ -11,6 +11,7 @@ from quantlab.cli.paper_sessions import (
     DEFAULT_PAPER_STALE_MINUTES,
     build_paper_sessions_alerts,
     build_paper_sessions_health,
+    build_paper_sessions_promotion_report,
     handle_paper_session_commands,
 )
 from quantlab.errors import ConfigError
@@ -104,6 +105,7 @@ def _make_args(**kwargs) -> types.SimpleNamespace:
         "paper_sessions_show": None,
         "paper_sessions_health": None,
         "paper_sessions_alerts": None,
+        "paper_sessions_promotion": None,
         "paper_sessions_index": None,
         "paper_stale_minutes": DEFAULT_PAPER_STALE_MINUTES,
     }
@@ -230,6 +232,36 @@ class TestPaperSessionsAlerts:
     def test_invalid_stale_threshold_raises_config_error(self, paper_sessions_root: Path):
         with pytest.raises(ConfigError):
             build_paper_sessions_alerts(paper_sessions_root, stale_after_minutes=0)
+
+
+class TestPaperSessionsPromotion:
+    def test_builds_promotion_report_with_candidates_and_blockers(self, paper_sessions_root: Path):
+        report = build_paper_sessions_promotion_report(paper_sessions_root)
+
+        assert report["total_sessions"] == 4
+        assert report["promotion_ready_count"] == 1
+        assert report["promotion_blocked_count"] == 3
+        assert report["latest_ready_session_id"] == "paper_001"
+        assert report["latest_blocked_session_id"] == "paper_004"
+        assert report["ready_candidates"][0]["session_id"] == "paper_001"
+        assert report["ready_candidates"][0]["broker_promotion_ready"] is True
+        assert "status_success" in report["ready_candidates"][0]["broker_promotion_reasons"]
+        assert report["blocked_sessions"][0]["broker_promotion_ready"] is False
+        assert "non_terminal" in report["blocked_sessions"][0]["broker_promotion_blockers"] or "status_running" in report["blocked_sessions"][0]["broker_promotion_blockers"]
+
+    def test_prints_promotion_report(self, paper_sessions_root: Path, capsys):
+        args = _make_args(paper_sessions_promotion=str(paper_sessions_root))
+        result = handle_paper_session_commands(args)
+        assert result is True
+
+        out = capsys.readouterr().out
+        assert '"promotion_ready_count"' in out
+        assert '"paper_001"' in out
+
+    def test_invalid_root_raises_config_error(self, tmp_path: Path):
+        args = _make_args(paper_sessions_promotion=str(tmp_path / "missing"))
+        with pytest.raises(ConfigError):
+            handle_paper_session_commands(args)
 
 
 class TestPaperSessionsIndex:

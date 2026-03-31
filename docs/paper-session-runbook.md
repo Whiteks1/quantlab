@@ -157,7 +157,23 @@ Note:
 - successful, failed, and aborted paper runs now refresh `paper_sessions_index.*` automatically
 - manual refresh remains useful if you have edited artifacts outside the normal `run --paper` flow
 
-## 8. Operator Response Guide
+## 8. Assess Broker Promotion Readiness
+
+Generate a promotion report for paper sessions that are ready to move toward the broker boundary:
+
+```bash
+python main.py --paper-sessions-promotion outputs/paper_sessions
+```
+
+The promotion report highlights:
+
+- ready candidates that satisfy the current promotion contract
+- blocked sessions and the reasons they are not yet ready
+- the latest ready and blocked sessions for quick operator review
+
+Use this when you want to identify which paper sessions are most suitable for the first broker-facing handoff.
+
+## 9. Operator Response Guide
 
 ### `success`
 
@@ -220,7 +236,7 @@ What to do:
 - confirm whether the process is genuinely still progressing
 - if not, treat it as an operational issue and rerun only after checking logs, data, and the local environment
 
-## 9. Recommended Operating Loop
+## 10. Recommended Operating Loop
 
 For routine paper operation:
 
@@ -232,14 +248,14 @@ For routine paper operation:
 6. inspect any non-success or stale session with `--paper-sessions-show`
 7. review `report.json` and `trades.csv` for the sessions worth keeping
 
-## 10. Boundary Notes
+## 11. Boundary Notes
 
 - paper sessions are operationally distinct from research runs
 - paper sessions do not refresh `outputs/runs/runs_index.*`
 - paper sessions are not yet broker-connected execution
 - Stepbit or other external systems may consume QuantLab outputs, but they do not define this runbook or the operating authority
 
-## 11. Related Documents
+## 12. Related Documents
 
 - [README.md](../README.md)
 - [cli.md](./cli.md)
