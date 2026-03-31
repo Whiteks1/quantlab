@@ -44,6 +44,7 @@ handle_broker_dry_run_commands = None
 handle_broker_dry_runs_commands = None
 handle_broker_order_validations_commands = None
 handle_hyperliquid_submit_sessions_commands = None
+handle_broker_evidence_readiness_commands = None
 handle_pretrade_handoff_commands = None
 run_sweep = None
 write_run_report = None
@@ -146,6 +147,7 @@ def _load_runtime_dependencies() -> None:
     global handle_broker_dry_runs_commands
     global handle_broker_order_validations_commands
     global handle_hyperliquid_submit_sessions_commands
+    global handle_broker_evidence_readiness_commands
     global handle_pretrade_handoff_commands
     global run_sweep
     global write_run_report
@@ -222,6 +224,12 @@ def _load_runtime_dependencies() -> None:
         )
 
         handle_hyperliquid_submit_sessions_commands = _handle_hyperliquid_submit_sessions_commands
+    if handle_broker_evidence_readiness_commands is None:
+        from quantlab.cli.broker_evidence_readiness import (
+            handle_broker_evidence_readiness_commands as _handle_broker_evidence_readiness_commands,
+        )
+
+        handle_broker_evidence_readiness_commands = _handle_broker_evidence_readiness_commands
     if handle_pretrade_handoff_commands is None:
         from quantlab.cli.pretrade_handoff import (
             handle_pretrade_handoff_commands as _handle_pretrade_handoff_commands,
@@ -312,6 +320,10 @@ def _dispatch_standard_commands(args: argparse.Namespace, initial_result: object
         handle_broker_dry_runs_commands=handle_broker_dry_runs_commands,
         handle_broker_order_validations_commands=handle_broker_order_validations_commands,
         handle_hyperliquid_submit_sessions_commands=handle_hyperliquid_submit_sessions_commands,
+        handle_broker_evidence_readiness_commands=lambda args: handle_broker_evidence_readiness_commands(
+            args,
+            project_root=PROJECT_ROOT,
+        ),
         handle_pretrade_handoff_commands=handle_pretrade_handoff_commands,
         handle_paper_session_commands=handle_paper_session_commands,
         handle_runs_commands=handle_runs_commands,
