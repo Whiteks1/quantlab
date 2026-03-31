@@ -313,6 +313,38 @@ def test_hyperliquid_account_readiness_still_rejects_signer_mismatch_when_accoun
     assert "signer_role_mismatch" in report["readiness_reasons"]
 
 
+def test_hyperliquid_account_readiness_marks_missing_delegated_signer_role_unknown():
+    adapter = HyperliquidBrokerAdapter()
+    context = ExecutionContext(
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        signer_id="0x2222222222222222222222222222222222222222",
+        signer_type="agent_wallet",
+        routing_target="account",
+        transport_preference="websocket",
+    )
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "userRole" and payload["user"] == "0x1111111111111111111111111111111111111111":
+            return {"role": "missing"}
+        if payload["type"] == "userRole" and payload["user"] == "0x2222222222222222222222222222222222222222":
+            return {"role": "missing"}
+        if payload["type"] == "openOrders":
+            return []
+        if payload["type"] == "frontendOpenOrders":
+            return []
+        raise AssertionError(payload)
+
+    report = adapter.build_account_readiness_report(
+        context=context,
+        fetch_json=fake_fetch_json,
+    ).to_dict()
+
+    assert report["account_visibility_available"] is True
+    assert report["readiness_allowed"] is False
+    assert "signer_role_unknown" in report["readiness_reasons"]
+    assert "signer_role_mismatch" not in report["readiness_reasons"]
+
+
 def test_hyperliquid_account_readiness_reports_visibility_probe_failure():
     adapter = HyperliquidBrokerAdapter()
     context = ExecutionContext(
