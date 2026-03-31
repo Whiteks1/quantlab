@@ -45,6 +45,29 @@ Practical rule:
 - paper is still the promotion floor
 - broker work begins only after the operator is comfortable that the paper result is worth a tightly supervised real-world check
 
+## 2.5. Readiness Check Before The First Evidence Pass
+
+Before attempting the first supervised broker evidence run, generate a readiness artifact:
+
+```bash
+python main.py --broker-evidence-readiness-outdir outputs/broker_evidence
+```
+
+If you already know which corridor you want to exercise first, make it explicit:
+
+```bash
+python main.py --broker-evidence-readiness-outdir outputs/broker_evidence --broker-evidence-corridor kraken
+python main.py --broker-evidence-readiness-outdir outputs/broker_evidence --broker-evidence-corridor hyperliquid
+```
+
+Use this check to fail early on:
+
+- missing broker credentials
+- missing Hyperliquid execution identity inputs
+- missing runbook/documentation continuity
+
+The command writes `broker_evidence_readiness.json` even when the corridor is not ready yet.
+
 ## 3. Happy Path: Kraken Supervised Corridor
 
 This is the current narrow Kraken path under `outputs/broker_order_validations/`.

@@ -293,6 +293,18 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="Directory where QuantLab should write the local pre-trade handoff validation artifact.",
     )
     parser.add_argument(
+        "--broker-evidence-readiness-outdir",
+        metavar="DIR",
+        default=None,
+        help="Write a deterministic readiness artifact for the first supervised broker evidence pass.",
+    )
+    parser.add_argument(
+        "--broker-evidence-corridor",
+        choices=["auto", "kraken", "hyperliquid"],
+        default="auto",
+        help="Broker corridor to evaluate for the first supervised evidence pass.",
+    )
+    parser.add_argument(
         "--hyperliquid-private-key",
         default=None,
         help="Private key for local Hyperliquid action signing.",

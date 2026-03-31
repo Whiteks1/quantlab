@@ -96,3 +96,12 @@ def test_determine_session_mode_for_pretrade_handoff():
     mode = app._determine_session_mode(args, json_command=None)
 
     assert mode == "pretrade_handoff"
+
+
+def test_determine_session_mode_for_broker_evidence_readiness():
+    parser = app._build_argument_parser()
+    args = parser.parse_args(["--broker-evidence-readiness-outdir", "outputs/broker_evidence"])
+
+    mode = app._determine_session_mode(args, json_command=None)
+
+    assert mode == "broker_evidence_readiness"

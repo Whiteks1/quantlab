@@ -118,6 +118,8 @@ def determine_session_mode(args: argparse.Namespace, json_command: str | None) -
         or args.hyperliquid_submit_sessions_alerts
     ):
         return "hyperliquid_submit"
+    if args.broker_evidence_readiness_outdir:
+        return "broker_evidence_readiness"
     if args.pretrade_handoff_validate or args.pretrade_handoff_validation_outdir:
         return "pretrade_handoff"
     if (
@@ -191,6 +193,7 @@ def dispatch_standard_commands(
     handle_broker_dry_runs_commands,
     handle_broker_order_validations_commands,
     handle_hyperliquid_submit_sessions_commands,
+    handle_broker_evidence_readiness_commands,
     handle_pretrade_handoff_commands,
     handle_paper_session_commands,
     handle_runs_commands,
@@ -220,6 +223,8 @@ def dispatch_standard_commands(
         result_ctx = handle_broker_order_validations_commands(args)
     if result_ctx in (None, False):
         result_ctx = handle_hyperliquid_submit_sessions_commands(args)
+    if result_ctx in (None, False):
+        result_ctx = handle_broker_evidence_readiness_commands(args)
     if result_ctx in (None, False):
         result_ctx = handle_pretrade_handoff_commands(args)
     if result_ctx in (None, False):

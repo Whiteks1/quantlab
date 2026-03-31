@@ -211,7 +211,41 @@ The index is intentionally separate from `outputs/runs/runs_index.*` and is mean
 
 ## 5. Broker Dry-Run
 
-## 5.5. Pre-Trade Handoff Intake
+## 5.5. Broker Evidence Readiness
+
+### `--broker-evidence-readiness-outdir`
+
+Write a deterministic readiness artifact before the first supervised broker evidence pass:
+
+```bash
+python main.py --broker-evidence-readiness-outdir outputs/broker_evidence
+```
+
+Optional corridor selection:
+
+```bash
+python main.py --broker-evidence-readiness-outdir outputs/broker_evidence --broker-evidence-corridor kraken
+python main.py --broker-evidence-readiness-outdir outputs/broker_evidence --broker-evidence-corridor hyperliquid
+```
+
+This writes:
+
+- `broker_evidence_readiness.json`
+
+The artifact makes these things explicit without printing secret values:
+
+- requested and resolved corridor
+- whether the evidence pass is actually ready to run
+- which expected secrets are present by source name only
+- expected local roots for:
+  - `outputs/paper_sessions/`
+  - `outputs/broker_order_validations/`
+  - `outputs/hyperliquid_submits/`
+- whether the supervised broker runbook is present
+
+If the requested corridor is not ready, QuantLab still writes the artifact but exits with explicit blocking reasons.
+
+## 5.6. Pre-Trade Handoff Intake
 
 ### `--pretrade-handoff-validate`
 

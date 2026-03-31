@@ -211,6 +211,7 @@ See also:
 - `--hyperliquid-submit-sessions-cancel`: submit a supervised cancel request for a canonical Hyperliquid submit session
 - `--hyperliquid-submit-sessions-health`: summarize Hyperliquid submission health across canonical submit sessions
 - `--hyperliquid-submit-sessions-alerts`: emit a deterministic alert snapshot for notable Hyperliquid submit-session states
+- `--broker-evidence-readiness-outdir`: write a deterministic readiness artifact before attempting the first supervised broker evidence pass
 - `--pretrade-handoff-validate`: validate a bounded `calculadora_riego_trading` handoff artifact without reintroducing broad pretrade runtime ownership
 - `--kraken-preflight-outdir`: persist a read-only Kraken public preflight artifact
 - `--kraken-auth-preflight-outdir`: persist a read-only Kraken authenticated preflight artifact
