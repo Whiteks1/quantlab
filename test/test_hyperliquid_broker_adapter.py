@@ -535,6 +535,94 @@ def test_hyperliquid_signed_action_report_flags_signer_identity_mismatch():
     assert "signer_identity_mismatch" in report["errors"]
 
 
+def test_hyperliquid_signed_action_report_signs_with_env_private_key_when_signer_role_is_unknown(monkeypatch):
+    adapter = HyperliquidBrokerAdapter()
+    policy = ExecutionPolicy(max_notional_per_order=1000.0)
+    signer_private_key = "0x59c6995e998f97a5a0044966f0945382d7f6f9d5c4bbf34c95a98e2ce42928f1"
+    signer_address = "0x4ad91849099DcD0E9e4b80214D8B4969a69f1861"
+    monkeypatch.setenv("QL_HL_TEST_KEY", signer_private_key)
+    context = ExecutionContext(
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        signer_id=signer_address,
+        signer_type="agent_wallet",
+        routing_target="account",
+        transport_preference="websocket",
+        nonce_hint=1700000000000,
+    )
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "allMids":
+            return {"ETH": "2450.1"}
+        if payload["type"] == "meta":
+            return {"universe": [{"name": "ETH", "szDecimals": 4}]}
+        if payload["type"] == "userRole":
+            return {"role": "missing"}
+        if payload["type"] == "openOrders":
+            return []
+        if payload["type"] == "frontendOpenOrders":
+            return []
+        raise AssertionError(payload)
+
+    report = adapter.build_signed_action_report(
+        _make_intent(account_id="0x1111111111111111111111111111111111111111"),
+        policy,
+        context=context,
+        fetch_json=fake_fetch_json,
+        signing_private_key_env="QL_HL_TEST_KEY",
+    ).to_dict()
+
+    assert report["readiness_allowed"] is False
+    assert report["action_payload"] is not None
+    assert report["signer_backend"] == "hyperliquid_local_private_key"
+    assert report["signature_envelope"]["signature_state"] == "signed"
+    assert report["signature_envelope"]["signature_present"] is True
+    assert "signer_role_unknown" in report["readiness_reasons"]
+    assert "action_payload_not_ready" not in report["errors"]
+
+
+def test_hyperliquid_signed_action_report_marks_missing_env_private_key_clearly_when_signer_role_is_unknown(monkeypatch):
+    adapter = HyperliquidBrokerAdapter()
+    policy = ExecutionPolicy(max_notional_per_order=1000.0)
+    monkeypatch.delenv("QL_HL_TEST_KEY_MISSING", raising=False)
+    context = ExecutionContext(
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        signer_id="0x4ad91849099DcD0E9e4b80214D8B4969a69f1861",
+        signer_type="agent_wallet",
+        routing_target="account",
+        transport_preference="websocket",
+        nonce_hint=1700000000000,
+    )
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "allMids":
+            return {"ETH": "2450.1"}
+        if payload["type"] == "meta":
+            return {"universe": [{"name": "ETH", "szDecimals": 4}]}
+        if payload["type"] == "userRole":
+            return {"role": "missing"}
+        if payload["type"] == "openOrders":
+            return []
+        if payload["type"] == "frontendOpenOrders":
+            return []
+        raise AssertionError(payload)
+
+    report = adapter.build_signed_action_report(
+        _make_intent(account_id="0x1111111111111111111111111111111111111111"),
+        policy,
+        context=context,
+        fetch_json=fake_fetch_json,
+        signing_private_key_env="QL_HL_TEST_KEY_MISSING",
+    ).to_dict()
+
+    assert report["readiness_allowed"] is False
+    assert report["action_payload"] is not None
+    assert report["signer_backend"] == "local_private_key"
+    assert report["signature_envelope"]["signature_state"] == "pending_signer_backend"
+    assert report["signature_envelope"]["signature_reason"] == "missing_signing_key"
+    assert "signer_role_unknown" in report["readiness_reasons"]
+    assert "action_payload_not_ready" not in report["errors"]
+
+
 def test_hyperliquid_reconciliation_report_prefers_known_order_status():
     adapter = HyperliquidBrokerAdapter()
 

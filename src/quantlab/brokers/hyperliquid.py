@@ -691,8 +691,11 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
         if not resolved_context.nonce_scope:
             readiness_reasons.append("missing_nonce_scope")
 
+        action_payload_blocking_reasons = [
+            reason for reason in readiness_reasons if reason != "signer_role_unknown"
+        ]
         action_payload = None
-        if not readiness_reasons:
+        if not action_payload_blocking_reasons:
             action_payload = self.build_order_action_payload(
                 intent,
                 public_preflight=public_preflight,
