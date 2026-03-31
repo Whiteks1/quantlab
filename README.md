@@ -96,6 +96,18 @@ Optional performance extras:
 pip install -e .[perf]
 ```
 
+Local credentials:
+
+- QuantLab loads a root `.env` automatically on startup
+- use [`.env.example`](./.env.example) as the template
+- keep unused secrets blank rather than filling placeholder text
+- the first supervised evidence check expects:
+  - `KRAKEN_API_KEY`
+  - `KRAKEN_API_SECRET`
+  - `HYPERLIQUID_PRIVATE_KEY`
+  - `HYPERLIQUID_ACCOUNT` or `HYPERLIQUID_ADDRESS`
+  - `HYPERLIQUID_SIGNER_ID` when using `api_wallet` or `agent_wallet`
+
 Contribution workflow:
 
 - see [CONTRIBUTING.md](./CONTRIBUTING.md) for the preferred local-first slice workflow, PR shape, and merge guidance used in this repo
@@ -522,6 +534,20 @@ And it can run a read-only authenticated preflight probe with Kraken credentials
 ```bash
 python main.py --kraken-auth-preflight-outdir outputs/broker_preflight/auth_demo
 ```
+
+And it can check whether your local secrets are sufficient before attempting the first supervised broker evidence pass:
+
+```bash
+python main.py --broker-evidence-readiness-outdir outputs/broker_evidence_demo
+```
+
+This writes:
+
+```text
+outputs/broker_evidence_demo/broker_evidence_readiness.json
+```
+
+If credentials are still missing, QuantLab fails with explicit blocking reasons without printing secret values.
 
 And it can run a read-only account readiness probe for a specific broker intent:
 
