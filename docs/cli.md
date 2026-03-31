@@ -192,6 +192,8 @@ The alert snapshot is machine-readable JSON and currently makes these situations
 
 For the recommended operating loop and response guidance, see [paper-session-runbook.md](./paper-session-runbook.md).
 
+For the current supervised broker happy path and failure path, see [supervised-broker-runbook.md](./supervised-broker-runbook.md).
+
 ### `--paper-sessions-index`
 
 Refresh the shared paper-session index:

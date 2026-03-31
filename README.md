@@ -338,6 +338,7 @@ python main.py --paper-sessions-index outputs/paper_sessions
 Operational guidance:
 
 - see [docs/paper-session-runbook.md](./docs/paper-session-runbook.md) for the recommended paper-session operating loop and response guidance
+- see [docs/supervised-broker-runbook.md](./docs/supervised-broker-runbook.md) for the current happy-path and failure-path guidance over supervised Kraken and Hyperliquid corridors
 
 ### Forward
 
