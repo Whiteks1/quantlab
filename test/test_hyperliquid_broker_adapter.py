@@ -660,6 +660,7 @@ def test_hyperliquid_reconciliation_report_prefers_known_order_status():
         fetch_json=fake_fetch_json,
     ).to_dict()
 
+    json.dumps(report)
     assert report["status_known"] is True
     assert report["normalized_state"] == "filled"
     assert report["close_state"] == "closed"
@@ -1038,6 +1039,7 @@ def test_hyperliquid_cancel_report_submits_signed_cancel():
         post_json=fake_post_json,
     ).to_dict()
 
+    json.dumps(report)
     assert report["artifact_type"] == "quantlab.hyperliquid.cancel_response"
     assert report["cancel_accepted"] is True
     assert report["remote_cancel_called"] is True
