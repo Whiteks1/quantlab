@@ -8,7 +8,9 @@ const DESKTOP_ROOT = __dirname;
 const PROJECT_ROOT = path.resolve(DESKTOP_ROOT, "..");
 const WORKSPACE_ROOT = path.resolve(PROJECT_ROOT, "..");
 const SERVER_SCRIPT = path.join(PROJECT_ROOT, "research_ui", "server.py");
-const OUTPUTS_ROOT = path.join(PROJECT_ROOT, "outputs");
+const OUTPUTS_ROOT = process.env.QUANTLAB_DESKTOP_OUTPUTS_ROOT
+  ? path.resolve(process.env.QUANTLAB_DESKTOP_OUTPUTS_ROOT)
+  : path.join(PROJECT_ROOT, "outputs");
 const DESKTOP_OUTPUTS_ROOT = path.join(OUTPUTS_ROOT, "desktop");
 const CANDIDATES_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "candidates_shortlist.json");
 const SWEEP_DECISION_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "sweep_decision_handoff.json");
@@ -21,7 +23,7 @@ const RESEARCH_UI_URLS = [
   "http://localhost:8000",
 ];
 const RESEARCH_UI_HEALTH_PATH = "/api/paper-sessions-health";
-const RESEARCH_UI_STARTUP_TIMEOUT_MS = 15000;
+const RESEARCH_UI_STARTUP_TIMEOUT_MS = 25000;
 const ELECTRON_STATE_ROOT = path.join(DESKTOP_OUTPUTS_ROOT, "electron");
 const IS_SMOKE_RUN = process.env.QUANTLAB_DESKTOP_SMOKE === "1";
 const SMOKE_OUTPUT_PATH = process.env.QUANTLAB_DESKTOP_SMOKE_OUTPUT || "";
@@ -274,6 +276,7 @@ async function readShellWorkspaceStore() {
     return normalizeShellWorkspaceStore(JSON.parse(raw));
   } catch (error) {
     if (error && error.code === "ENOENT") return defaultShellWorkspaceStore();
+    if (error instanceof SyntaxError) return defaultShellWorkspaceStore();
     throw error;
   }
 }
@@ -282,7 +285,9 @@ async function writeShellWorkspaceStore(store) {
   const normalized = normalizeShellWorkspaceStore(store);
   normalized.updated_at = new Date().toISOString();
   await fsp.mkdir(path.dirname(WORKSPACE_STORE_PATH), { recursive: true });
-  await fsp.writeFile(WORKSPACE_STORE_PATH, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  const tempPath = `${WORKSPACE_STORE_PATH}.tmp`;
+  await fsp.writeFile(tempPath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  await fsp.rename(tempPath, WORKSPACE_STORE_PATH);
   return normalized;
 }
 
@@ -590,18 +595,22 @@ async function detectResearchUiServerUrl() {
   return "";
 }
 
+function markResearchUiReady(discoveredUrl, source) {
+  clearResearchStartupTimer();
+  updateWorkspaceState({
+    status: "ready",
+    serverUrl: discoveredUrl,
+    error: null,
+    source,
+  });
+}
+
 async function monitorResearchUiStartup() {
   const deadline = Date.now() + RESEARCH_UI_STARTUP_TIMEOUT_MS;
   while (researchServerProcess && Date.now() < deadline) {
     const discoveredUrl = await detectResearchUiServerUrl();
     if (discoveredUrl) {
-      clearResearchStartupTimer();
-      updateWorkspaceState({
-        status: "ready",
-        serverUrl: discoveredUrl,
-        error: null,
-        source: researchServerOwned ? "managed" : "external",
-      });
+      markResearchUiReady(discoveredUrl, researchServerOwned ? "managed" : "external");
       appendLog(`[startup] research_ui reachable at ${discoveredUrl}`);
       return;
     }
@@ -633,13 +642,7 @@ async function startResearchUiServer({ forceRestart = false } = {}) {
   const existingUrl = await detectResearchUiServerUrl();
   if (existingUrl) {
     researchServerOwned = false;
-    clearResearchStartupTimer();
-    updateWorkspaceState({
-      status: "ready",
-      serverUrl: existingUrl,
-      error: null,
-      source: "external",
-    });
+    markResearchUiReady(existingUrl, "external");
     appendLog(`[startup] reusing existing research_ui server at ${existingUrl}`);
     return;
   }
@@ -673,13 +676,12 @@ async function startResearchUiServer({ forceRestart = false } = {}) {
         appendLog(line);
         const discoveredUrl = extractServerUrl(line);
         if (discoveredUrl) {
-          clearResearchStartupTimer();
-          updateWorkspaceState({
-            status: "ready",
-            serverUrl: discoveredUrl,
-            error: null,
-            source: "managed",
-          });
+          isResearchUiReachable(discoveredUrl)
+            .then((reachable) => {
+              if (!reachable || !researchServerProcess) return;
+              markResearchUiReady(discoveredUrl, "managed");
+            })
+            .catch(() => {});
         }
       });
   });
