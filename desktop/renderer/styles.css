@@ -95,6 +95,20 @@ button, input, textarea { font: inherit; }
 .sidebar-panel { padding: 16px; }
 .sidebar-panel p { margin: 8px 0 0; color: var(--muted); line-height: 1.5; }
 .runtime-summary { margin-top: 8px; font-size: 1.02rem; font-weight: 600; }
+.runtime-alert {
+    margin-top: 12px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: rgba(8, 14, 22, 0.86);
+    color: var(--muted);
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.runtime-alert.warn { border-color: rgba(240, 179, 93, 0.32); color: var(--warning); }
+.runtime-alert.down { border-color: rgba(242, 125, 136, 0.32); color: #ffb3ba; }
+.runtime-actions { margin-top: 12px; }
 
 .chip-list, .runtime-chips, .tabs-bar, .chat-actions, .topbar-actions {
     display: flex;

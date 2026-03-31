@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("quantlabDesktop", {
   readProjectText: (targetPath) => ipcRenderer.invoke("quantlab:read-project-text", targetPath),
   readProjectJson: (targetPath) => ipcRenderer.invoke("quantlab:read-project-json", targetPath),
   postJson: (relativePath, payload) => ipcRenderer.invoke("quantlab:post-json", relativePath, payload),
+  restartWorkspaceServer: () => ipcRenderer.invoke("quantlab:restart-workspace-server"),
   askStepbitChat: (payload) => ipcRenderer.invoke("quantlab:ask-stepbit-chat", payload),
   openExternal: (url) => ipcRenderer.invoke("quantlab:open-external", url),
   openPath: (targetPath) => ipcRenderer.invoke("quantlab:open-path", targetPath),

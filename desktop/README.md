@@ -24,6 +24,13 @@ npm install
 npm start
 ```
 
+Smoke check:
+
+```powershell
+cd desktop
+npm run smoke
+```
+
 ## Current Tabs
 
 - Chat

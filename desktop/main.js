@@ -16,14 +16,35 @@ const WORKSPACE_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "workspace_state.js
 const STEPBIT_APP_ROOT = path.join(WORKSPACE_ROOT, "stepbit-app");
 const STEPBIT_APP_CONFIG_PATH = path.join(STEPBIT_APP_ROOT, "config.yaml");
 const MAX_DIRECTORY_ENTRIES = 240;
+const RESEARCH_UI_URLS = [
+  "http://127.0.0.1:8000",
+  "http://localhost:8000",
+];
+const RESEARCH_UI_HEALTH_PATH = "/api/paper-sessions-health";
+const RESEARCH_UI_STARTUP_TIMEOUT_MS = 15000;
+const ELECTRON_STATE_ROOT = path.join(DESKTOP_OUTPUTS_ROOT, "electron");
+const IS_SMOKE_RUN = process.env.QUANTLAB_DESKTOP_SMOKE === "1";
+const SMOKE_OUTPUT_PATH = process.env.QUANTLAB_DESKTOP_SMOKE_OUTPUT || "";
+
+app.setPath("userData", path.join(ELECTRON_STATE_ROOT, "user-data"));
+app.setPath("cache", path.join(ELECTRON_STATE_ROOT, "cache"));
+
+const singleInstanceLock = app.requestSingleInstanceLock();
+if (!singleInstanceLock) {
+  app.quit();
+  process.exit(0);
+}
 
 let mainWindow = null;
 let researchServerProcess = null;
+let researchServerOwned = false;
+let researchStartupTimer = null;
 let workspaceState = {
   status: "idle",
   serverUrl: null,
   logs: [],
   error: null,
+  source: null,
 };
 
 function defaultCandidatesStore() {
@@ -514,9 +535,78 @@ function appendLog(line) {
   broadcastWorkspaceState();
 }
 
+function updateWorkspaceState(patch) {
+  workspaceState = {
+    ...workspaceState,
+    ...patch,
+  };
+  broadcastWorkspaceState();
+}
+
 function broadcastWorkspaceState() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send("quantlab:workspace-state", workspaceState);
+}
+
+function clearResearchStartupTimer() {
+  if (researchStartupTimer) {
+    clearTimeout(researchStartupTimer);
+    researchStartupTimer = null;
+  }
+}
+
+function scheduleResearchStartupTimeout() {
+  clearResearchStartupTimer();
+  researchStartupTimer = setTimeout(() => {
+    if (workspaceState.status === "ready") return;
+    updateWorkspaceState({
+      status: "error",
+      error: "research_ui did not become ready before the startup timeout.",
+    });
+    appendLog("[startup-timeout] research_ui did not become ready before the timeout.");
+  }, RESEARCH_UI_STARTUP_TIMEOUT_MS);
+}
+
+async function isResearchUiReachable(baseUrl) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1000);
+  try {
+    const response = await fetch(`${String(baseUrl).replace(/\/$/, "")}${RESEARCH_UI_HEALTH_PATH}`, {
+      signal: controller.signal,
+      headers: { "User-Agent": "QuantLab-Desktop" },
+    });
+    return response.ok;
+  } catch (_error) {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function detectResearchUiServerUrl() {
+  for (const candidate of RESEARCH_UI_URLS) {
+    if (await isResearchUiReachable(candidate)) return candidate;
+  }
+  return "";
+}
+
+async function monitorResearchUiStartup() {
+  const deadline = Date.now() + RESEARCH_UI_STARTUP_TIMEOUT_MS;
+  while (researchServerProcess && Date.now() < deadline) {
+    const discoveredUrl = await detectResearchUiServerUrl();
+    if (discoveredUrl) {
+      clearResearchStartupTimer();
+      updateWorkspaceState({
+        status: "ready",
+        serverUrl: discoveredUrl,
+        error: null,
+        source: researchServerOwned ? "managed" : "external",
+      });
+      appendLog(`[startup] research_ui reachable at ${discoveredUrl}`);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
 }
 
 function resolvePythonCommand() {
@@ -533,24 +623,47 @@ function extractServerUrl(line) {
   return match ? match[1] : null;
 }
 
-function startResearchUiServer() {
+async function startResearchUiServer({ forceRestart = false } = {}) {
+  if (forceRestart) {
+    stopResearchUiServer({ force: true });
+  }
+
   if (researchServerProcess) return;
 
-  workspaceState = {
-    ...workspaceState,
+  const existingUrl = await detectResearchUiServerUrl();
+  if (existingUrl) {
+    researchServerOwned = false;
+    clearResearchStartupTimer();
+    updateWorkspaceState({
+      status: "ready",
+      serverUrl: existingUrl,
+      error: null,
+      source: "external",
+    });
+    appendLog(`[startup] reusing existing research_ui server at ${existingUrl}`);
+    return;
+  }
+
+  updateWorkspaceState({
     status: "starting",
+    serverUrl: null,
     error: null,
-  };
-  broadcastWorkspaceState();
+    source: "managed",
+  });
+  scheduleResearchStartupTimeout();
 
   researchServerProcess = spawn(resolvePythonCommand(), [SERVER_SCRIPT], {
     cwd: PROJECT_ROOT,
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  researchServerOwned = true;
 
   researchServerProcess.stdout.setEncoding("utf8");
   researchServerProcess.stderr.setEncoding("utf8");
+  monitorResearchUiStartup().catch((error) => {
+    appendLog(`[startup-monitor-error] ${error.message}`);
+  });
 
   researchServerProcess.stdout.on("data", (chunk) => {
     String(chunk || "")
@@ -560,13 +673,13 @@ function startResearchUiServer() {
         appendLog(line);
         const discoveredUrl = extractServerUrl(line);
         if (discoveredUrl) {
-          workspaceState = {
-            ...workspaceState,
+          clearResearchStartupTimer();
+          updateWorkspaceState({
             status: "ready",
             serverUrl: discoveredUrl,
             error: null,
-          };
-          broadcastWorkspaceState();
+            source: "managed",
+          });
         }
       });
   });
@@ -582,34 +695,47 @@ function startResearchUiServer() {
 
   researchServerProcess.on("exit", (code, signal) => {
     researchServerProcess = null;
-    workspaceState = {
-      ...workspaceState,
+    researchServerOwned = false;
+    clearResearchStartupTimer();
+    updateWorkspaceState({
       status: "stopped",
+      serverUrl: null,
       error: code === 0 ? null : `research_ui exited (${code ?? "null"}${signal ? `, ${signal}` : ""})`,
-    };
-    broadcastWorkspaceState();
+      source: "managed",
+    });
   });
 
   researchServerProcess.on("error", (error) => {
     researchServerProcess = null;
-    workspaceState = {
-      ...workspaceState,
+    researchServerOwned = false;
+    clearResearchStartupTimer();
+    updateWorkspaceState({
       status: "error",
+      serverUrl: null,
       error: error.message,
-    };
+      source: "managed",
+    });
     appendLog(`[spawn-error] ${error.message}`);
-    broadcastWorkspaceState();
   });
 }
 
-function stopResearchUiServer() {
-  if (!researchServerProcess) return;
+function stopResearchUiServer({ force = false } = {}) {
+  clearResearchStartupTimer();
+  if (!researchServerProcess || !researchServerOwned) return;
   try {
-    researchServerProcess.kill();
+    if (process.platform === "win32" && researchServerProcess.pid) {
+      spawn("taskkill", ["/PID", String(researchServerProcess.pid), "/T", "/F"], {
+        windowsHide: true,
+        stdio: "ignore",
+      });
+    } else {
+      researchServerProcess.kill(force ? "SIGKILL" : "SIGTERM");
+    }
   } catch (_error) {
     // Best effort shutdown.
   }
   researchServerProcess = null;
+  researchServerOwned = false;
 }
 
 function createMainWindow() {
@@ -618,6 +744,7 @@ function createMainWindow() {
     height: 960,
     minWidth: 1100,
     minHeight: 760,
+    show: !IS_SMOKE_RUN,
     autoHideMenuBar: true,
     backgroundColor: "#0b1118",
     title: "QuantLab Desktop",
@@ -630,9 +757,56 @@ function createMainWindow() {
   });
 
   mainWindow.loadFile(path.join(DESKTOP_ROOT, "renderer", "index.html"));
+  if (!IS_SMOKE_RUN) {
+    mainWindow.once("ready-to-show", () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.show();
+    });
+  }
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+}
+
+async function runDesktopSmoke() {
+  const result = {
+    bridgeReady: false,
+    serverReady: false,
+    apiReady: false,
+    serverUrl: "",
+    error: "",
+  };
+  try {
+    result.bridgeReady = await mainWindow.webContents.executeJavaScript(
+      "Boolean(window.quantlabDesktop && typeof window.quantlabDesktop.getWorkspaceState === 'function')",
+      true,
+    );
+    const deadline = Date.now() + RESEARCH_UI_STARTUP_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      if (workspaceState.serverUrl && await isResearchUiReachable(workspaceState.serverUrl)) {
+        result.serverReady = true;
+        result.apiReady = true;
+        result.serverUrl = workspaceState.serverUrl;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    if (!result.serverReady) {
+      result.error = workspaceState.error || "research_ui did not become reachable during smoke run.";
+    }
+  } catch (error) {
+    result.error = error.message;
+  }
+
+  if (SMOKE_OUTPUT_PATH) {
+    await fsp.mkdir(path.dirname(SMOKE_OUTPUT_PATH), { recursive: true });
+    await fsp.writeFile(SMOKE_OUTPUT_PATH, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+  }
+
+  if (!result.bridgeReady || !result.serverReady || !result.apiReady) {
+    process.exitCode = 1;
+  }
+  app.quit();
 }
 
 ipcMain.handle("quantlab:get-workspace-state", async () => workspaceState);
@@ -714,20 +888,50 @@ ipcMain.handle("quantlab:open-path", async (_event, targetPath) => {
   return { ok: true };
 });
 
+ipcMain.handle("quantlab:restart-workspace-server", async () => {
+  await startResearchUiServer({ forceRestart: true });
+  return workspaceState;
+});
+
 ipcMain.handle("quantlab:ask-stepbit-chat", async (_event, payload) => {
   return askStepbitChat(payload);
 });
 
-app.whenReady().then(() => {
-  createMainWindow();
-  startResearchUiServer();
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
-    }
+if (singleInstanceLock) {
+  app.on("second-instance", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
   });
-});
+
+  app.whenReady().then(() => {
+    createMainWindow();
+    startResearchUiServer();
+    if (IS_SMOKE_RUN) {
+      mainWindow.webContents.once("did-finish-load", () => {
+        runDesktopSmoke().catch((error) => {
+          if (SMOKE_OUTPUT_PATH) {
+            fsp.mkdir(path.dirname(SMOKE_OUTPUT_PATH), { recursive: true })
+              .then(() => fsp.writeFile(SMOKE_OUTPUT_PATH, `${JSON.stringify({ bridgeReady: false, serverReady: false, apiReady: false, error: error.message }, null, 2)}\n`, "utf8"))
+              .finally(() => {
+                process.exitCode = 1;
+                app.quit();
+              });
+          } else {
+            process.exitCode = 1;
+            app.quit();
+          }
+        });
+      });
+    }
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createMainWindow();
+      }
+    });
+  });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
