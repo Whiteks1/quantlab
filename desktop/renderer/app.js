@@ -325,6 +325,7 @@ async function refreshSnapshot() {
       state.selectedRunIds = filteredSelection;
       scheduleShellWorkspacePersist();
     }
+    reconcileWorkspaceTabs();
     renderWorkspaceState();
     renderWorkflow();
     refreshLiveJobTabs();
@@ -491,6 +492,92 @@ function restoreShellWorkspaceStore(store) {
   state.activeTabId = restored.active_tab_id;
   state.selectedRunIds = restored.selected_run_ids;
   applyLaunchFormState(restored.launch_form);
+}
+
+function resolveExperimentConfigPath(selectedConfigPath, configs) {
+  const configEntries = Array.isArray(configs) ? configs : [];
+  if (!configEntries.length) return null;
+  return configEntries.some((entry) => entry.path === selectedConfigPath)
+    ? selectedConfigPath
+    : configEntries[0]?.path || null;
+}
+
+function resolveExperimentSweepId(selectedSweepId, sweeps) {
+  const sweepEntries = Array.isArray(sweeps) ? sweeps : [];
+  if (!sweepEntries.length) return null;
+  const selectedSweep = sweepEntries.find((entry) => entry.run_id === selectedSweepId) || null;
+  const preferredSweep = sweepEntries.find((entry) => entry.hasStructuredData) || sweepEntries[0] || null;
+  if (selectedSweep?.hasStructuredData) return selectedSweepId;
+  if (selectedSweep && !preferredSweep?.hasStructuredData) return selectedSweepId;
+  return preferredSweep?.run_id || null;
+}
+
+function reconcileWorkspaceTabs() {
+  if (!state.tabs.length) return false;
+
+  const validRunIds = new Set(getRuns().map((run) => run.run_id));
+  const validJobIds = new Set(getJobs().map((job) => job.request_id));
+  const experimentsReady = state.experimentsWorkspace.status === "ready";
+  let changed = false;
+
+  const nextTabs = state.tabs
+    .map((tab) => {
+      if (tab.kind === "run" || tab.kind === "artifacts") {
+        if (!validRunIds.has(tab.runId)) {
+          changed = true;
+          return null;
+        }
+        return tab;
+      }
+
+      if (tab.kind === "compare") {
+        const runIds = uniqueRunIds((tab.runIds || []).filter((runId) => validRunIds.has(runId))).slice(0, CONFIG.maxCandidateCompare);
+        if (runIds.length < 2) {
+          changed = true;
+          return null;
+        }
+        if (
+          runIds.length !== (tab.runIds || []).length
+          || runIds.some((runId, index) => runId !== tab.runIds[index])
+        ) {
+          changed = true;
+          return { ...tab, runIds };
+        }
+        return tab;
+      }
+
+      if (tab.kind === "job") {
+        if (!validJobIds.has(tab.requestId)) {
+          changed = true;
+          return null;
+        }
+        return tab;
+      }
+
+      if (tab.kind === "experiments" && experimentsReady) {
+        const selectedConfigPath = resolveExperimentConfigPath(tab.selectedConfigPath, state.experimentsWorkspace.configs);
+        const selectedSweepId = resolveExperimentSweepId(tab.selectedSweepId, state.experimentsWorkspace.sweeps);
+        if (selectedConfigPath !== tab.selectedConfigPath || selectedSweepId !== tab.selectedSweepId) {
+          changed = true;
+          return {
+            ...tab,
+            selectedConfigPath,
+            selectedSweepId,
+          };
+        }
+      }
+
+      return tab;
+    })
+    .filter(Boolean);
+
+  const nextActiveTabId = nextTabs.some((tab) => tab.id === state.activeTabId) ? state.activeTabId : nextTabs[0]?.id || null;
+  if (!changed && nextActiveTabId === state.activeTabId) return false;
+
+  state.tabs = nextTabs;
+  state.activeTabId = nextActiveTabId;
+  if (state.workspaceStoreLoaded) scheduleShellWorkspacePersist();
+  return true;
 }
 
 function scheduleShellWorkspacePersist() {
@@ -1740,8 +1827,8 @@ async function refreshExperimentsWorkspace({ focusTab = false, silent = true } =
     if (experimentsTab) {
       const nextTab = {
         ...experimentsTab,
-        selectedConfigPath: experimentsTab.selectedConfigPath || workspace.configs[0]?.path || null,
-        selectedSweepId: experimentsTab.selectedSweepId || workspace.sweeps[0]?.run_id || null,
+        selectedConfigPath: resolveExperimentConfigPath(experimentsTab.selectedConfigPath, workspace.configs),
+        selectedSweepId: resolveExperimentSweepId(experimentsTab.selectedSweepId, workspace.sweeps),
       };
       if (focusTab) {
         upsertTab(nextTab);
@@ -1752,6 +1839,7 @@ async function refreshExperimentsWorkspace({ focusTab = false, silent = true } =
     } else if (focusTab) {
       renderTabs();
     }
+    reconcileWorkspaceTabs();
     rerenderContextualTabs();
     if (!silent) {
       pushMessage(
@@ -1805,6 +1893,8 @@ async function buildExperimentsWorkspace() {
 async function buildSweepSummary(entry) {
   const rootPath = entry.path;
   const fileListing = await window.quantlabDesktop.listDirectory(rootPath, 0).catch(() => ({ entries: [], truncated: false }));
+  const files = fileListing.entries || [];
+  const hasFile = (fileName) => files.some((file) => file.name === fileName);
   const metaPath = `${rootPath}\\meta.json`;
   const leaderboardPath = `${rootPath}\\leaderboard.csv`;
   const experimentsPath = `${rootPath}\\experiments.csv`;
@@ -1812,10 +1902,10 @@ async function buildSweepSummary(entry) {
   const configResolvedPath = `${rootPath}\\config_resolved.yaml`;
 
   const [meta, leaderboardText, experimentsText, walkforwardText] = await Promise.all([
-    readOptionalProjectJson(metaPath),
-    readOptionalProjectText(leaderboardPath),
-    readOptionalProjectText(experimentsPath),
-    readOptionalProjectText(walkforwardSummaryPath),
+    hasFile("meta.json") ? readOptionalProjectJson(metaPath) : Promise.resolve(null),
+    hasFile("leaderboard.csv") ? readOptionalProjectText(leaderboardPath) : Promise.resolve(""),
+    hasFile("experiments.csv") ? readOptionalProjectText(experimentsPath) : Promise.resolve(""),
+    hasFile("walkforward_summary.csv") ? readOptionalProjectText(walkforwardSummaryPath) : Promise.resolve(""),
   ]);
 
   const leaderboardRows = parseCsvPreviewRows(leaderboardText, CONFIG.maxSweepRows);
@@ -1826,6 +1916,13 @@ async function buildSweepSummary(entry) {
     meta?.run_id || basenameValue(rootPath),
     meta?.config_path || "",
     Array.isArray(meta?.top10) && meta.top10.length ? meta.top10.slice(0, CONFIG.maxSweepRows) : leaderboardRows,
+  );
+  const hasStructuredData = Boolean(
+    leaderboardRows.length
+    || walkforwardRows.length
+    || experimentsRows.length
+    || decisionRows.length
+    || (Array.isArray(meta?.top10) && meta.top10.length),
   );
 
   return {
@@ -1844,13 +1941,14 @@ async function buildSweepSummary(entry) {
     decisionRows,
     leaderboardRows,
     walkforwardRows,
-    files: fileListing.entries || [],
+    files,
     filesTruncated: Boolean(fileListing.truncated),
     metaPath,
     leaderboardPath,
     experimentsPath,
     walkforwardSummaryPath,
     configResolvedPath,
+    hasStructuredData,
     headlineReturn: coerceNumber(firstRow?.total_return),
     headlineSharpe: coerceNumber(firstRow?.sharpe_simple || firstRow?.best_test_sharpe),
     headlineDrawdown: coerceNumber(firstRow?.max_drawdown),
