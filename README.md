@@ -206,6 +206,7 @@ See also:
 - `--paper-sessions-show`: inspect a single paper session directory
 - `--paper-sessions-health`: summarize health across paper sessions
 - `--paper-sessions-alerts`: emit a deterministic alert snapshot for paper sessions
+- `--paper-sessions-promotion`: emit a broker-promotion report for paper sessions
 - `--paper-sessions-index`: refresh a shared paper-session index under the paper root
 - `--hyperliquid-preflight-outdir`: persist a read-only Hyperliquid venue preflight artifact
 - `--hyperliquid-account-readiness-outdir`: persist a read-only Hyperliquid account and signer readiness artifact
@@ -351,6 +352,7 @@ python main.py --paper-sessions-index outputs/paper_sessions
 Operational guidance:
 
 - see [docs/paper-session-runbook.md](./docs/paper-session-runbook.md) for the recommended paper-session operating loop and response guidance
+- see [docs/paper-session-runbook.md](./docs/paper-session-runbook.md) for the paper-to-broker promotion report and its criteria
 - see [docs/supervised-broker-runbook.md](./docs/supervised-broker-runbook.md) for the current happy-path and failure-path guidance over supervised Kraken and Hyperliquid corridors
 
 ### Forward

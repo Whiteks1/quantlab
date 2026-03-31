@@ -128,22 +128,63 @@ def _paper_status_payload(
     session_id: str,
     status: str,
     request_id: str | None,
+    started_at: str,
     message: str | None = None,
     error_type: str | None = None,
+    finished_at: str | None = None,
+    terminal_reason: str | None = None,
 ) -> dict[str, Any]:
+    updated_at = dt.datetime.now().isoformat()
+    terminal = status in {"success", "failed", "aborted"}
+    final_finished_at = finished_at or (updated_at if terminal else None)
+    status_reason = terminal_reason
+    if status_reason is None:
+        if status == "success":
+            status_reason = "completed"
+        elif status == "failed":
+            status_reason = "exception"
+        elif status == "aborted":
+            status_reason = "operator_abort"
+        else:
+            status_reason = "active"
+
     payload: dict[str, Any] = {
         "session_id": session_id,
         "mode": "paper",
         "command": "paper",
         "status": status,
         "request_id": request_id,
-        "updated_at": dt.datetime.now().isoformat(),
+        "started_at": started_at,
+        "updated_at": updated_at,
+        "terminal": terminal,
+        "status_reason": status_reason,
     }
+    if final_finished_at:
+        payload["finished_at"] = final_finished_at
+        try:
+            started_dt = dt.datetime.fromisoformat(started_at)
+            finished_dt = dt.datetime.fromisoformat(final_finished_at)
+        except ValueError:
+            pass
+        else:
+            payload["duration_seconds"] = max(
+                0.0,
+                round((finished_dt - started_dt).total_seconds(), 6),
+            )
     if message:
         payload["message"] = message
     if error_type:
         payload["error_type"] = error_type
     return payload
+
+
+def _refresh_paper_sessions_index(root_dir: Path) -> None:
+    from quantlab.reporting.paper_session_index import write_paper_sessions_index
+
+    try:
+        write_paper_sessions_index(root_dir)
+    except Exception as exc:
+        print(f"WARNING: Failed to refresh paper_sessions_index.*: {exc}")
 
 
 def handle_run_command(args) -> bool:
@@ -155,13 +196,14 @@ def handle_run_command(args) -> bool:
 
     config = _build_run_config(args)
     request_id = getattr(args, "_request_id", None)
+    started_at = dt.datetime.now().isoformat()
+    paper_sessions_root = (Path("outputs") / "paper_sessions").resolve()
 
     paper_store = None
     paper_session_id = None
     paper_session_dir = None
     if args.paper:
         paper_session_id = generate_run_id("paper", config)
-        paper_sessions_root = (Path("outputs") / "paper_sessions").resolve()
         paper_store = PaperSessionStore(paper_session_id, base_dir=str(paper_sessions_root))
         paper_session_dir = paper_store.initialize().resolve()
 
@@ -171,7 +213,7 @@ def handle_run_command(args) -> bool:
             "mode": "paper",
             "command": "paper",
             "status": "running",
-            "created_at": dt.datetime.now().isoformat(),
+            "created_at": started_at,
             "git_commit": _get_git_commit(),
             "python_executable": sys.executable,
             "python_version": sys.version,
@@ -186,6 +228,7 @@ def handle_run_command(args) -> bool:
                 session_id=paper_session_id,
                 status="running",
                 request_id=request_id,
+                started_at=started_at,
             )
         )
 
@@ -351,8 +394,10 @@ def handle_run_command(args) -> bool:
                     session_id=paper_session_id,
                     status="success",
                     request_id=request_id,
+                    started_at=started_at,
                 )
             )
+            _refresh_paper_sessions_index(paper_sessions_root)
 
             if args.report is True:
                 print("\n=== REPORT ===")
@@ -388,10 +433,12 @@ def handle_run_command(args) -> bool:
                     session_id=paper_session_id,
                     status="aborted",
                     request_id=request_id,
+                    started_at=started_at,
                     message="Aborted by user",
                     error_type="KeyboardInterrupt",
                 )
             )
+            _refresh_paper_sessions_index(paper_sessions_root)
         raise
     except Exception as exc:
         if paper_store is not None and paper_session_id is not None:
@@ -400,10 +447,12 @@ def handle_run_command(args) -> bool:
                     session_id=paper_session_id,
                     status="failed",
                     request_id=request_id,
+                    started_at=started_at,
                     message=str(exc),
                     error_type=exc.__class__.__name__,
                 )
             )
+            _refresh_paper_sessions_index(paper_sessions_root)
         raise
 
 

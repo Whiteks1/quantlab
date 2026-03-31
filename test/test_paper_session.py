@@ -111,6 +111,20 @@ def test_paper_run_creates_dedicated_session_artifacts(monkeypatch, tmp_path):
     status = json.loads((session_dir / "session_status.json").read_text(encoding="utf-8"))
     assert status["session_id"] == session_id
     assert status["status"] == "success"
+    assert status["terminal"] is True
+    assert status["status_reason"] == "completed"
+    assert status["started_at"]
+    assert status["finished_at"]
+    assert status["duration_seconds"] >= 0.0
+
+    index_payload = json.loads(
+        (tmp_path / "outputs" / "paper_sessions" / "paper_sessions_index.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    indexed = {row["session_id"]: row for row in index_payload["sessions"]}
+    assert indexed[session_id]["terminal"] is True
+    assert indexed[session_id]["status_reason"] == "completed"
 
     report = json.loads((session_dir / "report.json").read_text(encoding="utf-8"))
     assert report["header"]["mode"] == "paper"
@@ -132,9 +146,20 @@ def test_paper_run_persists_failed_session_status(monkeypatch, tmp_path):
         handle_run_command(_make_args())
 
     sessions_root = tmp_path / "outputs" / "paper_sessions"
-    session_dirs = list(sessions_root.iterdir())
+    session_dirs = [path for path in sessions_root.iterdir() if path.is_dir()]
     assert len(session_dirs) == 1
 
     status = json.loads((session_dirs[0] / "session_status.json").read_text(encoding="utf-8"))
     assert status["status"] == "failed"
     assert status["error_type"] == "DataError"
+    assert status["terminal"] is True
+    assert status["status_reason"] == "exception"
+    assert status["started_at"]
+    assert status["finished_at"]
+    assert status["duration_seconds"] >= 0.0
+
+    index_payload = json.loads((sessions_root / "paper_sessions_index.json").read_text(encoding="utf-8"))
+    indexed = {row["session_id"]: row for row in index_payload["sessions"]}
+    failed_session_id = session_dirs[0].name
+    assert indexed[failed_session_id]["status"] == "failed"
+    assert indexed[failed_session_id]["status_reason"] == "exception"

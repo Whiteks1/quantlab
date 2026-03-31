@@ -209,6 +209,22 @@ This writes:
 
 The index is intentionally separate from `outputs/runs/runs_index.*` and is meant for repeated paper-session operations.
 
+### `--paper-sessions-promotion`
+
+Emit a broker-promotion report for paper sessions:
+
+```bash
+python main.py --paper-sessions-promotion outputs/paper_sessions
+```
+
+The promotion report highlights:
+
+- paper sessions that are ready to move toward the broker boundary
+- paper sessions that are still blocked and why
+- the latest ready and blocked sessions for operator review
+
+This command is meant to help bridge paper work into the supervised broker boundary without changing execution authority.
+
 ## 5. Broker Dry-Run
 
 ## 5.5. Broker Evidence Readiness
