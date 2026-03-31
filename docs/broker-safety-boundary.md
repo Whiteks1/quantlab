@@ -133,6 +133,7 @@ After this submit-safety slice is stable, the next logical implementation step i
 ## Related Documents
 
 - [roadmap.md](./roadmap.md)
+- [supervised-broker-runbook.md](./supervised-broker-runbook.md)
 - [execution-context-layer.md](./execution-context-layer.md)
 - [execution-venue-strategy.md](./execution-venue-strategy.md)
 - [hyperliquid-boundary-review.md](./hyperliquid-boundary-review.md)
