@@ -168,7 +168,7 @@ Exit condition:
 
 ## Stage C.1 - Paper Trading Operationalization
 
-Status: next QuantLab-owned product stage
+Status: supporting stage, no longer the primary bottleneck
 
 Goal:
 
@@ -186,6 +186,12 @@ Scope:
 Exit condition:
 
 - QuantLab can run paper sessions repeatedly with traceability, alerts, and enough operator confidence to treat them as a real dry operational environment
+
+Current interpretation:
+
+- `Stage C.1` still matters because paper-session discipline remains the promotion floor for broker-facing work
+- but it is no longer the main unresolved runtime frontier
+- from the current repository state, paper work should now be prioritized when it strengthens operator visibility, promotion discipline, or broker-readiness handoff rather than treated as the dominant roadmap stage
 
 ## Stage O.1 - Integration Hardening
 
@@ -366,6 +372,15 @@ Initial slice already present:
 - authenticated reconciliation of submit sessions against Kraken order state using stable session-derived `userref`
 - persistent broker order-status artifacts with normalized local state for submitted sessions
 - broker submission health summaries and alert snapshots over broker order-validation sessions
+- first supervised Hyperliquid submit response artifacts generated from previously signed action artifacts
+- canonical Hyperliquid submit sessions with persistent order-status, reconciliation, fill-summary, supervision, cancel-response, health, and alert artifacts
+- bounded Hyperliquid continuous supervision built as an artifact-first polling surface rather than a daemon-first runtime
+
+Current interpretation:
+
+- `Stage D.2` is the active QuantLab-owned execution frontier
+- the main remaining work is no longer to invent the first supervised corridor, but to validate real operator use, tighten ambiguous-submit handling, and keep post-submit supervision credible
+- the highest-value next steps are therefore evidence-producing and hardening-oriented: real artifact runs, tighter runbooks, promotion criteria, and focused fixes on whichever supervised path still fails under realistic use
 
 Exit condition:
 
@@ -436,15 +451,13 @@ Exit condition:
 
 From the current repository state, the most rational order is:
 
-1. complete Stage C.1 paper-trading operationalization
-2. continue Stage O producer-side stabilization only where real integration friction requires it
-3. harden Stage O.1 integration fixtures only if consumer feedback justifies them
-4. design and implement Stage D.0 safety boundary
-5. add Stage D.1 broker dry-run integration, starting with Kraken
-6. add the second venue comparison layer with Hyperliquid once the Kraken boundary is stable enough to generalize
-7. validate broker behavior in Stage D.2
-8. enter Stage E supervised live execution
-9. only then move into Stage F controlled automation
+1. harden the already-implemented `Stage D.2` supervised broker corridors with real operator evidence, reconciliation discipline, and post-submit clarity
+2. continue `Stage C.1` paper-trading polish where it directly improves promotion discipline, runbooks, and paper-to-broker readiness
+3. continue `Stage O` producer-side stabilization only where real integration friction requires it
+4. harden `Stage O.1` integration fixtures only if consumer feedback justifies them
+5. avoid reopening `Stage D.0` / `D.1` as primary stages unless a real hardening gap proves the current boundary insufficient
+6. enter `Stage E` supervised live execution only after the current `D.2` corridors are operationally credible
+7. only then move into `Stage F` controlled automation
 
 ## What Should Not Happen Early
 
@@ -452,6 +465,7 @@ From the current repository state, the most rational order is:
 - no live broker work before safety limits and kill-switch behavior exist
 - no exchange-specific strategy or risk logic outside `BrokerAdapter`
 - no expansion of external orchestration before the paper and safety layers are operationally trustworthy
+- no new venue or UI expansion before the existing supervised corridors produce credible operational evidence
 - no collapsing of QuantLab and Stepbit responsibilities into one codebase
 
 ## Related Documents

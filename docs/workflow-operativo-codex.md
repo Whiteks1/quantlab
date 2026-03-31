@@ -142,18 +142,19 @@ Al final:
 
 A día de hoy, el orden correcto es:
 
-1. `Stage C.1 - Paper Trading Operationalization`
-2. hardening puntual de frontera externa solo si hay fricción real
-3. `Stage D.0 - Real Execution Safety Boundary`
-4. broker dry-run
-5. sandbox / simulación
-6. live supervisado
-7. automatización controlada
+1. cerrar y endurecer `Stage D.2 - supervised broker submit safety` sobre los corredores ya implementados
+2. seguir puliendo `Stage C.1 - Paper Trading Operationalization` cuando fortalezca promoción, runbooks o visibilidad operativa
+3. hardening puntual de frontera externa solo si hay fricción real
+4. no reabrir `Stage D.0` o `Stage D.1` como bloques principales salvo que un fallo real demuestre un gap de boundary
+5. pasar a `live supervisado` solo cuando el corredor actual tenga evidencia operativa creíble
+6. dejar `automatización controlada` para después de esa credibilidad operativa
 
 Interpretación:
 
 - Stepbit no dicta el roadmap de QuantLab
 - la frontera externa se mejora cuando ayuda, no cuando desplaza prioridades soberanas
+- `paper` sigue siendo prerrequisito, pero ya no es el cuello principal del roadmap
+- la prioridad actual es producir evidencia real y endurecer el punto exacto que falle en los corredores supervisados existentes
 
 ## Autoridad documental
 
