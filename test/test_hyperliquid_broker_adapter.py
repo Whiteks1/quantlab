@@ -920,6 +920,61 @@ def test_hyperliquid_submit_report_rejects_unsigned_artifact():
     assert "signed_action_not_signed" in report["errors"]
 
 
+def test_hyperliquid_submit_report_accepts_json_safe_signed_action_artifact():
+    adapter = HyperliquidBrokerAdapter()
+    policy = ExecutionPolicy(max_notional_per_order=1000.0)
+    signer_private_key = "0x59c6995e998f97a5a0044966f0945382d7f6f9d5c4bbf34c95a98e2ce42928f1"
+    context = ExecutionContext(
+        execution_account_id="0x1111111111111111111111111111111111111111",
+        signer_id="0x4ad91849099DcD0E9e4b80214D8B4969a69f1861",
+        signer_type="agent_wallet",
+        routing_target="subaccount",
+        transport_preference="websocket",
+        expires_after=60000,
+        nonce_hint=1700000000000,
+    )
+
+    def fake_fetch_json(payload, **kwargs):
+        if payload["type"] == "allMids":
+            return {"ETH": "2450.1"}
+        if payload["type"] == "meta":
+            return {"universe": [{"name": "ETH", "szDecimals": 4}]}
+        if payload["type"] == "userRole" and payload["user"] == "0x1111111111111111111111111111111111111111":
+            return {"role": "subAccount"}
+        if payload["type"] == "userRole" and payload["user"] == "0x4ad91849099DcD0E9e4b80214D8B4969a69f1861":
+            return {"role": "agent"}
+        if payload["type"] == "openOrders":
+            return []
+        if payload["type"] == "frontendOpenOrders":
+            return []
+        raise AssertionError(payload)
+
+    signed_action = adapter.build_signed_action_report(
+        _make_intent(),
+        policy,
+        context=context,
+        fetch_json=fake_fetch_json,
+        signing_private_key=signer_private_key,
+    ).to_dict()
+
+    submit_report = adapter.build_submit_report(
+        source_artifact_path="C:/tmp/hyperliquid_signed_action.json",
+        signed_action_artifact=signed_action,
+        reviewer="marce",
+        note="ready",
+        remote_submit=False,
+    ).to_dict()
+
+    json.dumps(submit_report)
+    assert submit_report["artifact_type"] == "quantlab.hyperliquid.submit_response"
+    assert submit_report["submitted"] is False
+    assert submit_report["remote_submit_called"] is False
+    assert submit_report["submit_state"] == "pending_remote_submit"
+    assert isinstance(submit_report["source_action_hash"], str)
+    assert isinstance(submit_report["source_signer_id"], str)
+    assert isinstance(submit_report["source_signing_payload_sha256"], str)
+
+
 def test_hyperliquid_cancel_report_submits_signed_cancel():
     adapter = HyperliquidBrokerAdapter()
     policy = ExecutionPolicy(max_notional_per_order=1000.0)
