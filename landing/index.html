@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuantLab | Shell de trabajo cuantitativo</title>
+  <meta
+    name="description"
+    content="QuantLab es una shell de trabajo para research cuantitativo, paper trading disciplinado y execution supervisada."
+  >
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-header">
+      <div class="brand">
+        <div class="brand-mark">QL</div>
+        <div>
+          <div class="brand-title">QuantLab</div>
+          <div class="brand-subtitle">Research workspace</div>
+        </div>
+      </div>
+      <nav class="site-nav">
+        <a href="#workflow">Workflow</a>
+        <a href="#preview">Preview</a>
+        <a href="#layers">Capas</a>
+        <a href="#roadmap">Roadmap</a>
+      </nav>
+      <a class="header-cta" href="#cta">Ver producto</a>
+    </header>
+
+    <main>
+      <section class="hero section">
+        <div class="hero-copy">
+          <div class="eyebrow">Research, paper discipline y execution safety</div>
+          <h1>QuantLab es tu shell de trabajo para investigacion cuantitativa y ejecucion supervisada.</h1>
+          <p class="hero-text">
+            Una superficie unificada para lanzar experimentos, revisar runs, comparar resultados,
+            inspeccionar artifacts y avanzar solo cuando el sistema esta listo.
+          </p>
+          <div class="cta-row">
+            <a class="button button-primary" href="#preview">Ver la shell</a>
+            <a class="button button-secondary" href="#workflow">Entender el workflow</a>
+          </div>
+          <div class="badge-row">
+            <span class="badge">Experiments</span>
+            <span class="badge">Runs</span>
+            <span class="badge">Compare</span>
+            <span class="badge">Artifacts</span>
+            <span class="badge">Paper Ops</span>
+            <span class="badge">Execution Boundaries</span>
+          </div>
+        </div>
+
+        <div class="hero-visual panel">
+          <div class="window-chrome">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="workspace-preview">
+            <aside class="workspace-sidebar">
+              <div class="workspace-label">Shell</div>
+              <div class="workspace-item active">Chat</div>
+              <div class="workspace-item">Experiments</div>
+              <div class="workspace-item">Runs</div>
+              <div class="workspace-item">Candidates</div>
+              <div class="workspace-item">Compare</div>
+              <div class="workspace-item">Paper Ops</div>
+            </aside>
+            <div class="workspace-main">
+              <div class="preview-strip">
+                <div class="strip-chip up">research_ui up</div>
+                <div class="strip-chip warn">stepbit optional</div>
+                <div class="strip-chip up">paper health ok</div>
+              </div>
+              <div class="preview-grid">
+                <div class="preview-card primary">
+                  <div class="card-label">Run Explorer</div>
+                  <div class="metric-row"><span>ETH-USD</span><strong>Sharpe 1.42</strong></div>
+                  <div class="metric-row"><span>Walkforward</span><strong>Drawdown -12.4%</strong></div>
+                  <div class="metric-row"><span>Artifacts</span><strong>report.json</strong></div>
+                </div>
+                <div class="preview-card">
+                  <div class="card-label">Candidates</div>
+                  <ul class="mini-list">
+                    <li>baseline_run_001</li>
+                    <li>candidate_eth_grid</li>
+                    <li>paper_ready_shortlist</li>
+                  </ul>
+                </div>
+                <div class="preview-card wide">
+                  <div class="card-label">Command bus</div>
+                  <div class="terminal-line">$ open latest run</div>
+                  <div class="terminal-line">$ compare selected</div>
+                  <div class="terminal-line">$ prepare paper</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <div class="eyebrow">Problema</div>
+          <h2>El problema no es ver datos. El problema es trabajar con continuidad.</h2>
+          <p>
+            Herramientas dispersas, runs aislados, dashboards muertos y poca trazabilidad entre research,
+            paper y execution safety. QuantLab existe para convertir ese caos en workflow operativo.
+          </p>
+        </div>
+        <div class="problem-grid">
+          <article class="panel problem-card">
+            <h3>Demasiadas superficies</h3>
+            <p>Varios scripts, varios outputs y varias ventanas sin una shell principal de trabajo.</p>
+          </article>
+          <article class="panel problem-card">
+            <h3>Runs sin contexto</h3>
+            <p>Resultados aislados que no ayudan a decidir que merece seguir vivo.</p>
+          </article>
+          <article class="panel problem-card">
+            <h3>Poca memoria operativa</h3>
+            <p>Sin shortlist, baseline ni artifacts claros, cada iteracion empieza casi desde cero.</p>
+          </article>
+          <article class="panel problem-card">
+            <h3>Research sin handoff</h3>
+            <p>La transicion a paper y a execution safety se vuelve ambigua y fragil.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <div class="eyebrow">Superficies</div>
+          <h2>QuantLab organiza el trabajo por objetos y decisiones, no por pantallas vacias.</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="panel feature-card">
+            <h3>Experiments</h3>
+            <p>Preparar hipotesis, cargar configs, lanzar sweeps y revisar lotes recientes.</p>
+          </article>
+          <article class="panel feature-card">
+            <h3>Runs</h3>
+            <p>Explorer principal con resultados, estado, config y acceso directo al detalle.</p>
+          </article>
+          <article class="panel feature-card">
+            <h3>Compare</h3>
+            <p>Comparar runs, detectar diferencias y cerrar mejor el proceso de decision.</p>
+          </article>
+          <article class="panel feature-card">
+            <h3>Artifacts</h3>
+            <p>Explorar report.json, metrics, config resuelta, logs y salidas canonicamente.</p>
+          </article>
+          <article class="panel feature-card">
+            <h3>Candidates / Shortlist</h3>
+            <p>Marcar candidatos, fijar baseline y separar lo prometedor del ruido.</p>
+          </article>
+          <article class="panel feature-card">
+            <h3>Paper Ops</h3>
+            <p>Operar paper sessions con estado, alertas, continuidad y lectura de errores.</p>
+          </article>
+          <article class="panel feature-card">
+            <h3>Pre-trade intake</h3>
+            <p>Leer handoffs de trabajo previo sin mezclar planning externo con la autoridad de QuantLab.</p>
+          </article>
+          <article class="panel feature-card">
+            <h3>Execution boundaries</h3>
+            <p>Preparar promotion y seguridad antes de cualquier automation o live boundary.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="workflow" class="section">
+        <div class="section-heading">
+          <div class="eyebrow">Workflow real</div>
+          <h2>Una maquina de pensamiento cuantitativo.</h2>
+          <p>QuantLab esta pensado para sostener el ciclo completo de investigacion y decision.</p>
+        </div>
+        <div class="workflow-timeline">
+          <article class="timeline-step panel">
+            <div class="step-index">01</div>
+            <h3>Definir hipotesis</h3>
+            <p>Elegir estrategia, rango, activos y parametros iniciales.</p>
+          </article>
+          <article class="timeline-step panel">
+            <div class="step-index">02</div>
+            <h3>Lanzar run o sweep</h3>
+            <p>Ejecutar de forma reproducible y dejar artifacts persistidos.</p>
+          </article>
+          <article class="timeline-step panel">
+            <div class="step-index">03</div>
+            <h3>Inspeccionar resultados</h3>
+            <p>Leer metricas, config y errores desde una misma superficie.</p>
+          </article>
+          <article class="timeline-step panel">
+            <div class="step-index">04</div>
+            <h3>Comparar alternativas</h3>
+            <p>Separar resultados competitivos de resultados irrelevantes.</p>
+          </article>
+          <article class="timeline-step panel">
+            <div class="step-index">05</div>
+            <h3>Marcar candidatos</h3>
+            <p>Crear shortlist, baseline y memoria operativa local.</p>
+          </article>
+          <article class="timeline-step panel">
+            <div class="step-index">06</div>
+            <h3>Promover a paper</h3>
+            <p>Solo avanzar cuando el research ya ha demostrado continuidad suficiente.</p>
+          </article>
+          <article class="timeline-step panel">
+            <div class="step-index">07</div>
+            <h3>Preparar execution con seguridad</h3>
+            <p>Boundaries explicitos, handoffs claros y automation solo cuando toca.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="layers" class="section">
+        <div class="section-heading">
+          <div class="eyebrow">Capas del producto</div>
+          <h2>QuantLab no es una sola UI; es un sistema con fronteras claras.</h2>
+        </div>
+        <div class="layers-grid">
+          <article class="panel layer-card">
+            <div class="layer-tag">Motor cuantitativo</div>
+            <p>Runs, sweeps, paper sessions y reporting canonicamente definidos.</p>
+          </article>
+          <article class="panel layer-card">
+            <div class="layer-tag">Artifacts canonicos</div>
+            <p>report.json, metrics, metadata, status e indices compartidos como contrato real.</p>
+          </article>
+          <article class="panel layer-card">
+            <div class="layer-tag">Desktop shell</div>
+            <p>Superficie unificada para lanzar, revisar, comparar y decidir.</p>
+          </article>
+          <article class="panel layer-card">
+            <div class="layer-tag">Operational boundaries</div>
+            <p>Paper, broker safety y handoffs tratados como capas disciplinadas, no como atajos.</p>
+          </article>
+          <article class="panel layer-card">
+            <div class="layer-tag">Stepbit opcional</div>
+            <p>Copiloto externo y acoplado por contrato. No define la soberania de QuantLab.</p>
+          </article>
+          <article class="panel layer-card">
+            <div class="layer-tag">Pre-trade upstream</div>
+            <p>La calculadora externa prepara handoffs. QuantLab valida, decide y ejecuta.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <div class="eyebrow">Principios</div>
+          <h2>Menos ruido, mas disciplina.</h2>
+        </div>
+        <div class="principles-grid">
+          <div class="principle">Reproducibilidad</div>
+          <div class="principle">Auditabilidad</div>
+          <div class="principle">Claridad operativa</div>
+          <div class="principle">Control local</div>
+          <div class="principle">Boundaries explicitos</div>
+          <div class="principle">Automation solo cuando el sistema esta preparado</div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <div class="eyebrow">Research to execution safety</div>
+          <h2>La prioridad no es automatizar antes. La prioridad es madurar el sistema.</h2>
+        </div>
+        <div class="maturity-rail">
+          <div class="maturity-step">
+            <span>Research</span>
+            <p>Hipotesis y ejecucion reproducible.</p>
+          </div>
+          <div class="maturity-step">
+            <span>Validation</span>
+            <p>Compare, artifacts y shortlist.</p>
+          </div>
+          <div class="maturity-step">
+            <span>Paper</span>
+            <p>Sesiones operativas con visibilidad real.</p>
+          </div>
+          <div class="maturity-step">
+            <span>Execution safety</span>
+            <p>Boundaries, preflight y handoffs claros.</p>
+          </div>
+          <div class="maturity-step">
+            <span>Supervised live</span>
+            <p>Solo cuando la disciplina ya esta consolidada.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="preview" class="section">
+        <div class="section-heading">
+          <div class="eyebrow">Product preview</div>
+          <h2>Una shell, varias superficies, un mismo flujo de trabajo.</h2>
+        </div>
+        <div class="preview-gallery">
+          <article class="panel preview-surface">
+            <div class="surface-head">
+              <span>Desktop shell</span>
+              <strong>Chat + tabs + runtime strip</strong>
+            </div>
+            <div class="surface-body shell-surface">
+              <div class="surface-column"></div>
+              <div class="surface-chat">
+                <div class="chat-bubble">open latest run</div>
+                <div class="chat-bubble muted">compare selected</div>
+              </div>
+              <div class="surface-tab"></div>
+            </div>
+          </article>
+
+          <article class="panel preview-surface">
+            <div class="surface-head">
+              <span>Runs explorer</span>
+              <strong>Historial, estado y contexto</strong>
+            </div>
+            <div class="surface-table">
+              <div class="table-row header"><span>Run</span><span>Sharpe</span><span>Return</span></div>
+              <div class="table-row"><span>run_eth_001</span><span>1.42</span><span>18.2%</span></div>
+              <div class="table-row"><span>run_eth_002</span><span>1.10</span><span>11.4%</span></div>
+              <div class="table-row"><span>run_eth_003</span><span>0.88</span><span>7.1%</span></div>
+            </div>
+          </article>
+
+          <article class="panel preview-surface">
+            <div class="surface-head">
+              <span>Compare</span>
+              <strong>Diferencias y ganador</strong>
+            </div>
+            <div class="compare-bars">
+              <div class="compare-bar"><label>Sharpe</label><span></span></div>
+              <div class="compare-bar"><label>Drawdown</label><span class="alt"></span></div>
+              <div class="compare-bar"><label>Win rate</label><span></span></div>
+            </div>
+          </article>
+
+          <article class="panel preview-surface">
+            <div class="surface-head">
+              <span>Artifacts</span>
+              <strong>Contrato y evidencia</strong>
+            </div>
+            <div class="artifact-stack">
+              <div>report.json</div>
+              <div>metrics.json</div>
+              <div>config.json</div>
+              <div>session_status.json</div>
+            </div>
+          </article>
+
+          <article class="panel preview-surface">
+            <div class="surface-head">
+              <span>Paper Ops</span>
+              <strong>Now / Watch / Next</strong>
+            </div>
+            <div class="ops-grid">
+              <div class="ops-card">Running session</div>
+              <div class="ops-card">Latest issue</div>
+              <div class="ops-card">Promotion readiness</div>
+            </div>
+          </article>
+
+          <article class="panel preview-surface">
+            <div class="surface-head">
+              <span>Experiments / Launch</span>
+              <strong>Hipotesis y ejecucion</strong>
+            </div>
+            <div class="launch-form">
+              <div class="launch-field"></div>
+              <div class="launch-field"></div>
+              <div class="launch-field short"></div>
+              <div class="launch-button">Launch sweep</div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <div class="eyebrow">Diferenciacion</div>
+          <h2>QuantLab no compite por tener mas widgets. Compite por claridad, continuidad y control.</h2>
+        </div>
+        <div class="comparison-table panel">
+          <div class="comparison-row comparison-head">
+            <span>Enfoque</span>
+            <span>Research</span>
+            <span>Decision</span>
+            <span>Paper discipline</span>
+            <span>Execution boundary</span>
+          </div>
+          <div class="comparison-row">
+            <span>Dashboard bonito</span>
+            <span>Parcial</span>
+            <span>Bajo</span>
+            <span>No</span>
+            <span>No</span>
+          </div>
+          <div class="comparison-row">
+            <span>Bot automatico</span>
+            <span>Debil</span>
+            <span>Opaco</span>
+            <span>No</span>
+            <span>Riesgoso</span>
+          </div>
+          <div class="comparison-row">
+            <span>Broker UI</span>
+            <span>No</span>
+            <span>Bajo</span>
+            <span>Parcial</span>
+            <span>Si</span>
+          </div>
+          <div class="comparison-row emphasis">
+            <span>QuantLab</span>
+            <span>Si</span>
+            <span>Si</span>
+            <span>Si</span>
+            <span>Si</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="roadmap" class="section">
+        <div class="section-heading">
+          <div class="eyebrow">Roadmap</div>
+          <h2>Progresion controlada del sistema.</h2>
+        </div>
+        <div class="roadmap-grid">
+          <article class="panel roadmap-card">
+            <span>01</span>
+            <h3>Shell madura</h3>
+            <p>Workspace mas robusta, menos friccion y mejor continuidad entre superficies.</p>
+          </article>
+          <article class="panel roadmap-card">
+            <span>02</span>
+            <h3>Contratos del motor</h3>
+            <p>Artifacts, estados, paper sessions e indices mas estables y legibles.</p>
+          </article>
+          <article class="panel roadmap-card">
+            <span>03</span>
+            <h3>Paper Ops mas fuertes</h3>
+            <p>Mas disciplina operativa antes de subir el liston de execution.</p>
+          </article>
+          <article class="panel roadmap-card">
+            <span>04</span>
+            <h3>Execution safety</h3>
+            <p>Preflight, submit supervision y boundaries de broker mas serios.</p>
+          </article>
+          <article class="panel roadmap-card">
+            <span>05</span>
+            <h3>Automation controlada</h3>
+            <p>Solo despues de que research, paper y safety tengan suficiente madurez.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="cta" class="section final-cta">
+        <div class="panel final-cta-panel">
+          <div class="eyebrow">QuantLab</div>
+          <h2>Construido para pensar, comparar y decidir con rigor.</h2>
+          <p>
+            Una shell cuantitativa para convertir research reproducible en workflow operativo,
+            sin perder trazabilidad, control local ni disciplina antes de execution real.
+          </p>
+          <div class="cta-row">
+            <a class="button button-primary" href="#preview">Explorar preview</a>
+            <a class="button button-secondary" href="#workflow">Ver workflow</a>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
