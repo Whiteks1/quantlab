@@ -91,6 +91,7 @@ def determine_session_mode(args: argparse.Namespace, json_command: str | None) -
         or args.paper_sessions_show
         or args.paper_sessions_health
         or args.paper_sessions_alerts
+        or args.paper_sessions_promotion
         or args.paper_sessions_index
     ):
         return "paper_sessions"

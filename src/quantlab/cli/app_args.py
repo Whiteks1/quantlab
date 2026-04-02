@@ -125,6 +125,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="Emit a deterministic alert snapshot for paper sessions in a directory.",
     )
     parser.add_argument(
+        "--paper-sessions-promotion",
+        metavar="ROOT_DIR",
+        default=None,
+        help="Emit a broker-promotion report for paper sessions in a directory.",
+    )
+    parser.add_argument(
         "--paper-stale-minutes",
         type=int,
         default=60,

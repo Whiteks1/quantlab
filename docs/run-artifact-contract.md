@@ -195,6 +195,29 @@ Paper sessions are excluded from this shared run index.
 
 They are intended as the read-only shared registry for browsing and integration.
 
+## Paper Session Status Contract
+
+`session_status.json` is the canonical lifecycle artifact for paper sessions.
+
+Expected fields include:
+
+- `session_id`
+- `status`
+- `started_at`
+- `updated_at`
+- `finished_at` when terminal
+- `terminal`
+- `status_reason`
+- `duration_seconds` when timing can be computed
+- `error_type` and `message` when non-success
+
+Stable `status_reason` values currently include:
+
+- `active`
+- `completed`
+- `exception`
+- `operator_abort`
+
 ## Legacy Compatibility
 
 QuantLab keeps legacy read compatibility for older consumers:
