@@ -227,7 +227,7 @@ export class LruCache {
       const oldestKey = this.cache.keys().next().value;
       this.cache.delete(oldestKey);
     }
-    return value;
+    return this;
   }
 }
 
