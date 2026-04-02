@@ -635,12 +635,23 @@ function resolvePythonCandidates() {
   return [...new Set(candidates)].filter((candidate) => {
     if (!path.isAbsolute(candidate)) return true;
     try {
-      fs.accessSync(candidate, fs.constants.R_OK);
+      fs.accessSync(candidate, fs.constants.R_OK | fs.constants.X_OK);
       return true;
     } catch (_error) {
       return false;
     }
   });
+}
+
+function retryResearchUiProcess(nextReason) {
+  const nextCandidateIndex = researchUiPythonCandidateIndex + 1;
+  if (nextCandidateIndex >= researchUiPythonCandidates.length) return false;
+  const previousCommand = researchUiPythonCommand || researchUiPythonCandidates[researchUiPythonCandidateIndex];
+  researchUiPythonCandidateIndex = nextCandidateIndex;
+  researchUiPythonCommand = researchUiPythonCandidates[nextCandidateIndex];
+  appendLog(`[${nextReason}] ${previousCommand} failed. Retrying with ${researchUiPythonCommand}.`);
+  launchResearchUiProcess();
+  return true;
 }
 
 function bindResearchUiProcess(processHandle) {
@@ -684,6 +695,8 @@ function bindResearchUiProcess(processHandle) {
     if (researchServerProcess !== processHandle) return;
     researchServerProcess = null;
     researchServerOwned = false;
+    const shouldRetry = code !== 0 && workspaceState.status === "starting" && retryResearchUiProcess("startup-exit");
+    if (shouldRetry) return;
     clearResearchStartupTimer();
     updateWorkspaceState({
       status: "stopped",
@@ -698,16 +711,10 @@ function bindResearchUiProcess(processHandle) {
       researchServerProcess = null;
       researchServerOwned = false;
     }
-    const nextCandidateIndex = researchUiPythonCandidateIndex + 1;
     const shouldRetry =
       ["EACCES", "EPERM", "ENOENT"].includes(error?.code || "")
-      && nextCandidateIndex < researchUiPythonCandidates.length;
+      && retryResearchUiProcess("spawn-error");
     if (shouldRetry) {
-      researchUiPythonCandidateIndex = nextCandidateIndex;
-      const nextCommand = researchUiPythonCandidates[nextCandidateIndex];
-      researchUiPythonCommand = nextCommand;
-      appendLog(`[spawn-error] ${researchUiPythonCommand} failed (${error.code}). Retrying with ${nextCommand}.`);
-      launchResearchUiProcess();
       return;
     }
     clearResearchStartupTimer();

@@ -311,7 +311,7 @@ function bindEvents() {
 }
 
 function ensureRefreshLoop() {
-  if (!state.workspace.serverUrl) return;
+  if (!state.workspace.serverUrl || state.snapshotStatus.refreshPaused) return;
   refreshSnapshot();
   if (!state.refreshTimer) state.refreshTimer = window.setInterval(refreshSnapshot, CONFIG.refreshIntervalMs);
 }
