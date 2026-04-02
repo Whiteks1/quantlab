@@ -41,9 +41,6 @@ let mainWindow = null;
 let researchServerProcess = null;
 let researchServerOwned = false;
 let researchStartupTimer = null;
-let researchUiPythonCandidates = [];
-let researchUiPythonCandidateIndex = 0;
-let researchUiPythonCommand = "";
 let workspaceState = {
   status: "idle",
   serverUrl: null,
@@ -635,7 +632,7 @@ function resolvePythonCandidates() {
   return [...new Set(candidates)].filter((candidate) => {
     if (!path.isAbsolute(candidate)) return true;
     try {
-      fs.accessSync(candidate, fs.constants.R_OK | fs.constants.X_OK);
+      fs.accessSync(candidate, fs.constants.R_OK);
       return true;
     } catch (_error) {
       return false;
@@ -643,18 +640,7 @@ function resolvePythonCandidates() {
   });
 }
 
-function retryResearchUiProcess(nextReason) {
-  const nextCandidateIndex = researchUiPythonCandidateIndex + 1;
-  if (nextCandidateIndex >= researchUiPythonCandidates.length) return false;
-  const previousCommand = researchUiPythonCommand || researchUiPythonCandidates[researchUiPythonCandidateIndex];
-  researchUiPythonCandidateIndex = nextCandidateIndex;
-  researchUiPythonCommand = researchUiPythonCandidates[nextCandidateIndex];
-  appendLog(`[${nextReason}] ${previousCommand} failed. Retrying with ${researchUiPythonCommand}.`);
-  launchResearchUiProcess();
-  return true;
-}
-
-function bindResearchUiProcess(processHandle) {
+function bindResearchUiProcess(processHandle, pythonCommand, candidates, candidateIndex) {
   researchServerProcess = processHandle;
   researchServerOwned = true;
 
@@ -695,8 +681,13 @@ function bindResearchUiProcess(processHandle) {
     if (researchServerProcess !== processHandle) return;
     researchServerProcess = null;
     researchServerOwned = false;
-    const shouldRetry = code !== 0 && workspaceState.status === "starting" && retryResearchUiProcess("startup-exit");
-    if (shouldRetry) return;
+    const shouldRetry = code !== 0 && workspaceState.status === "starting" && candidateIndex < candidates.length - 1;
+    if (shouldRetry) {
+      const nextCommand = candidates[candidateIndex + 1];
+      appendLog(`[startup-exit] ${pythonCommand} exited (${code ?? "null"}${signal ? `, ${signal}` : ""}). Retrying with ${nextCommand}.`);
+      launchResearchUiProcess(candidates, candidateIndex + 1);
+      return;
+    }
     clearResearchStartupTimer();
     updateWorkspaceState({
       status: "stopped",
@@ -712,9 +703,12 @@ function bindResearchUiProcess(processHandle) {
       researchServerOwned = false;
     }
     const shouldRetry =
-      ["EACCES", "EPERM", "ENOENT"].includes(error?.code || "")
-      && retryResearchUiProcess("spawn-error");
+      ["EACCES", "EPERM", "ENOENT"].includes(error?.code || "") &&
+      candidateIndex < candidates.length - 1;
     if (shouldRetry) {
+      const nextCommand = candidates[candidateIndex + 1];
+      appendLog(`[spawn-error] ${pythonCommand} failed (${error.code}). Retrying with ${nextCommand}.`);
+      launchResearchUiProcess(candidates, candidateIndex + 1);
       return;
     }
     clearResearchStartupTimer();
@@ -728,16 +722,15 @@ function bindResearchUiProcess(processHandle) {
   });
 }
 
-function launchResearchUiProcess() {
-  const pythonCommand = researchUiPythonCandidates[researchUiPythonCandidateIndex];
-  researchUiPythonCommand = pythonCommand;
+function launchResearchUiProcess(candidates, candidateIndex = 0) {
+  const pythonCommand = candidates[candidateIndex];
   appendLog(`[startup] launching research_ui with ${pythonCommand}`);
   const child = spawn(pythonCommand, [SERVER_SCRIPT], {
     cwd: PROJECT_ROOT,
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
-  bindResearchUiProcess(child);
+  bindResearchUiProcess(child, pythonCommand, candidates, candidateIndex);
 }
 
 function extractServerUrl(line) {
@@ -768,10 +761,8 @@ async function startResearchUiServer({ forceRestart = false } = {}) {
   });
   scheduleResearchStartupTimeout();
 
-  researchUiPythonCandidates = resolvePythonCandidates();
-  researchUiPythonCandidateIndex = 0;
-  researchUiPythonCommand = "";
-  if (!researchUiPythonCandidates.length) {
+  const pythonCandidates = resolvePythonCandidates();
+  if (!pythonCandidates.length) {
     clearResearchStartupTimer();
     updateWorkspaceState({
       status: "error",
@@ -782,7 +773,7 @@ async function startResearchUiServer({ forceRestart = false } = {}) {
     return;
   }
 
-  launchResearchUiProcess();
+  launchResearchUiProcess(pythonCandidates, 0);
 }
 
 function stopResearchUiServer({ force = false } = {}) {
@@ -802,9 +793,6 @@ function stopResearchUiServer({ force = false } = {}) {
   }
   researchServerProcess = null;
   researchServerOwned = false;
-  researchUiPythonCandidates = [];
-  researchUiPythonCandidateIndex = 0;
-  researchUiPythonCommand = "";
 }
 
 function createMainWindow() {
