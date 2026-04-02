@@ -253,6 +253,7 @@ The first real execution-venue integration should follow this decision framework
 - define and stabilize `BrokerAdapter` before integrating any exchange-specific backend
 - keep `Kraken` as the first implemented backend and safety proving ground
 - move `Hyperliquid` ahead of `Binance` as the first next venue intended for personal connection and supervised practical use
+- consider `Bitget` as optional later comparison work after `Hyperliquid`, not the default next venue
 - treat `Binance` as optional later comparison work, not the default next venue
 - treat CCXT as optional acceleration for prototypes, smoke tests, or broad exchange experimentation, not as the authority of the execution design
 
