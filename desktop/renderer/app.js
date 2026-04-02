@@ -17,6 +17,7 @@ import {
   stripWrappingQuotes as stripQuotes,
   titleCase as titleCaseValue,
   toneClass as resolveToneClass,
+  LruCache,
   uniqueRunIds as dedupeRunIds,
 } from "./modules/utils.js";
 import {
@@ -51,7 +52,11 @@ const CONFIG = {
   maxSweepRows: 5,
   maxSweepDecisionCompare: 4,
   persistDebounceMs: 400,
+  maxDetailCacheEntries: 50,
+  maxConsecutiveRefreshErrors: 3,
 };
+
+let unsubscribeWorkspaceState = null;
 
 const state = {
   workspace: { status: "starting", serverUrl: null, logs: [], error: null },
@@ -61,14 +66,20 @@ const state = {
   sweepDecisionStore: defaultSweepDecisionStore(),
   sweepDecisionLoaded: false,
   selectedRunIds: [],
-  detailCache: new Map(),
+  detailCache: new LruCache(CONFIG.maxDetailCacheEntries),
   experimentsWorkspace: { status: "idle", configs: [], sweeps: [], error: null, updatedAt: null },
   experimentConfigPreviewCache: new Map(),
   isSubmittingLaunch: false,
   launchFeedback: "Use deterministic inputs or ask from chat.",
   refreshTimer: null,
   isStepbitSubmitting: false,
-  snapshotStatus: { status: "idle", error: null, lastSuccessAt: null },
+  snapshotStatus: {
+    status: "idle",
+    error: null,
+    lastSuccessAt: null,
+    consecutiveErrors: 0,
+    refreshPaused: false,
+  },
   isRetryingWorkspace: false,
   chatMessages: [
     {
@@ -177,7 +188,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   state.workspace = initialState;
   renderWorkspaceState();
   renderWorkflow();
-  window.quantlabDesktop.onWorkspaceState((payload) => {
+  unsubscribeWorkspaceState = window.quantlabDesktop.onWorkspaceState((payload) => {
     state.workspace = payload;
     renderWorkspaceState();
     if (payload.serverUrl) ensureRefreshLoop();
@@ -186,8 +197,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 window.addEventListener("beforeunload", () => {
-  if (state.refreshTimer) window.clearInterval(state.refreshTimer);
+  stopRefreshLoop();
   if (state.workspacePersistTimer) window.clearTimeout(state.workspacePersistTimer);
+  if (unsubscribeWorkspaceState) {
+    unsubscribeWorkspaceState();
+    unsubscribeWorkspaceState = null;
+  }
   if (state.workspaceStoreLoaded) {
     window.quantlabDesktop.saveShellWorkspaceStore(serializeShellWorkspaceStore()).catch(() => {});
   }
@@ -296,12 +311,23 @@ function bindEvents() {
 }
 
 function ensureRefreshLoop() {
+  if (!state.workspace.serverUrl) return;
   refreshSnapshot();
   if (!state.refreshTimer) state.refreshTimer = window.setInterval(refreshSnapshot, CONFIG.refreshIntervalMs);
 }
 
+function stopRefreshLoop() {
+  if (state.refreshTimer) {
+    window.clearInterval(state.refreshTimer);
+    state.refreshTimer = null;
+  }
+}
+
 async function refreshSnapshot() {
-  if (!state.workspace.serverUrl) return;
+  if (!state.workspace.serverUrl) {
+    stopRefreshLoop();
+    return;
+  }
   try {
     const runsRegistry = await window.quantlabDesktop.requestJson(CONFIG.runsIndexPath);
     state.detailCache.clear();
@@ -318,7 +344,13 @@ async function refreshSnapshot() {
       brokerHealth: extra[2].status === "fulfilled" ? extra[2].value : state.snapshot?.brokerHealth || null,
       stepbitWorkspace: extra[3].status === "fulfilled" ? extra[3].value : state.snapshot?.stepbitWorkspace || null,
     };
-    state.snapshotStatus = { status: "ok", error: null, lastSuccessAt: new Date().toISOString() };
+    state.snapshotStatus = {
+      status: "ok",
+      error: null,
+      lastSuccessAt: new Date().toISOString(),
+      consecutiveErrors: 0,
+      refreshPaused: false,
+    };
     const validIds = new Set(getRuns().map((run) => run.run_id));
     const filteredSelection = state.selectedRunIds.filter((runId) => validIds.has(runId));
     if (filteredSelection.length !== state.selectedRunIds.length) {
@@ -334,10 +366,15 @@ async function refreshSnapshot() {
       refreshExperimentsWorkspace({ focusTab: false, silent: true });
     }
   } catch (error) {
+    const consecutiveErrors = (state.snapshotStatus.consecutiveErrors || 0) + 1;
+    const refreshPaused = consecutiveErrors >= CONFIG.maxConsecutiveRefreshErrors;
+    if (refreshPaused) stopRefreshLoop();
     state.snapshotStatus = {
       status: "error",
       error: error?.message || "The local API is unavailable.",
       lastSuccessAt: state.snapshotStatus.lastSuccessAt,
+      consecutiveErrors,
+      refreshPaused,
     };
     renderWorkspaceState();
     // Keep the shell usable even if optional surfaces are down.
@@ -689,10 +726,13 @@ function buildRuntimeAlert() {
     };
   }
   if (state.snapshotStatus.status === "error") {
+    const pausedSuffix = state.snapshotStatus.refreshPaused
+      ? " Automatic refresh paused after repeated failures."
+      : "";
     return {
       tone: "warn",
       actionLabel: "Retry API",
-      message: `API unavailable: ${state.snapshotStatus.error || "local request failed."}`,
+      message: `API unavailable: ${state.snapshotStatus.error || "local request failed."}${pausedSuffix}`,
     };
   }
   if (state.workspace.status === "starting") {
@@ -714,7 +754,15 @@ async function retryWorkspaceRuntime() {
       state.workspace = await window.quantlabDesktop.restartWorkspaceServer();
       renderWorkspaceState();
     }
+    state.snapshotStatus = {
+      ...state.snapshotStatus,
+      consecutiveErrors: 0,
+      refreshPaused: false,
+    };
     await refreshSnapshot();
+    if (state.workspace.serverUrl && !state.refreshTimer && state.snapshotStatus.status !== "error") {
+      ensureRefreshLoop();
+    }
   } finally {
     state.isRetryingWorkspace = false;
     renderWorkspaceState();

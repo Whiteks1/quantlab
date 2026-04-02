@@ -618,13 +618,112 @@ async function monitorResearchUiStartup() {
   }
 }
 
-function resolvePythonCommand() {
+function resolvePythonCandidates() {
   const isWindows = process.platform === "win32";
   const localVenv = path.join(PROJECT_ROOT, ".venv", isWindows ? "Scripts" : "bin", isWindows ? "python.exe" : "python");
-  if (localVenv && require("fs").existsSync(localVenv)) {
-    return localVenv;
-  }
-  return process.env.PYTHON || (isWindows ? "python" : "python3");
+  const candidates = [
+    localVenv,
+    process.env.PYTHON || "",
+    isWindows ? "python" : "python3",
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  return [...new Set(candidates)].filter((candidate) => {
+    if (!path.isAbsolute(candidate)) return true;
+    try {
+      fs.accessSync(candidate, fs.constants.R_OK);
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  });
+}
+
+function bindResearchUiProcess(processHandle, pythonCommand, candidates, candidateIndex) {
+  researchServerProcess = processHandle;
+  researchServerOwned = true;
+
+  processHandle.stdout.setEncoding("utf8");
+  processHandle.stderr.setEncoding("utf8");
+  monitorResearchUiStartup().catch((error) => {
+    appendLog(`[startup-monitor-error] ${error.message}`);
+  });
+
+  processHandle.stdout.on("data", (chunk) => {
+    String(chunk || "")
+      .split(/\r?\n/)
+      .forEach((line) => {
+        if (!line.trim()) return;
+        appendLog(line);
+        const discoveredUrl = extractServerUrl(line);
+        if (discoveredUrl) {
+          isResearchUiReachable(discoveredUrl)
+            .then((reachable) => {
+              if (!reachable || !researchServerProcess || researchServerProcess !== processHandle) return;
+              markResearchUiReady(discoveredUrl, "managed");
+            })
+            .catch(() => {});
+        }
+      });
+  });
+
+  processHandle.stderr.on("data", (chunk) => {
+    String(chunk || "")
+      .split(/\r?\n/)
+      .forEach((line) => {
+        if (!line.trim()) return;
+        appendLog(`[stderr] ${line}`);
+      });
+  });
+
+  processHandle.on("exit", (code, signal) => {
+    if (researchServerProcess !== processHandle) return;
+    researchServerProcess = null;
+    researchServerOwned = false;
+    clearResearchStartupTimer();
+    updateWorkspaceState({
+      status: "stopped",
+      serverUrl: null,
+      error: code === 0 ? null : `research_ui exited (${code ?? "null"}${signal ? `, ${signal}` : ""})`,
+      source: "managed",
+    });
+  });
+
+  processHandle.on("error", (error) => {
+    if (researchServerProcess === processHandle) {
+      researchServerProcess = null;
+      researchServerOwned = false;
+    }
+    const shouldRetry =
+      ["EACCES", "EPERM", "ENOENT"].includes(error?.code || "")
+      && candidateIndex < candidates.length - 1;
+    if (shouldRetry) {
+      const nextCommand = candidates[candidateIndex + 1];
+      appendLog(`[spawn-error] ${pythonCommand} failed (${error.code}). Retrying with ${nextCommand}.`);
+      launchResearchUiProcess(candidates, candidateIndex + 1);
+      return;
+    }
+    clearResearchStartupTimer();
+    updateWorkspaceState({
+      status: "error",
+      serverUrl: null,
+      error: error.message,
+      source: "managed",
+    });
+    appendLog(`[spawn-error] ${error.message}`);
+  });
+}
+
+function launchResearchUiProcess(candidates, candidateIndex = 0) {
+  const pythonCommand = candidates[candidateIndex];
+  appendLog(`[startup] launching research_ui with ${pythonCommand}`);
+  const child = spawn(pythonCommand, [SERVER_SCRIPT], {
+    cwd: PROJECT_ROOT,
+    windowsHide: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  bindResearchUiProcess(child, pythonCommand, candidates, candidateIndex);
 }
 
 function extractServerUrl(line) {
@@ -655,70 +754,19 @@ async function startResearchUiServer({ forceRestart = false } = {}) {
   });
   scheduleResearchStartupTimeout();
 
-  researchServerProcess = spawn(resolvePythonCommand(), [SERVER_SCRIPT], {
-    cwd: PROJECT_ROOT,
-    windowsHide: true,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  researchServerOwned = true;
-
-  researchServerProcess.stdout.setEncoding("utf8");
-  researchServerProcess.stderr.setEncoding("utf8");
-  monitorResearchUiStartup().catch((error) => {
-    appendLog(`[startup-monitor-error] ${error.message}`);
-  });
-
-  researchServerProcess.stdout.on("data", (chunk) => {
-    String(chunk || "")
-      .split(/\r?\n/)
-      .forEach((line) => {
-        if (!line.trim()) return;
-        appendLog(line);
-        const discoveredUrl = extractServerUrl(line);
-        if (discoveredUrl) {
-          isResearchUiReachable(discoveredUrl)
-            .then((reachable) => {
-              if (!reachable || !researchServerProcess) return;
-              markResearchUiReady(discoveredUrl, "managed");
-            })
-            .catch(() => {});
-        }
-      });
-  });
-
-  researchServerProcess.stderr.on("data", (chunk) => {
-    String(chunk || "")
-      .split(/\r?\n/)
-      .forEach((line) => {
-        if (!line.trim()) return;
-        appendLog(`[stderr] ${line}`);
-      });
-  });
-
-  researchServerProcess.on("exit", (code, signal) => {
-    researchServerProcess = null;
-    researchServerOwned = false;
-    clearResearchStartupTimer();
-    updateWorkspaceState({
-      status: "stopped",
-      serverUrl: null,
-      error: code === 0 ? null : `research_ui exited (${code ?? "null"}${signal ? `, ${signal}` : ""})`,
-      source: "managed",
-    });
-  });
-
-  researchServerProcess.on("error", (error) => {
-    researchServerProcess = null;
-    researchServerOwned = false;
+  const pythonCandidates = resolvePythonCandidates();
+  if (!pythonCandidates.length) {
     clearResearchStartupTimer();
     updateWorkspaceState({
       status: "error",
       serverUrl: null,
-      error: error.message,
+      error: "No usable Python interpreter was found for research_ui startup.",
       source: "managed",
     });
-    appendLog(`[spawn-error] ${error.message}`);
-  });
+    return;
+  }
+
+  launchResearchUiProcess(pythonCandidates, 0);
 }
 
 function stopResearchUiServer({ force = false } = {}) {
@@ -754,7 +802,7 @@ function createMainWindow() {
       preload: path.join(DESKTOP_ROOT, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 

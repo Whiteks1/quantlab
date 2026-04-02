@@ -196,6 +196,41 @@ export function parseCsvRows(text, limit = Infinity) {
   return rows;
 }
 
+export class LruCache {
+  constructor(maxSize = 50) {
+    this.maxSize = Math.max(1, Number(maxSize) || 50);
+    this.cache = new Map();
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+
+  has(key) {
+    return this.cache.has(key);
+  }
+
+  get(key) {
+    if (!this.cache.has(key)) return undefined;
+    const value = this.cache.get(key);
+    this.cache.delete(key);
+    this.cache.set(key, value);
+    return value;
+  }
+
+  set(key, value) {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    }
+    this.cache.set(key, value);
+    while (this.cache.size > this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
+    }
+    return value;
+  }
+}
+
 function splitCsvLine(line) {
   const values = [];
   let current = "";
