@@ -33,6 +33,7 @@ Execution venue strategy note:
 
 - `Kraken` remains the first implemented real-execution backend
 - `Hyperliquid` is the first next venue intended for personal connection and supervised practical use
+- `Bitget` is a later optional comparison venue, after Hyperliquid, not the next default target
 - this is why `QuantLab web3 app` is now the right public direction, even though the product is still earlier in runtime maturity than that label's end-state implies
 - `BrokerAdapter` remains the current code name, but the architecture should now be read as an execution-venue boundary, not only a CEX-style broker boundary
 - a minimal `ExecutionContext` layer now exists in code so future venue work can model signer and routing semantics without overloading `ExecutionIntent`

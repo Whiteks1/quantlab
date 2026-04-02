@@ -39,6 +39,7 @@
   - keep broker execution auditable before any broader live routing or retry logic
   - preserve paper-session discipline as a prerequisite, not the current bottleneck
   - keep Kraken as the first implemented execution boundary while positioning Hyperliquid as the first next venue intended for personal connection
+  - treat Bitget as a later optional comparison venue after Hyperliquid, not a current priority
   - review whether the current boundary can express Hyperliquid signer, wallet, routing, and websocket semantics without ad hoc adapter leaks
   - keep the first Hyperliquid supervised submit path intentionally narrow and auditable before adding richer session, status, or websocket execution work
   - add local operator visibility over canonical Hyperliquid submit sessions before widening execution further
