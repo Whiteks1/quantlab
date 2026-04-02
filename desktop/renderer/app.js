@@ -38,6 +38,7 @@ const CONFIG = {
   launchControlPath: "/api/launch-control",
   paperHealthPath: "/api/paper-sessions-health",
   brokerHealthPath: "/api/broker-submissions-health",
+  hyperliquidSurfacePath: "/api/hyperliquid-surface",
   stepbitWorkspacePath: "/api/stepbit-workspace",
   detailArtifacts: ["report.json", "run_report.json"],
   experimentsConfigDir: "configs/experiments",
@@ -103,6 +104,10 @@ const elements = {
   runtimeAlert: document.getElementById("runtime-alert"),
   runtimeRetry: document.getElementById("runtime-retry"),
   runtimeChips: document.getElementById("runtime-chips"),
+  frontierMeta: document.getElementById("frontier-meta"),
+  frontierSummary: document.getElementById("frontier-summary"),
+  frontierGrid: document.getElementById("frontier-grid"),
+  frontierCallout: document.getElementById("frontier-callout"),
   chatLog: document.getElementById("chat-log"),
   chatForm: document.getElementById("chat-form"),
   chatInput: document.getElementById("chat-input"),
@@ -335,6 +340,7 @@ async function refreshSnapshot() {
       window.quantlabDesktop.requestJson(CONFIG.launchControlPath),
       window.quantlabDesktop.requestJson(CONFIG.paperHealthPath),
       window.quantlabDesktop.requestJson(CONFIG.brokerHealthPath),
+      window.quantlabDesktop.requestJson(CONFIG.hyperliquidSurfacePath),
       window.quantlabDesktop.requestJson(CONFIG.stepbitWorkspacePath),
     ]);
     state.snapshot = {
@@ -342,7 +348,8 @@ async function refreshSnapshot() {
       launchControl: extra[0].status === "fulfilled" ? extra[0].value : state.snapshot?.launchControl || null,
       paperHealth: extra[1].status === "fulfilled" ? extra[1].value : state.snapshot?.paperHealth || null,
       brokerHealth: extra[2].status === "fulfilled" ? extra[2].value : state.snapshot?.brokerHealth || null,
-      stepbitWorkspace: extra[3].status === "fulfilled" ? extra[3].value : state.snapshot?.stepbitWorkspace || null,
+      hyperliquidSurface: extra[3].status === "fulfilled" ? extra[3].value : state.snapshot?.hyperliquidSurface || null,
+      stepbitWorkspace: extra[4].status === "fulfilled" ? extra[4].value : state.snapshot?.stepbitWorkspace || null,
     };
     state.snapshotStatus = {
       status: "ok",
@@ -680,6 +687,7 @@ function renderMarkupInto(container, markup) {
 function renderWorkspaceState() {
   const { status, serverUrl, error, source } = state.workspace;
   const runs = getRuns();
+  const frontier = getFrontierSnapshot();
   const stepbit = state.snapshot?.stepbitWorkspace?.live_urls || {};
   const paperCount = state.snapshot?.paperHealth?.total_sessions || 0;
   const brokerCount = state.snapshot?.brokerHealth?.total_sessions || 0;
@@ -713,7 +721,105 @@ function renderWorkspaceState() {
     createRuntimeChipNode("Stepbit app", stepbit.frontend_reachable ? "up" : "down", stepbit.frontend_reachable ? "up" : "down"),
     createRuntimeChipNode("Stepbit core", stepbit.core_ready ? "ready" : stepbit.core_reachable ? "up" : "down", stepbit.core_ready ? "up" : stepbit.core_reachable ? "warn" : "down"),
   );
+  renderFrontierDashboard(frontier);
   renderChatAdapterStatus();
+}
+
+function getFrontierSnapshot() {
+  const paper = state.snapshot?.paperHealth || null;
+  const broker = state.snapshot?.brokerHealth || null;
+  const hyperliquid = state.snapshot?.hyperliquidSurface || null;
+  const stepbit = state.snapshot?.stepbitWorkspace?.live_urls || {};
+  return { paper, broker, hyperliquid, stepbit };
+}
+
+function renderFrontierDashboard(frontier) {
+  if (!elements.frontierMeta || !elements.frontierSummary || !elements.frontierGrid || !elements.frontierCallout) return;
+  const { paper, broker, hyperliquid, stepbit } = frontier;
+  const paperReady = Boolean(paper?.available && paper?.total_sessions);
+  const brokerReady = Boolean(broker?.available);
+  const brokerAlerts = Boolean(broker?.has_alerts);
+  const hyperliquidReady = Boolean(hyperliquid?.available);
+  const hyperliquidAlerts = Boolean(hyperliquid?.submit_has_alerts);
+  const stepbitReady = Boolean(stepbit?.core_ready || stepbit?.backend_reachable || stepbit?.frontend_reachable);
+
+  clearElement(elements.frontierSummary);
+  appendChildren(
+    elements.frontierSummary,
+    createSummaryCardNode("Paper sessions", String(paper?.total_sessions ?? 0), paperReady ? "tone-positive" : "tone-warning"),
+    createSummaryCardNode("Broker boundary", brokerReady ? "Visible" : "Missing", brokerAlerts ? "tone-negative" : brokerReady ? "tone-positive" : "tone-warning"),
+    createSummaryCardNode("Hyperliquid surface", hyperliquidReady ? titleCase(hyperliquid?.latest_ready_artifact_type || "Ready") : "Missing", hyperliquidAlerts ? "tone-negative" : hyperliquidReady ? "tone-positive" : "tone-warning"),
+    createSummaryCardNode("Stepbit boundary", stepbitReady ? "Reachable" : "Down", stepbitReady ? "tone-positive" : "tone-warning"),
+  );
+
+  clearElement(elements.frontierGrid);
+  appendChildren(
+    elements.frontierGrid,
+    createFrontierCard("Paper bridge", paperReady ? "ready for promotion review" : "still building local session evidence", [
+      ["Latest session", paper?.latest_session_id || "-"],
+      ["Latest status", titleCase(paper?.latest_session_status || "none")],
+      ["Issue watch", paper?.latest_issue_session_id || "none"],
+    ], paperReady ? "positive" : "warning"),
+    createFrontierCard("Broker boundary", brokerReady ? "validation and alerts visible" : "no broker validation surface yet", [
+      ["Latest submit", broker?.latest_submit_session_id || "-"],
+      ["Latest state", broker?.latest_submit_state || "-"],
+      ["Alerts", broker?.has_alerts ? String((broker?.alerts || []).length) : "none"],
+    ], brokerAlerts ? "negative" : brokerReady ? "positive" : "warning"),
+    createFrontierCard("Hyperliquid", hyperliquidReady ? "signer and submit surfaces are tracked" : "surface not indexed yet", [
+      ["Latest artifact", hyperliquid?.latest_ready_artifact_type || "-"],
+      ["Signature state", titleCase(hyperliquid?.signature_state || "unknown")],
+      ["Alert status", titleCase(hyperliquid?.submit_alert_status || "unknown")],
+    ], hyperliquidAlerts ? "negative" : hyperliquidReady ? "positive" : "warning"),
+    createFrontierCard("Stepbit", stepbitReady ? "optional runtime boundary is reachable" : "external boundary is offline", [
+      ["Frontend", stepbit?.frontend_reachable ? "up" : "down"],
+      ["Backend", stepbit?.backend_reachable ? "up" : "down"],
+      ["Core", stepbit?.core_ready ? "ready" : stepbit?.core_reachable ? "up" : "down"],
+    ], stepbitReady ? "positive" : "warning"),
+  );
+
+  elements.frontierMeta.textContent = [
+    paperReady ? `${paper.total_sessions} paper sessions` : "paper not yet visible",
+    brokerReady ? `${formatNumericCount(broker?.total_sessions || 0)} broker sessions` : "broker not yet visible",
+    hyperliquidReady ? `${formatNumericCount(hyperliquid?.submit_health?.total_sessions || 0)} Hyperliquid submit sessions` : "Hyperliquid surface not yet visible",
+  ].join(" · ");
+
+  elements.frontierCallout.textContent = buildFrontierCallout({ paper, broker, hyperliquid, stepbit });
+}
+
+function buildFrontierCallout({ paper, broker, hyperliquid, stepbit }) {
+  if (broker?.has_alerts) {
+    return "Broker alerts are present. Inspect the broker boundary before trusting any submit-oriented flow.";
+  }
+  if (hyperliquid?.submit_has_alerts) {
+    return "Hyperliquid submit alerts are present. Inspect submit sessions and reconciliation before moving further.";
+  }
+  if (paper?.available && paper?.total_sessions) {
+    return `Paper sessions are visible with ${paper.total_sessions} tracked sessions. Use the ops view to decide which sessions are ready to bridge.`;
+  }
+  if (stepbit?.backend_reachable || stepbit?.core_reachable) {
+    return "The optional Stepbit boundary is partially reachable. Keep it as an external helper, not as QuantLab's control plane.";
+  }
+  return "Launch a run or wait for local session artifacts so the frontier cards can surface real operator state.";
+}
+
+function createSummaryCardNode(label, value, tone = "") {
+  return createElementNode("article", { className: "summary-card frontier-summary-card" }, [
+    createElementNode("div", { className: "label", text: label }),
+    createElementNode("div", { className: `value ${tone}`, text: value }),
+  ]);
+}
+
+function createFrontierCard(title, subtitle, rows, tone = "neutral") {
+  return createElementNode("article", { className: `frontier-card tone-${tone}` }, [
+    createElementNode("div", { className: "frontier-card-head" }, [
+      createElementNode("div", { className: "section-label", text: title }),
+      createElementNode("p", { className: "frontier-card-subtitle", text: subtitle }),
+    ]),
+    createElementNode("dl", { className: "frontier-metric-list metric-list compact" }, rows.flatMap(([label, value]) => [
+      createElementNode("dt", { text: label }),
+      createElementNode("dd", { text: value }),
+    ])),
+  ]);
 }
 
 function buildRuntimeAlert() {

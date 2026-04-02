@@ -406,6 +406,78 @@ button:disabled {
 .runtime-chip.warn { color: var(--warning); border-color: rgba(240, 179, 93, 0.32); }
 .runtime-chip.down { color: var(--danger); border-color: rgba(242, 125, 136, 0.32); }
 
+.frontier-panel {
+    display: grid;
+    gap: 16px;
+}
+
+.frontier-summary {
+    margin-top: 2px;
+}
+
+.frontier-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+}
+
+.frontier-card {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    background: linear-gradient(180deg, rgba(18, 28, 40, 0.94), rgba(8, 14, 22, 0.82));
+    display: grid;
+    gap: 12px;
+}
+
+.frontier-card.tone-positive {
+    border-color: rgba(118, 211, 156, 0.28);
+}
+
+.frontier-card.tone-warning {
+    border-color: rgba(240, 179, 93, 0.28);
+}
+
+.frontier-card.tone-negative {
+    border-color: rgba(242, 125, 136, 0.28);
+}
+
+.frontier-card-subtitle {
+    margin: 6px 0 0;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.frontier-metric-list {
+    margin: 0;
+}
+
+.frontier-metric-list dt {
+    color: var(--muted);
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.frontier-metric-list dd {
+    margin: 4px 0 0;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+.frontier-callout {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 16px;
+    background: rgba(8, 14, 22, 0.82);
+    color: var(--muted);
+    line-height: 1.55;
+}
+
+.frontier-actions {
+    margin-top: 2px;
+}
+
 .workflow-panel {
     display: grid;
     gap: 16px;
