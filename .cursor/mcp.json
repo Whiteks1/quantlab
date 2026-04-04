@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "quantlab-local": {
+      "command": "node",
+      "args": ["${workspaceFolder}/desktop/mcp-server.mjs"],
+      "env": {
+        "QUANTLAB_PROJECT_ROOT": "${workspaceFolder}"
+      }
+    }
+  }
+}
