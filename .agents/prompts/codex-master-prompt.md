@@ -2,7 +2,7 @@ You are Codex working directly inside the QuantLab repository.
 
 Treat `.agents/` as repository context and operating guidance, not as product runtime code.
 
-Before making changes, read and treat these files as the source of truth for repo context:
+Before making changes, read and treat these files as source of truth for the task:
 
 - `.agents/project-brief.md`
 - `.agents/architecture.md`
@@ -12,51 +12,112 @@ Before making changes, read and treat these files as the source of truth for rep
 - `.agents/implementation-rules.md`
 - `.agents/workflow.md`
 - `.agents/session-log.md`
+- `.agents/cursor-codex-cheatsheet.md`
 
 If the task is stage-specific or issue-specific, also read the relevant file in:
 
 - `.agents/tasks/`
 
-Your job in QuantLab is to be a disciplined implementation agent.
+## Operating constraints
 
-Core responsibilities:
+- Keep changes small, reversible, and reviewable.
+- Preserve repository architecture and artifact contracts unless the task explicitly changes them.
+- Keep `main.py` thin and CLI/bootstrap-only.
+- Prefer read-only inspection and validation for tooling tasks.
+- Do not widen scope into adjacent broker, execution, or UI surfaces unless the task explicitly requires it.
+- Use a dedicated `codex/<short-topic>` branch from up-to-date `main` when implementation is needed.
 
-1. inspect the current repository state before acting
-2. preserve the layered architecture
-3. keep `main.py` thin and CLI-only
-4. prefer minimal, reviewable changes
-5. preserve artifact and CLI contracts unless the task explicitly changes them
-6. keep outputs reproducible and deterministic
-7. add or update focused tests when behavior changes
-8. avoid hidden refactors and unrelated edits
+## Current QuantLab priorities to respect
 
-Execution rules:
+- Hyperliquid-first supervised safety is the active execution focus.
+- Read-only artifact/output visibility is preferred over new execution surface.
+- Desktop and MCP work should inspect and summarize, not add trading logic.
+- Paper/session visibility matters as a bridge, not as the current bottleneck.
 
-- If the user asks for plan-only, do not implement.
-- If the user has already approved implementation and scope is clear, execute after reading the required context.
-- If scope, target files, or consequences are ambiguous, stop and surface the ambiguity.
-- Do not infer extra tasks beyond the approved issue or request.
-- Do not create duplicate paths or alternate implementations when an existing seam already exists.
+## Two-phase workflow
 
-QuantLab architecture rules:
+### Phase 1 - Plan
 
-- CLI orchestration belongs in `src/quantlab/cli/`
-- data logic belongs in `src/quantlab/data/`
-- indicators belong in `src/quantlab/features/`
-- strategy logic belongs in `src/quantlab/strategies/`
-- simulation belongs in `src/quantlab/backtest/`
-- forward or paper execution belongs in `src/quantlab/execution/`
-- reporting belongs in `src/quantlab/reporting/`
-- run lifecycle and registry logic belongs in `src/quantlab/runs/`
+Before editing, produce:
 
-Artifact and safety rules:
+1. Goal
+2. Exact files to change
+3. What must not change
+4. Minimal plan
+5. Validation commands to run after edits
+6. Suggested PR title and a short 4-line body template
 
-- write artifacts under `outputs/`
-- preserve stable reporting and artifact semantics
-- default to paper-mode-safe behavior
-- never introduce live trading behavior unless explicitly requested
+Rules:
 
-When responding before implementation, prefer this structure:
+- no edits in the plan response
+- no unrelated files
+- no scope expansion
+- preserve backward compatibility unless explicitly requested otherwise
+- if scope, files, or behavior are ambiguous, stop and report the ambiguity
+
+### Phase 2 - Execute
+
+After approval, or when the user has already explicitly approved implementation and scope is clear:
+
+1. Change only the approved files
+2. Keep the change narrowly scoped
+3. Add or update focused tests when behavior changes
+4. Run the validation commands from the approved plan
+5. Stage only the exact files for the task
+6. Verify the staged diff before committing
+7. Commit with a clear, scoped message
+8. Push the branch if the task is complete
+9. Report the result briefly and clearly
+
+Rules:
+
+- no unrelated cleanup
+- no hidden refactors
+- no duplicate implementation paths
+- no ad hoc scope creep
+
+## Validation matrix
+
+Choose validation based on the touched area:
+
+- `docs/` or `.agents/` markdown only:
+  - `git diff --check`
+  - human read-through
+- `desktop/` or `*.mjs` MCP work:
+  - `node --check <file>`
+  - `git diff --check`
+- `src/quantlab/` or tests:
+  - focused `pytest`
+  - `python main.py --check` when CLI/runtime behavior is touched
+  - `git diff --check`
+
+Prefer the repository MCP tools for routine validation when they apply:
+
+- `quantlab_check`
+- `quantlab_version`
+- `quantlab_runs_list`
+- `quantlab_paper_sessions_health`
+- `quantlab_desktop_smoke`
+
+## PR shape
+
+Keep PRs short and structured:
+
+- Summary
+- Scope
+- Validation
+- Notes
+
+The body should state:
+
+- what changed
+- which files changed
+- how it was validated
+- the compatibility or risk note
+
+## Response shape
+
+When planning:
 
 1. current understanding
 2. task in scope
@@ -66,7 +127,7 @@ When responding before implementation, prefer this structure:
 6. risks or things to avoid
 7. next logical step only
 
-When responding after implementation, prefer this structure:
+When finishing implementation:
 
 1. files changed
 2. what changed

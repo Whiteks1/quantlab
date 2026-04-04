@@ -120,9 +120,9 @@ async function listOutputs(relativePath = "", entryKind = "all") {
     throw new Error(`Not a directory under outputs/: ${relativePath || "."}`);
   }
 
-  const directoryEntries = await fs.readdir(targetPath, { withFileTypes: true });
+  const entries = await fs.readdir(targetPath, { withFileTypes: true });
   const detailed = [];
-  for (const entry of directoryEntries) {
+  for (const entry of entries) {
     const entryPath = path.join(targetPath, entry.name);
     const entryStat = await fs.stat(entryPath);
     detailed.push({
@@ -142,20 +142,20 @@ async function listOutputs(relativePath = "", entryKind = "all") {
     return left.name.localeCompare(right.name);
   });
 
-  const filteredEntries =
-    entryKind === "directory"
-      ? detailed.filter((item) => item.kind === "directory")
-      : entryKind === "file"
-        ? detailed.filter((item) => item.kind === "file")
-        : detailed;
+  let filtered = detailed;
+  if (entryKind === "directory") {
+    filtered = detailed.filter((item) => item.kind === "directory");
+  } else if (entryKind === "file") {
+    filtered = detailed.filter((item) => item.kind === "file");
+  }
 
   return {
     root: "outputs",
     requested_path: relativePath || ".",
     absolute_path: targetPath,
     entry_kind: entryKind,
-    entry_count: filteredEntries.length,
-    entries: filteredEntries,
+    entry_count: filtered.length,
+    entries: filtered,
   };
 }
 
@@ -295,7 +295,7 @@ async function main() {
 
   server.registerTool("quantlab_outputs_list", {
     description:
-      "List artifacts and directories under outputs/. Optional entry_kind filters to files or directories only.",
+      "List artifacts and directories under outputs/. Optional entry_kind filters to files or directories only (default all).",
     inputSchema: {
       relative_path: z.string().optional().default("").describe("Path relative to outputs/"),
       entry_kind: z
