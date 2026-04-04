@@ -113,16 +113,16 @@ async function runPythonCli(args, timeoutMs = 120000) {
   });
 }
 
-async function listOutputs(relativePath = "") {
+async function listOutputs(relativePath = "", entryKind = "all") {
   const targetPath = resolveOutputsPath(relativePath);
   const stat = await fs.stat(targetPath);
   if (!stat.isDirectory()) {
     throw new Error(`Not a directory under outputs/: ${relativePath || "."}`);
   }
 
-  const entries = await fs.readdir(targetPath, { withFileTypes: true });
+  const directoryEntries = await fs.readdir(targetPath, { withFileTypes: true });
   const detailed = [];
-  for (const entry of entries) {
+  for (const entry of directoryEntries) {
     const entryPath = path.join(targetPath, entry.name);
     const entryStat = await fs.stat(entryPath);
     detailed.push({
@@ -142,12 +142,20 @@ async function listOutputs(relativePath = "") {
     return left.name.localeCompare(right.name);
   });
 
+  const filteredEntries =
+    entryKind === "directory"
+      ? detailed.filter((item) => item.kind === "directory")
+      : entryKind === "file"
+        ? detailed.filter((item) => item.kind === "file")
+        : detailed;
+
   return {
     root: "outputs",
     requested_path: relativePath || ".",
     absolute_path: targetPath,
-    entry_count: detailed.length,
-    entries: detailed,
+    entry_kind: entryKind,
+    entry_count: filteredEntries.length,
+    entries: filteredEntries,
   };
 }
 
@@ -286,13 +294,19 @@ async function main() {
   });
 
   server.registerTool("quantlab_outputs_list", {
-    description: "List artifacts and directories under outputs/.",
+    description:
+      "List artifacts and directories under outputs/. Optional entry_kind filters to files or directories only.",
     inputSchema: {
       relative_path: z.string().optional().default("").describe("Path relative to outputs/"),
+      entry_kind: z
+        .enum(["all", "directory", "file"])
+        .optional()
+        .default("all")
+        .describe('List "all" entries, or only "directory" or "file"'),
     },
-  }, async ({ relative_path }) => {
+  }, async ({ relative_path, entry_kind }) => {
     try {
-      const payload = await listOutputs(relative_path);
+      const payload = await listOutputs(relative_path, entry_kind);
       return {
         content: [
           {

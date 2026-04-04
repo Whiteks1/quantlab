@@ -46,6 +46,8 @@ Available tools:
 - `quantlab_outputs_list`
 - `quantlab_artifact_read`
 
+`quantlab_outputs_list` accepts optional `relative_path` and `entry_kind` filters (`all`, `directory`, `file`).
+
 The server entrypoint is `mcp-server.mjs`, and the `mcp` npm script runs it directly.
 
 ## Current Tabs
