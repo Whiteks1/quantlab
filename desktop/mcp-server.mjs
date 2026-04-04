@@ -113,7 +113,7 @@ async function runPythonCli(args, timeoutMs = 120000) {
   });
 }
 
-async function listOutputs(relativePath = "") {
+async function listOutputs(relativePath = "", entryKind = "all") {
   const targetPath = resolveOutputsPath(relativePath);
   const stat = await fs.stat(targetPath);
   if (!stat.isDirectory()) {
@@ -142,12 +142,20 @@ async function listOutputs(relativePath = "") {
     return left.name.localeCompare(right.name);
   });
 
+  let filtered = detailed;
+  if (entryKind === "directory") {
+    filtered = detailed.filter((item) => item.kind === "directory");
+  } else if (entryKind === "file") {
+    filtered = detailed.filter((item) => item.kind === "file");
+  }
+
   return {
     root: "outputs",
     requested_path: relativePath || ".",
     absolute_path: targetPath,
-    entry_count: detailed.length,
-    entries: detailed,
+    entry_kind: entryKind,
+    entry_count: filtered.length,
+    entries: filtered,
   };
 }
 
@@ -286,13 +294,19 @@ async function main() {
   });
 
   server.registerTool("quantlab_outputs_list", {
-    description: "List artifacts and directories under outputs/.",
+    description:
+      "List artifacts and directories under outputs/. Optional entry_kind filters to files or directories only (default all).",
     inputSchema: {
       relative_path: z.string().optional().default("").describe("Path relative to outputs/"),
+      entry_kind: z
+        .enum(["all", "directory", "file"])
+        .optional()
+        .default("all")
+        .describe('List "all" entries, or only "directory" or "file"'),
     },
-  }, async ({ relative_path }) => {
+  }, async ({ relative_path, entry_kind }) => {
     try {
-      const payload = await listOutputs(relative_path);
+      const payload = await listOutputs(relative_path, entry_kind);
       return {
         content: [
           {
