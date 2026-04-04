@@ -511,6 +511,8 @@ def test_build_pretrade_handoff_payload_selects_latest_validation_artifact(tmp_p
     assert payload["handoff_id"] == "handoff-newer"
     assert payload["latest_validation_path"] == str(newer)
     assert payload["latest_validation_href"] == "/outputs/pretrade_handoff/newer/pretrade_handoff_validation.json"
+    assert payload["source_artifact_path"] == "C:\\Users\\marce\\Documents\\meta_trade\\tests\\fixtures\\expected_quantlab_handoff.json"
+    assert payload["source_artifact_href"] is None
 
 
 def test_normalize_launch_request_accepts_run_payload():

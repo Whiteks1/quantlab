@@ -767,6 +767,50 @@ function buildPretradePanel(pretrade) {
     const reasons = Array.isArray(pretrade.reasons) && pretrade.reasons.length
         ? pretrade.reasons.map((reason) => `<span class="inline-chip">${escapeHtml(reason)}</span>`).join("")
         : `<span class="muted-copy">No rejection reasons.</span>`;
+    const artifactEntries = [
+        {
+            label: "Validation artifact",
+            path: pretrade.latest_validation_path,
+            href: pretrade.latest_validation_href,
+            fallback: "Latest validation artifact not available yet.",
+        },
+        {
+            label: "Source artifact",
+            path: pretrade.source_artifact_path,
+            href: pretrade.source_artifact_href,
+            fallback: "Source artifact not available yet.",
+        },
+    ].filter((artifact) => artifact.path || artifact.href);
+
+    const artifactLinks = artifactEntries.length
+        ? `
+            <div class="artifact-list">
+                ${artifactEntries.map((artifact) => {
+                    const label = escapeHtml(artifact.label);
+                    const path = escapeHtml(artifact.path || artifact.fallback);
+                    if (artifact.href) {
+                        return `
+                            <a class="artifact-link" href="${escapeHtml(artifact.href)}" target="_blank" rel="noreferrer">
+                                <span>${label}</span>
+                                <span>${path}</span>
+                            </a>
+                        `;
+                    }
+                    return `
+                        <div class="artifact-link">
+                            <span>${label}</span>
+                            <span>${path}</span>
+                        </div>
+                    `;
+                }).join("")}
+            </div>
+        `
+        : `
+            <div class="panel-empty compact-empty">
+                <strong>No artifact paths yet</strong>
+                <span>QuantLab will show the validation and source artifact paths here once the first bounded handoff is ingested.</span>
+            </div>
+        `;
 
     return `
         <div class="key-value-grid">
@@ -777,6 +821,7 @@ function buildPretradePanel(pretrade) {
             ${keyValue("Side", titleCase(pretrade.side || "-"))}
             ${keyValue("Draft ready", pretrade.ready_for_draft_execution_intent ? "Yes" : "No")}
         </div>
+        ${artifactLinks}
         <div class="inline-list">${reasons}</div>
     `;
 }
