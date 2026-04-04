@@ -249,18 +249,17 @@ Exit condition:
 
 The first real execution-venue integration should follow this decision framework:
 
-- start with Kraken as the first real broker target
 - define and stabilize `BrokerAdapter` before integrating any exchange-specific backend
-- keep `Kraken` as the first implemented backend and safety proving ground
-- move `Hyperliquid` ahead of `Binance` as the first next venue intended for personal connection and supervised practical use
+- keep `Hyperliquid` as the active execution-venue target for personal connection and supervised practical use
+- keep `Kraken` as implemented compatibility/history rather than the active next target
 - consider `Bitget` as optional later comparison work after `Hyperliquid`, not the default next venue
 - treat `Binance` as optional later comparison work, not the default next venue
 - treat CCXT as optional acceleration for prototypes, smoke tests, or broad exchange experimentation, not as the authority of the execution design
 
 Rationale:
 
-- Kraken is the preferred first integration because it is a credible first real boundary for disciplined execution work
-- Hyperliquid is the preferred next venue because it tests whether the current abstraction can handle a high-performance onchain order-book venue, not only a conventional CEX-style broker
+- Hyperliquid is the preferred active venue because it tests whether the current abstraction can handle a high-performance onchain order-book venue, not only a conventional CEX-style broker
+- Kraken remains useful as compatibility history and a reference implementation, but it is no longer the active next strategic target
 - Binance remains useful later as an additional comparison backend, but it is no longer the default next strategic target
 - CCXT is useful when speed matters, but native integrations remain preferable when QuantLab needs tighter control over errors, rate limits, retries, and private execution flows
 

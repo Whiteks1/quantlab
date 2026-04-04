@@ -88,3 +88,20 @@ def test_handle_broker_evidence_readiness_accepts_ready_kraken_path(monkeypatch,
     assert result["resolved_corridor"] == "kraken"
     payload = json.loads((outdir / ARTIFACT_FILENAME).read_text(encoding="utf-8"))
     assert payload["ready_for_evidence_pass"] is True
+
+
+def test_build_broker_evidence_readiness_report_prefers_hyperliquid_when_both_are_ready(monkeypatch, tmp_path: Path):
+    args = _build_args()
+
+    monkeypatch.setenv("KRAKEN_API_KEY", "demo-key")
+    monkeypatch.setenv("KRAKEN_API_SECRET", "demo-secret")
+    monkeypatch.setenv("HYPERLIQUID_PRIVATE_KEY", "demo-private-key")
+    monkeypatch.setenv("HYPERLIQUID_ACCOUNT", "0x5C3CE658Ab5a953F3870678e99e3bE8eD0eA8e80")
+    monkeypatch.setenv("HYPERLIQUID_SIGNER_ID", "0x5e1079D0b32dDe739340C13C869a97d9b6552eF2")
+    monkeypatch.setenv("HYPERLIQUID_SIGNER_TYPE", "agent_wallet")
+
+    report = build_broker_evidence_readiness_report(args, project_root=tmp_path)
+
+    assert report["recommended_first_corridor"] == "hyperliquid"
+    assert report["resolved_corridor"] == "hyperliquid"
+    assert report["ready_for_evidence_pass"] is False

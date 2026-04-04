@@ -5,14 +5,14 @@ Date: 2026-03-26
 
 ## Decision
 
-QuantLab keeps `Kraken` as the first implemented real-execution backend.
+QuantLab keeps `Hyperliquid` as the active execution venue direction.
 
-At the same time, `Hyperliquid` becomes the first venue intended for personal connection and supervised practical use once the execution boundary is ready for that step.
+`Kraken` remains implemented compatibility/history and can still serve as a reference backend, but it is no longer the active next target.
 
 This means:
 
-- `Kraken` remains the first backend used to prove the safety boundary, validation flow, submit discipline, and reconciliation model
-- `Hyperliquid` becomes the first next venue to target for real personal use
+- `Hyperliquid` is the venue used to prove the active safety boundary, validation flow, submit discipline, and reconciliation model
+- `Kraken` remains a reference implementation and compatibility boundary
 - `Binance` is no longer the default next comparison venue ahead of `Hyperliquid`
 - the current code name `BrokerAdapter` stays in place for continuity, but the architecture should be read as an `execution venue` boundary, not only a centralized-exchange broker boundary
 
@@ -20,7 +20,7 @@ This means:
 
 The first implemented backend and the first venue worth using personally do not need to be the same thing.
 
-`Kraken` is still a strong first implementation target because it is a disciplined and familiar boundary for:
+`Hyperliquid` is the active implementation target because it is the boundary the project is currently using to prove:
 
 - local execution policy
 - authenticated preflight
@@ -28,7 +28,7 @@ The first implemented backend and the first venue worth using personally do not 
 - supervised submit safety
 - reconciliation and post-submit state tracking
 
-But for actual personal connection and future execution design, `Hyperliquid` is strategically more interesting.
+`Kraken` remains a useful reference boundary, but it is not the active next target.
 
 According to the official documentation, Hyperliquid is a performant L1 built around a fully onchain financial system, with HyperCore and HyperEVM secured by HyperBFT. HyperCore includes fully onchain spot and perpetual order books where orders, cancels, trades, and liquidations happen with one-block finality, and the docs state current support for up to 200k orders per second. Source: [About Hyperliquid](https://hyperliquid.gitbook.io/hyperliquid-docs).
 
@@ -44,12 +44,12 @@ That combination makes Hyperliquid materially different from a standard CEX adap
 
 ## Architectural Interpretation
 
-The architectural lesson is not "replace Kraken."
+The architectural lesson is not "delete all historical Kraken work."
 
 The lesson is:
 
-- `Kraken` is the first safety proving ground
-- `Hyperliquid` is the first next venue that tests whether the QuantLab boundary is genuinely venue-agnostic
+- `Hyperliquid` is the active safety proving ground
+- `Kraken` remains a compatibility/reference boundary
 
 If the current `BrokerAdapter` only feels natural for CEX-style REST brokers, then the abstraction is still too narrow.
 If it can also support:
@@ -66,10 +66,10 @@ then the abstraction is becoming strong enough for the direction QuantLab actual
 
 For roadmap and implementation sequencing:
 
-1. keep Kraken as the first implemented backend and finish its submit-safety boundary cleanly
+1. keep Hyperliquid as the active backend focus and finish its submit-safety boundary cleanly
 2. do not rename `BrokerAdapter` in code yet just for terminology
 3. update architecture and roadmap language so it is clear that this boundary is really an execution-venue boundary
-4. move `Hyperliquid` ahead of `Binance` as the next venue target for real personal connection and future comparison work
+4. keep `Kraken` as compatibility/reference and move `Hyperliquid` ahead of `Binance` as the next venue target for real personal connection and future comparison work
 5. treat `Binance` as optional later comparison work, not the default second venue
 
 ## What This Does Not Mean

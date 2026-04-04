@@ -25,14 +25,14 @@ QuantLab is currently transitioning from a strong paper-operations base into **S
 
 The paper layer is now materially operational, and the current broker-facing focus is:
 
-- reconcile the first supervised Kraken submit path before widening live execution
+- reconcile the first supervised Hyperliquid submit path before widening live execution
 - close idempotency and ambiguous-submit gaps before adding more broker power
 - keep paper-session discipline as a prerequisite, not as the current bottleneck
 
 Execution venue strategy note:
 
-- `Kraken` remains the first implemented real-execution backend
-- `Hyperliquid` is the first next venue intended for personal connection and supervised practical use
+- `Hyperliquid` is the active execution venue direction
+- `Kraken` remains implemented compatibility / history, not the active next target
 - `Bitget` is a later optional comparison venue, after Hyperliquid, not the next default target
 - this is why `QuantLab web3 app` is now the right public direction, even though the product is still earlier in runtime maturity than that label's end-state implies
 - `BrokerAdapter` remains the current code name, but the architecture should now be read as an execution-venue boundary, not only a CEX-style broker boundary
