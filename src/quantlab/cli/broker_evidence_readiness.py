@@ -114,10 +114,10 @@ def build_broker_evidence_readiness_report(args, *, project_root: Path) -> dict[
         resolved_corridor = "kraken"
     elif requested_corridor == "hyperliquid":
         resolved_corridor = "hyperliquid"
-    elif kraken_ready:
-        resolved_corridor = "kraken"
     elif hyperliquid_ready:
         resolved_corridor = "hyperliquid"
+    elif kraken_ready:
+        resolved_corridor = "kraken"
 
     selected_ready = {
         "kraken": kraken_ready,
@@ -136,7 +136,7 @@ def build_broker_evidence_readiness_report(args, *, project_root: Path) -> dict[
         "project_root": str(project_root),
         "requested_corridor": requested_corridor,
         "resolved_corridor": resolved_corridor,
-        "recommended_first_corridor": "kraken",
+        "recommended_first_corridor": "hyperliquid",
         "runbook": {
             "path": str(runbook_path),
             "exists": runbook_path.exists(),

@@ -53,11 +53,13 @@ Before attempting the first supervised broker evidence run, generate a readiness
 python main.py --broker-evidence-readiness-outdir outputs/broker_evidence
 ```
 
+Hyperliquid is the preferred first corridor for the current execution direction.
+
 If you already know which corridor you want to exercise first, make it explicit:
 
 ```bash
-python main.py --broker-evidence-readiness-outdir outputs/broker_evidence --broker-evidence-corridor kraken
 python main.py --broker-evidence-readiness-outdir outputs/broker_evidence --broker-evidence-corridor hyperliquid
+python main.py --broker-evidence-readiness-outdir outputs/broker_evidence --broker-evidence-corridor kraken
 ```
 
 Use this check to fail early on:

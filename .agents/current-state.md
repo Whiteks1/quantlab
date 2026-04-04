@@ -3,7 +3,7 @@
 ## Active Stage
 - **Stage**: Stage D.2 — Supervised Broker Submit Safety
 - **Last Updated**: 2026-03-27
-- **Focus**: Stage D.2 is centered on closing ambiguity around supervised Kraken submit, especially idempotency, reconciliation, and post-submit operator safety.
+- **Focus**: Stage D.2 is centered on closing ambiguity around supervised Hyperliquid submit, especially idempotency, reconciliation, and post-submit operator safety.
 - **Authority Note**: Stepbit-facing integration remains a secondary boundary track. QuantLab stays autonomous and external consumer needs do not override QuantLab-owned priorities.
 - **Product Identity Note**: Publicly, QuantLab should now be described as a `web3 app` in direction, but still as a supervised and safety-first execution system in current maturity.
 - **Performance Note**: QuantLab remains Python-first. Native acceleration is now treated as a measured hotspot tactic, with the backtest engine as the first realistic candidate if profiling justifies escalation.
@@ -31,14 +31,14 @@
 
 ## Active Work
 - **Stage Open**: Stage D.2 is now the primary execution-safety focus.
-- **Current Priority**: Close ambiguous-submit risk before widening broker execution beyond the first supervised Kraken submit path.
+- **Current Priority**: Close ambiguous-submit risk before widening broker execution beyond the first supervised Hyperliquid submit path.
 - **Active Focus Areas**:
   - make the first supervised broker submit path idempotency-safer
-  - reconcile ambiguous submit states against real Kraken order state
+  - reconcile ambiguous submit states against real Hyperliquid order state
   - add aggregate health and alert visibility over canonical broker submission sessions
   - keep broker execution auditable before any broader live routing or retry logic
   - preserve paper-session discipline as a prerequisite, not the current bottleneck
-  - keep Kraken as the first implemented execution boundary while positioning Hyperliquid as the first next venue intended for personal connection
+  - keep Hyperliquid as the active execution boundary while positioning Kraken as legacy compatibility and Hyperliquid as the first next venue intended for personal connection
   - treat Bitget as a later optional comparison venue after Hyperliquid, not a current priority
   - review whether the current boundary can express Hyperliquid signer, wallet, routing, and websocket semantics without ad hoc adapter leaks
   - keep the first Hyperliquid supervised submit path intentionally narrow and auditable before adding richer session, status, or websocket execution work
