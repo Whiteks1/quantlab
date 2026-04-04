@@ -31,6 +31,21 @@ cd desktop
 npm run smoke
 ```
 
+## Cursor MCP
+
+This folder also exposes a local MCP server for Cursor via [`.cursor/mcp.json`](../.cursor/mcp.json).
+
+Available tools:
+
+- `quantlab_check`
+- `quantlab_version`
+- `quantlab_runs_list`
+- `quantlab_paper_sessions_health`
+- `quantlab_desktop_smoke`
+- `quantlab_read_file`
+
+The server entrypoint is `mcp-server.mjs`, and the `mcp` npm script runs it directly.
+
 ## Current Tabs
 
 - Chat

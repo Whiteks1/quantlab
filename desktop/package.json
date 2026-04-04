@@ -7,9 +7,12 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "smoke": "node scripts/smoke.js"
+    "smoke": "node scripts/smoke.js",
+    "mcp": "node mcp-server.mjs"
   },
   "devDependencies": {
-    "electron": "^37.2.0"
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "electron": "^37.2.0",
+    "zod": "^4.1.12"
   }
 }

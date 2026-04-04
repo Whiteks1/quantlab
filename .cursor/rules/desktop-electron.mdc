@@ -1,0 +1,34 @@
+---
+description: QuantLab desktop Electron rules
+globs:
+  - "desktop/**/*.js"
+  - "desktop/**/*.mjs"
+  - "desktop/**/*.cjs"
+  - "desktop/**/*.ts"
+  - "desktop/**/*.tsx"
+  - "desktop/**/*.jsx"
+  - "desktop/**/*.json"
+alwaysApply: false
+---
+
+# Desktop Electron Rules
+
+## Scope
+
+- Keep Electron shell work inside `desktop/`.
+- Treat the shell as a UI and orchestration layer, not a place for trading logic.
+- Reuse the embedded `research_ui` surface rather than re-implementing it in the shell.
+
+## Implementation
+
+- Keep the main process and renderer responsibilities separate.
+- Prefer small renderer modules over one large file.
+- Preserve the command bus and the existing launch/run/compare/artifacts workflow.
+- Keep the shell deterministic and operationally simple.
+
+## Integration
+
+- Do not bypass the Python CLI for core QuantLab behavior.
+- Keep shell actions reversible and explicit.
+- If the change touches launch or smoke flows, verify the existing npm scripts remain valid.
+

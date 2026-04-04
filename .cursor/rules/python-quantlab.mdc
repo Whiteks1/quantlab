@@ -1,0 +1,38 @@
+---
+description: QuantLab Python backend rules
+globs:
+  - "main.py"
+  - "src/**/*.py"
+  - "scripts/**/*.py"
+  - "test/**/*.py"
+alwaysApply: false
+---
+
+# Python QuantLab Rules
+
+## Boundaries
+
+- Keep domain logic in `src/quantlab/`.
+- Keep command routing in `src/quantlab/cli/`.
+- Keep `main.py` as compatibility/bootstrap only.
+- Keep generated artifacts in `outputs/`.
+
+## Implementation
+
+- Prefer small, reversible changes.
+- Favor pure functions for analytics, metrics, and transforms.
+- Use type hints for new Python code.
+- Avoid side effects on import.
+- Keep behavior deterministic where possible.
+
+## Testing
+
+- Add or update `pytest` coverage for any behavior change.
+- Cover edge cases explicitly, including empty inputs, missing values, and no-op or resume paths.
+- Do not silently change CLI or artifact contracts.
+
+## Safety
+
+- Treat broker and execution changes as safety-sensitive.
+- Preserve explicit human gates, idempotency, and reconciliation logic.
+
