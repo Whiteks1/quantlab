@@ -10,12 +10,51 @@ import { z } from "zod";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DESKTOP_ROOT = __dirname;
 const PROJECT_ROOT = path.resolve(DESKTOP_ROOT, "..");
+const OUTPUTS_ROOT = path.resolve(PROJECT_ROOT, "outputs");
 const PYTHON_EXECUTABLE = process.env.QUANTLAB_PYTHON || "python";
 const MAX_OUTPUT_CHARS = 12000;
+const BINARY_ARTIFACT_EXTENSIONS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".bmp",
+  ".ico",
+  ".pdf",
+]);
 
 function truncateText(text) {
   if (text.length <= MAX_OUTPUT_CHARS) return text;
   return `${text.slice(0, MAX_OUTPUT_CHARS)}\n...[truncated]`;
+}
+
+function resolveOutputsPath(relativePath) {
+  const requested = relativePath || "";
+  const resolvedPath = path.resolve(OUTPUTS_ROOT, requested);
+  const relative = path.relative(OUTPUTS_ROOT, resolvedPath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`Refusing to access outside outputs/: ${relativePath}`);
+  }
+  return resolvedPath;
+}
+
+function formatBytes(size) {
+  if (!Number.isFinite(size)) return "unknown";
+  if (size < 1024) return `${size} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = size / 1024;
+  for (const unit of units) {
+    if (value < 1024 || unit === units[units.length - 1]) {
+      return `${value.toFixed(value >= 10 ? 1 : 2)} ${unit}`;
+    }
+    value /= 1024;
+  }
+  return `${size} B`;
+}
+
+function toIsoString(date) {
+  return date instanceof Date ? date.toISOString() : null;
 }
 
 function runProcess(command, args, options = {}) {
@@ -72,6 +111,66 @@ async function runPythonCli(args, timeoutMs = 120000) {
     cwd: PROJECT_ROOT,
     timeoutMs,
   });
+}
+
+async function listOutputs(relativePath = "") {
+  const targetPath = resolveOutputsPath(relativePath);
+  const stat = await fs.stat(targetPath);
+  if (!stat.isDirectory()) {
+    throw new Error(`Not a directory under outputs/: ${relativePath || "."}`);
+  }
+
+  const entries = await fs.readdir(targetPath, { withFileTypes: true });
+  const detailed = [];
+  for (const entry of entries) {
+    const entryPath = path.join(targetPath, entry.name);
+    const entryStat = await fs.stat(entryPath);
+    detailed.push({
+      name: entry.name,
+      kind: entry.isDirectory() ? "directory" : "file",
+      relative_path: path.relative(PROJECT_ROOT, entryPath).replaceAll("\\", "/"),
+      size_bytes: entry.isDirectory() ? null : entryStat.size,
+      size_human: entry.isDirectory() ? null : formatBytes(entryStat.size),
+      modified_at: toIsoString(entryStat.mtime),
+    });
+  }
+
+  detailed.sort((left, right) => {
+    if (left.kind !== right.kind) {
+      return left.kind === "directory" ? -1 : 1;
+    }
+    return left.name.localeCompare(right.name);
+  });
+
+  return {
+    root: "outputs",
+    requested_path: relativePath || ".",
+    absolute_path: targetPath,
+    entry_count: detailed.length,
+    entries: detailed,
+  };
+}
+
+async function readOutputsArtifact(relativePath) {
+  const targetPath = resolveOutputsPath(relativePath);
+  const stat = await fs.stat(targetPath);
+  if (stat.isDirectory()) {
+    throw new Error(`Expected a file under outputs/, got directory: ${relativePath}`);
+  }
+  if (BINARY_ARTIFACT_EXTENSIONS.has(path.extname(targetPath).toLowerCase())) {
+    throw new Error(`Binary artifact reading is not supported for ${relativePath}`);
+  }
+
+  const data = await fs.readFile(targetPath, "utf8");
+  return {
+    root: "outputs",
+    requested_path: relativePath,
+    absolute_path: targetPath,
+    bytes: stat.size,
+    modified_at: toIsoString(stat.mtime),
+    truncated: data.length > MAX_OUTPUT_CHARS,
+    content: truncateText(data),
+  };
 }
 
 async function formatProcessResult(label, result, commandLine) {
@@ -179,6 +278,72 @@ async function main() {
           {
             type: "text",
             text: `Failed to read ${relative_path}: ${error.message || String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  });
+
+  server.registerTool("quantlab_outputs_list", {
+    description: "List artifacts and directories under outputs/.",
+    inputSchema: {
+      relative_path: z.string().optional().default("").describe("Path relative to outputs/"),
+    },
+  }, async ({ relative_path }) => {
+    try {
+      const payload = await listOutputs(relative_path);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(payload, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to list outputs/${relative_path || ""}: ${error.message || String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  });
+
+  server.registerTool("quantlab_artifact_read", {
+    description: "Read a text artifact within outputs/.",
+    inputSchema: {
+      relative_path: z.string().describe("Path relative to outputs/"),
+    },
+  }, async ({ relative_path }) => {
+    try {
+      const payload = await readOutputsArtifact(relative_path);
+      return {
+        content: [
+          {
+            type: "text",
+            text: [
+              `Path: outputs/${payload.requested_path}`,
+              `Bytes: ${payload.bytes}`,
+              `Size: ${formatBytes(payload.bytes)}`,
+              `Modified at: ${payload.modified_at || "unknown"}`,
+              `Truncated: ${payload.truncated ? "yes" : "no"}`,
+              "",
+              payload.content,
+            ].join("\n"),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to read outputs/${relative_path}: ${error.message || String(error)}`,
           },
         ],
         isError: true,

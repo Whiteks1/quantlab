@@ -43,6 +43,8 @@ Available tools:
 - `quantlab_paper_sessions_health`
 - `quantlab_desktop_smoke`
 - `quantlab_read_file`
+- `quantlab_outputs_list`
+- `quantlab_artifact_read`
 
 The server entrypoint is `mcp-server.mjs`, and the `mcp` npm script runs it directly.
 
