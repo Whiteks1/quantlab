@@ -352,6 +352,10 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  latest_close_state      : {health.get('latest_close_state')}")
         print(f"  latest_fill_state       : {health.get('latest_fill_state')}")
         print(f"  latest_supervision_state: {health.get('latest_supervision_state')}")
+        print(f"  alert_status            : {health.get('alert_status')}")
+        print(f"  alert_counts            : {health.get('alert_counts')}")
+        print(f"  latest_alert_id         : {health.get('latest_alert_session_id')}")
+        print(f"  latest_alert_code       : {health.get('latest_alert_code')}")
         print(f"  latest_submit_id        : {health.get('latest_submit_session_id')}")
         print(f"  latest_submit_state     : {health.get('latest_submit_state')}")
         print(f"  latest_order_state      : {health.get('latest_order_state')}")
@@ -805,6 +809,13 @@ def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
         [session for session in sessions if session.get("submit_response_present")]
     )
     latest_issue = max(alerts, key=_hyperliquid_alert_sort_key) if alerts else None
+    alert_counts = Counter(alert["severity"] for alert in alerts)
+    if alert_counts.get("critical", 0):
+        alert_status = "critical"
+    elif alerts:
+        alert_status = "warning"
+    else:
+        alert_status = "ok"
 
     return {
         "root_dir": str(root),
@@ -848,6 +859,12 @@ def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
                 if session.get("submit_response_present")
             )
         ),
+        "alert_status": alert_status,
+        "alert_counts": dict(alert_counts),
+        "alerts_present": bool(alerts),
+        "latest_alert_session_id": latest_issue.get("session_id") if latest_issue else None,
+        "latest_alert_code": latest_issue.get("alert_code") if latest_issue else None,
+        "latest_alert_at": latest_issue.get("activity_at") if latest_issue else None,
         "latest_submit_session_id": latest_submit.get("session_id") if latest_submit else None,
         "latest_submit_state": latest_submit.get("submit_state") if latest_submit else None,
         "latest_order_state": latest_submit.get("effective_order_state") if latest_submit else None,

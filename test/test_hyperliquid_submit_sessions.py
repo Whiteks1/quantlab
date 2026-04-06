@@ -166,19 +166,7 @@ def test_refresh_hyperliquid_submit_index(tmp_path):
 
 
 def test_hyperliquid_submit_health_summary(tmp_path, capsys):
-    session_dir = _write_session(tmp_path)
-    (session_dir / "hyperliquid_order_status.json").write_text(
-        json.dumps(
-            {
-                "artifact_type": "quantlab.hyperliquid.order_status",
-                "generated_at": "2026-03-27T12:05:00",
-                "status_known": True,
-                "normalized_state": "open",
-                "errors": [],
-            }
-        ),
-        encoding="utf-8",
-    )
+    _write_session(tmp_path)
 
     args = _make_args(hyperliquid_submit_sessions_health=str(tmp_path))
     assert handle_hyperliquid_submit_sessions_commands(args) is True
@@ -187,6 +175,8 @@ def test_hyperliquid_submit_health_summary(tmp_path, capsys):
     assert "Hyperliquid submission health" in output
     assert "total_sessions" in output
     assert "reconciliation_sessions" in output
+    assert "alert_status            : warning" in output
+    assert "latest_alert_code       : HYPERLIQUID_ORDER_STATUS_MISSING" in output
     assert "latest_submit_id" in output
 
 
