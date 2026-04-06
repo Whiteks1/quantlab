@@ -326,6 +326,7 @@ button:disabled {
     text-transform: none;
     letter-spacing: 0;
 }
+
 .run-metrics-summary {
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
@@ -343,8 +344,7 @@ button:disabled {
 
 .run-detail-evidence-grid {
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-}
-.tab-summary-grid,
+}.tab-summary-grid,
 .artifact-grid,
 .workflow-grid,
 .workflow-fields {
@@ -448,6 +448,7 @@ button:disabled {
 .run-evidence-stack {
     display: grid;
     gap: 12px;
+}
 }
 
 .artifact-link {
@@ -804,7 +805,6 @@ button:disabled {
     background: rgba(4, 10, 16, 0.72);
     box-shadow: none;
 }
-
 .candidate-card {
     border: 1px solid var(--border);
     border-radius: 16px;
@@ -946,6 +946,7 @@ button:disabled {
     .run-detail-evidence-grid,
     .evidence-grid { grid-template-columns: 1fr; }
 }
+
 
 @media (max-width: 980px) {
     .app-shell { grid-template-columns: 1fr; }
