@@ -99,6 +99,25 @@ export function renderCandidateCard(entry, forceShow, ctx) {
   `;
 }
 
+export function renderRunsTab(_tab, ctx) {
+  const runs = ctx.getRuns();
+  return `
+    <div class="tab-shell runs-tab">
+      <div class="artifact-top">
+        <div>
+          <div class="section-label">Run explorer</div>
+          <h3>Runs</h3>
+          <div class="artifact-meta">Native execution log and traceability surface for indexed runs inside QuantLab Desktop.</div>
+        </div>
+        <div class="workflow-actions">
+          <button class="ghost-btn" type="button" data-open-runs-legacy="true">Open legacy view</button>
+        </div>
+      </div>
+      ${renderRunsTable(runs, ctx.store, ctx.decision)}
+    </div>
+  `;
+}
+
 export function renderRunTab(tab, ctx) {
   const run = ctx.findRun(tab.runId);
   if (!run) return `<div class="tab-placeholder">The requested run is no longer present in the registry.</div>`;
@@ -123,169 +142,241 @@ export function renderRunTab(tab, ctx) {
     ? `${titleCase(latestRelatedJob.status || "unknown")} · ${formatDateTime(latestRelatedJob.created_at)}`
     : "No linked launch job";
   const relatedJobTone = latestRelatedJob?.status === "failed" ? "tone-down" : latestRelatedJob?.status === "succeeded" ? "tone-up" : "";
-
   return `
-    <div class="tab-shell">
-      <div class="artifact-top">
-        <div>
-          <div class="section-label">Run workspace</div>
-          <h3>${escapeHtml(run.run_id)}</h3>
-          <div class="artifact-meta">${escapeHtml(run.ticker || "-")} · ${escapeHtml(titleCase(run.mode || "unknown"))} · ${escapeHtml(formatDateTime(run.created_at))}</div>
+    <div class="tab-shell run-detail-shell">
+      ${renderRunIdentityHeader(run, ctx, latestRelatedJob)}
+      ${renderRunMetricsSummary(run)}
+      <div class="run-detail-grid">
+        <div class="run-detail-main">
+          ${renderRunDecisionBlock(run, ctx, candidateEntry, decisionNote, hasDecisionPeers)}
+          ${renderRunConfigProvenanceBlock(run, report)}
         </div>
+        <div class="run-detail-side">
+          ${renderRunArtifactsContinuityBlock(run, fileEntries, detail, latestRelatedJob, continuityState, sweepEntries)}
+        </div>
+      </div>
+      <div class="run-detail-deep">
+        ${renderRunPrimaryResultBlock(primaryResult)}
+        ${renderRunResolvedConfigBlock(configEntries)}
+        ${renderRunLaunchReviewBlock(run, latestRelatedJob, relatedJobTone)}
+        ${renderRunTopResultsBlock(topResults)}
+        ${renderRunSweepLinkageBlock(ctx, sweepEntries)}
+      </div>
+    </div>
+  `;
+}
+
+function renderRunIdentityHeader(run, ctx, latestRelatedJob) {
+  return `
+    <div class="run-identity-header">
+      <div class="run-identity-copy">
+        <div class="section-label">Run workspace</div>
+        <h2 class="run-identity-title">${escapeHtml(run.run_id)}</h2>
+        <div class="run-identity-meta">
+          <span>${escapeHtml(run.ticker || "-")}</span>
+          <span>${escapeHtml(titleCase(run.mode || "unknown"))}</span>
+          <span>${escapeHtml(formatDateTime(run.created_at))}</span>
+          <span class="mono-cell">${escapeHtml(shortCommit(run.git_commit) || "-")}</span>
+        </div>
+      </div>
+      <div class="run-identity-side">
+        <div class="run-row-flags">${renderCandidateFlags(ctx.store, run.run_id, ctx.decision)}</div>
         <div class="workflow-actions">
           <button class="ghost-btn" type="button" data-open-browser-run="${escapeHtml(run.run_id)}">Browser view</button>
           <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(run.run_id)}">Artifacts</button>
           <button class="ghost-btn" type="button" data-open-decision-compare="${escapeHtml(run.run_id)}">Decision compare</button>
           ${latestRelatedJob ? `<button class="ghost-btn" type="button" data-open-related-job="${escapeHtml(run.run_id)}">Latest launch review</button>` : ""}
-          <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(run.run_id)}">${ctx.decision.isCandidateRun(ctx.store, run.run_id) ? "Unmark candidate" : "Mark candidate"}</button>
-          <button class="ghost-btn" type="button" data-shortlist-run="${escapeHtml(run.run_id)}">${ctx.decision.isShortlistedRun(ctx.store, run.run_id) ? "Remove shortlist" : "Add shortlist"}</button>
-          <button class="ghost-btn" type="button" data-set-baseline="${escapeHtml(run.run_id)}">${ctx.decision.isBaselineRun(ctx.store, run.run_id) ? "Clear baseline" : "Set baseline"}</button>
-          <button class="ghost-btn" type="button" data-edit-note="${escapeHtml(run.run_id)}">${candidateEntry?.note ? "Edit note" : "Add note"}</button>
         </div>
       </div>
-      <div class="tab-summary-grid">
-        ${renderSummaryCard("Return", formatPercent(run.total_return), toneClass(run.total_return, true))}
-        ${renderSummaryCard("Sharpe", formatNumber(run.sharpe_simple))}
-        ${renderSummaryCard("Drawdown", formatPercent(run.max_drawdown), toneClass(run.max_drawdown, false))}
-        ${renderSummaryCard("Trades", formatCount(run.trades))}
-        ${renderSummaryCard("Decision state", ctx.decision.summarizeCandidateState(ctx.store, run.run_id))}
-        ${renderSummaryCard("Artifacts", fileEntries.length ? `${fileEntries.length} files` : "Pending")}
-        ${renderSummaryCard("Launch continuity", continuityState)}
-        ${renderSummaryCard("Sweep linkage", sweepEntries.length ? `${sweepEntries.length} tracked rows` : "None")}
-      </div>
-      <div class="artifact-grid">
-        <section class="artifact-panel">
-          <div class="section-label">Run summary</div>
-          <h3>Registry snapshot</h3>
-          <dl class="metric-list compact">
-            ${compareMetric("Mode", titleCase(run.mode || "unknown"), "")}
-            ${compareMetric("Ticker", run.ticker || "-", "")}
-            ${compareMetric("Window", `${run.start || "-"} -> ${run.end || "-"}`, "")}
-            ${compareMetric("Commit", shortCommit(run.git_commit) || "-", "")}
-            ${compareMetric("Path", run.path || "-", "")}
-          </dl>
-        </section>
-        <section class="artifact-panel">
-          <div class="section-label">Decision continuity</div>
-          <h3>What should happen next</h3>
-          <div class="run-row-flags">${renderCandidateFlags(ctx.store, run.run_id, ctx.decision)}</div>
-          <div class="candidate-note">${decisionNote}</div>
-          <div class="workflow-actions">
-            <button class="ghost-btn" type="button" data-open-decision-compare="${escapeHtml(run.run_id)}" ${hasDecisionPeers ? "" : "disabled"}>Compare with decision set</button>
-            <button class="ghost-btn" type="button" data-open-candidates="true">Open candidates</button>
-            <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(run.run_id)}">Inspect artifacts</button>
-          </div>
-          ${hasDecisionPeers ? `<div class="artifact-meta">This run can be compared directly against the current shortlist or baseline.</div>` : `<div class="artifact-meta">Pin a baseline or shortlist another run to enable decision compare from here.</div>`}
-        </section>
-      </div>
-      <div class="artifact-grid">
-        <section class="artifact-panel">
-          <div class="section-label">Execution</div>
-          <h3>Header and reproduce</h3>
-          <dl class="metric-list compact">
-            ${compareMetric("Config path", report?.header?.config_path || "-", "")}
-            ${compareMetric("Config hash", report?.header?.config_hash || "-", "")}
-            ${compareMetric("Python", report?.header?.python_version || "-", "")}
-            ${compareMetric("Reproduce", report?.reproduce?.command || "-", "")}
-          </dl>
-        </section>
-        <section class="artifact-panel">
-          <div class="section-label">Primary result</div>
-          <h3>${escapeHtml(primaryResult ? "Decision metric snapshot" : "No structured result available")}</h3>
-          ${primaryResult ? `
-            <dl class="metric-list">
-              ${compareMetric("Return", formatPercent(primaryResult.total_return), toneClass(primaryResult.total_return, true))}
-              ${compareMetric("Sharpe", formatNumber(primaryResult.sharpe_simple), "")}
-              ${compareMetric("Drawdown", formatPercent(primaryResult.max_drawdown), toneClass(primaryResult.max_drawdown, false))}
-              ${compareMetric("Trades", formatCount(primaryResult.trades), "")}
-              ${compareMetric("Win rate", formatPercent(primaryResult.win_rate_trades), "")}
-              ${compareMetric("Exposure", formatPercent(primaryResult.exposure), "")}
-            </dl>
-          ` : `<div class="empty-state">The canonical report did not expose a structured primary result for this run.</div>`}
-        </section>
-        <section class="artifact-panel">
-          <div class="section-label">Resolved config</div>
-          <h3>Effective parameters</h3>
-          ${configEntries.length ? `
-            <dl class="metric-list compact">
-              ${configEntries.map(([label, value]) => compareMetric(label, value, "")).join("")}
-            </dl>
-          ` : `<div class="empty-state">No resolved config was available in the canonical report.</div>`}
-        </section>
-      </div>
-      <div class="artifact-grid">
-        <section class="artifact-panel">
-          <div class="section-label">Launch review</div>
-          <h3>${escapeHtml(latestRelatedJob ? `Latest job ${latestRelatedJob.request_id}` : "No linked launch job")}</h3>
-          ${latestRelatedJob ? `
-            <dl class="metric-list compact">
-              ${compareMetric("Status", titleCase(latestRelatedJob.status || "unknown"), relatedJobTone)}
-              ${compareMetric("Created", formatDateTime(latestRelatedJob.created_at), "")}
-              ${compareMetric("Command", latestRelatedJob.command || "-", "")}
-              ${compareMetric("Request", latestRelatedJob.request_id || "-", "")}
-            </dl>
-            <div class="workflow-actions">
-              <button class="ghost-btn" type="button" data-open-related-job="${escapeHtml(run.run_id)}">Open launch review</button>
-              ${latestRelatedJob.stderr_href ? `<button class="ghost-btn" type="button" data-open-job-link="${escapeHtml(latestRelatedJob.stderr_href)}">Open stderr in browser</button>` : ""}
-            </div>
-          ` : `<div class="empty-state">This run does not currently expose a launch job in the local launch registry.</div>`}
-        </section>
-        <section class="artifact-panel">
-          <div class="section-label">Top result rows</div>
-          <h3>Best rows from report.json</h3>
-          ${topResults.length ? `
-            <div class="mini-table">
-              <div class="mini-table-row head">
-                <span>Return</span>
-                <span>Sharpe</span>
-                <span>Drawdown</span>
-                <span>Trades</span>
-              </div>
-              ${topResults.map((result) => `
-                <div class="mini-table-row">
-                  <span class="${escapeHtml(toneClass(result.total_return, true))}">${escapeHtml(formatPercent(result.total_return))}</span>
-                  <span>${escapeHtml(formatNumber(result.sharpe_simple))}</span>
-                  <span class="${escapeHtml(toneClass(result.max_drawdown, false))}">${escapeHtml(formatPercent(result.max_drawdown))}</span>
-                  <span>${escapeHtml(formatCount(result.trades))}</span>
-                </div>
-              `).join("")}
-            </div>
-          ` : `<div class="empty-state">This run did not expose comparable result rows.</div>`}
-        </section>
-      </div>
-      <div class="artifact-grid">
-        <section class="artifact-panel">
-          <div class="section-label">Sweep linkage</div>
-          <h3>${escapeHtml(sweepEntries.length ? "Tracked sweep rows for this run" : "No sweep handoff rows")}</h3>
-          ${sweepEntries.length ? `
-            <div class="mini-table">
-              <div class="mini-table-row head">
-                <span>Entry</span>
-                <span>State</span>
-                <span>Sharpe</span>
-                <span>Return</span>
-              </div>
-              ${sweepEntries.slice(0, 4).map((entry) => `
-                <div class="mini-table-row">
-                  <span>${escapeHtml(entry.entry_id)}</span>
-                  <span>${escapeHtml(ctx.sweepDecision.summarizeState(ctx.sweepDecisionStore, entry.entry_id))}</span>
-                  <span>${escapeHtml(formatNumber(entry.row?.sharpe_simple ?? entry.row_snapshot?.sharpe_simple))}</span>
-                  <span>${escapeHtml(formatPercent(entry.row?.total_return ?? entry.row_snapshot?.total_return))}</span>
-                </div>
-              `).join("")}
-            </div>
-            <div class="workflow-actions">
-              <button class="ghost-btn" type="button" data-open-sweep-handoff="tracked">Open sweep handoff</button>
-            </div>
-          ` : `<div class="empty-state">This run is not currently represented in the local sweep handoff store.</div>`}
-        </section>
-        <section class="artifact-panel">
-          <div class="section-label">Workspace files</div>
-          <h3>Local artifact directory</h3>
-          ${renderLocalFilesList(fileEntries.slice(0, 10), detail.directoryTruncated)}
-        </section>
-      </div>
     </div>
+  `;
+}
+
+function renderRunMetricsSummary(run) {
+  return `
+    <div class="tab-summary-grid run-metrics-summary">
+      ${renderSummaryCard("Return", formatPercent(run.total_return), toneClass(run.total_return, true))}
+      ${renderSummaryCard("Sharpe", formatNumber(run.sharpe_simple))}
+      ${renderSummaryCard("Drawdown", formatPercent(run.max_drawdown), toneClass(run.max_drawdown, false))}
+      ${renderSummaryCard("Trades", formatCount(run.trades))}
+    </div>
+  `;
+}
+
+function renderRunDecisionBlock(run, ctx, candidateEntry, decisionNote, hasDecisionPeers) {
+  return `
+    <section class="artifact-panel">
+      <div class="section-label">Decision / validation</div>
+      <h3>What should happen next</h3>
+      <div class="run-row-flags">${renderCandidateFlags(ctx.store, run.run_id, ctx.decision)}</div>
+      <div class="artifact-meta">Current state: ${escapeHtml(ctx.decision.summarizeCandidateState(ctx.store, run.run_id))}</div>
+      <div class="candidate-note">${decisionNote}</div>
+      <div class="workflow-actions">
+        <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(run.run_id)}">${ctx.decision.isCandidateRun(ctx.store, run.run_id) ? "Unmark candidate" : "Mark candidate"}</button>
+        <button class="ghost-btn" type="button" data-shortlist-run="${escapeHtml(run.run_id)}">${ctx.decision.isShortlistedRun(ctx.store, run.run_id) ? "Remove shortlist" : "Add shortlist"}</button>
+        <button class="ghost-btn" type="button" data-set-baseline="${escapeHtml(run.run_id)}">${ctx.decision.isBaselineRun(ctx.store, run.run_id) ? "Clear baseline" : "Set baseline"}</button>
+        <button class="ghost-btn" type="button" data-edit-note="${escapeHtml(run.run_id)}">${candidateEntry?.note ? "Edit note" : "Add note"}</button>
+      </div>
+      <div class="workflow-actions">
+        <button class="ghost-btn" type="button" data-open-decision-compare="${escapeHtml(run.run_id)}" ${hasDecisionPeers ? "" : "disabled"}>Compare with decision set</button>
+        <button class="ghost-btn" type="button" data-open-candidates="true">Open candidates</button>
+      </div>
+      ${hasDecisionPeers ? `<div class="artifact-meta">This run can be compared directly against the current shortlist or baseline.</div>` : `<div class="artifact-meta">Pin a baseline or shortlist another run to enable decision compare from here.</div>`}
+    </section>
+  `;
+}
+
+function renderRunConfigProvenanceBlock(run, report) {
+  return `
+    <section class="artifact-panel">
+      <div class="section-label">Config + provenance</div>
+      <h3>How this run was produced</h3>
+      <dl class="metric-list compact">
+        ${compareMetric("Mode", titleCase(run.mode || "unknown"), "")}
+        ${compareMetric("Ticker", run.ticker || "-", "")}
+        ${compareMetric("Window", `${run.start || "-"} -> ${run.end || "-"}`, "")}
+        ${compareMetric("Commit", shortCommit(run.git_commit) || "-", "")}
+        ${compareMetric("Path", run.path || "-", "")}
+        ${compareMetric("Config path", report?.header?.config_path || "-", "")}
+        ${compareMetric("Config hash", report?.header?.config_hash || "-", "")}
+        ${compareMetric("Python", report?.header?.python_version || "-", "")}
+        ${compareMetric("Reproduce", report?.reproduce?.command || "-", "")}
+      </dl>
+    </section>
+  `;
+}
+
+function renderRunArtifactsContinuityBlock(run, fileEntries, detail, latestRelatedJob, continuityState, sweepEntries) {
+  return `
+    <section class="artifact-panel">
+      <div class="section-label">Artifacts + continuity</div>
+      <h3>Evidence and operational links</h3>
+      <dl class="metric-list compact">
+        ${compareMetric("Artifacts", fileEntries.length ? `${fileEntries.length} files` : "Pending", "")}
+        ${compareMetric("Launch continuity", continuityState, "")}
+        ${compareMetric("Sweep linkage", sweepEntries.length ? `${sweepEntries.length} tracked rows` : "None", "")}
+      </dl>
+      <div class="workflow-actions">
+        <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(run.run_id)}">Inspect artifacts</button>
+        <button class="ghost-btn" type="button" data-open-browser-run="${escapeHtml(run.run_id)}">Browser view</button>
+        ${latestRelatedJob ? `<button class="ghost-btn" type="button" data-open-related-job="${escapeHtml(run.run_id)}">Latest launch review</button>` : ""}
+        ${latestRelatedJob?.stderr_href ? `<button class="ghost-btn" type="button" data-open-job-link="${escapeHtml(latestRelatedJob.stderr_href)}">Open stderr in browser</button>` : ""}
+      </div>
+      <div class="section-label">Workspace files</div>
+      <h3>Local artifact directory</h3>
+      ${renderLocalFilesList(fileEntries.slice(0, 10), detail.directoryTruncated)}
+    </section>
+  `;
+}
+
+function renderRunPrimaryResultBlock(primaryResult) {
+  return `
+    <section class="artifact-panel">
+      <div class="section-label">Primary result</div>
+      <h3>${escapeHtml(primaryResult ? "Decision metric snapshot" : "No structured result available")}</h3>
+      ${primaryResult ? `
+        <dl class="metric-list">
+          ${compareMetric("Return", formatPercent(primaryResult.total_return), toneClass(primaryResult.total_return, true))}
+          ${compareMetric("Sharpe", formatNumber(primaryResult.sharpe_simple), "")}
+          ${compareMetric("Drawdown", formatPercent(primaryResult.max_drawdown), toneClass(primaryResult.max_drawdown, false))}
+          ${compareMetric("Trades", formatCount(primaryResult.trades), "")}
+          ${compareMetric("Win rate", formatPercent(primaryResult.win_rate_trades), "")}
+          ${compareMetric("Exposure", formatPercent(primaryResult.exposure), "")}
+        </dl>
+      ` : `<div class="empty-state">The canonical report did not expose a structured primary result for this run.</div>`}
+    </section>
+  `;
+}
+
+function renderRunResolvedConfigBlock(configEntries) {
+  return `
+    <section class="artifact-panel">
+      <div class="section-label">Resolved config</div>
+      <h3>Effective parameters</h3>
+      ${configEntries.length ? `
+        <dl class="metric-list compact">
+          ${configEntries.map(([label, value]) => compareMetric(label, value, "")).join("")}
+        </dl>
+      ` : `<div class="empty-state">No resolved config was available in the canonical report.</div>`}
+    </section>
+  `;
+}
+
+function renderRunLaunchReviewBlock(run, latestRelatedJob, relatedJobTone) {
+  return `
+    <section class="artifact-panel">
+      <div class="section-label">Launch review</div>
+      <h3>${escapeHtml(latestRelatedJob ? `Latest job ${latestRelatedJob.request_id}` : "No linked launch job")}</h3>
+      ${latestRelatedJob ? `
+        <dl class="metric-list compact">
+          ${compareMetric("Status", titleCase(latestRelatedJob.status || "unknown"), relatedJobTone)}
+          ${compareMetric("Created", formatDateTime(latestRelatedJob.created_at), "")}
+          ${compareMetric("Command", latestRelatedJob.command || "-", "")}
+          ${compareMetric("Request", latestRelatedJob.request_id || "-", "")}
+        </dl>
+        <div class="workflow-actions">
+          <button class="ghost-btn" type="button" data-open-related-job="${escapeHtml(run.run_id)}">Open launch review</button>
+          ${latestRelatedJob.stderr_href ? `<button class="ghost-btn" type="button" data-open-job-link="${escapeHtml(latestRelatedJob.stderr_href)}">Open stderr in browser</button>` : ""}
+        </div>
+      ` : `<div class="empty-state">This run does not currently expose a launch job in the local launch registry.</div>`}
+    </section>
+  `;
+}
+
+function renderRunTopResultsBlock(topResults) {
+  return `
+    <section class="artifact-panel">
+      <div class="section-label">Top result rows</div>
+      <h3>Best rows from report.json</h3>
+      ${topResults.length ? `
+        <div class="mini-table">
+          <div class="mini-table-row head">
+            <span>Return</span>
+            <span>Sharpe</span>
+            <span>Drawdown</span>
+            <span>Trades</span>
+          </div>
+          ${topResults.map((result) => `
+            <div class="mini-table-row">
+              <span class="${escapeHtml(toneClass(result.total_return, true))}">${escapeHtml(formatPercent(result.total_return))}</span>
+              <span>${escapeHtml(formatNumber(result.sharpe_simple))}</span>
+              <span class="${escapeHtml(toneClass(result.max_drawdown, false))}">${escapeHtml(formatPercent(result.max_drawdown))}</span>
+              <span>${escapeHtml(formatCount(result.trades))}</span>
+            </div>
+          `).join("")}
+        </div>
+      ` : `<div class="empty-state">This run did not expose comparable result rows.</div>`}
+    </section>
+  `;
+}
+
+function renderRunSweepLinkageBlock(ctx, sweepEntries) {
+  return `
+    <section class="artifact-panel">
+      <div class="section-label">Sweep linkage</div>
+      <h3>${escapeHtml(sweepEntries.length ? "Tracked sweep rows for this run" : "No sweep handoff rows")}</h3>
+      ${sweepEntries.length ? `
+        <div class="mini-table">
+          <div class="mini-table-row head">
+            <span>Entry</span>
+            <span>State</span>
+            <span>Sharpe</span>
+            <span>Return</span>
+          </div>
+          ${sweepEntries.slice(0, 4).map((entry) => `
+            <div class="mini-table-row">
+              <span>${escapeHtml(entry.entry_id)}</span>
+              <span>${escapeHtml(ctx.sweepDecision.summarizeState(ctx.sweepDecisionStore, entry.entry_id))}</span>
+              <span>${escapeHtml(formatNumber(entry.row?.sharpe_simple ?? entry.row_snapshot?.sharpe_simple))}</span>
+              <span>${escapeHtml(formatPercent(entry.row?.total_return ?? entry.row_snapshot?.total_return))}</span>
+            </div>
+          `).join("")}
+        </div>
+        <div class="workflow-actions">
+          <button class="ghost-btn" type="button" data-open-sweep-handoff="tracked">Open sweep handoff</button>
+        </div>
+      ` : `<div class="empty-state">This run is not currently represented in the local sweep handoff store.</div>`}
+    </section>
   `;
 }
 
@@ -380,6 +471,63 @@ export function renderCompareTab(tab, ctx) {
         `).join("")}
       </div>
     </div>
+  `;
+}
+
+function renderRunsTable(runs, store, decision) {
+  if (!Array.isArray(runs) || !runs.length) {
+    return `<div class="empty-state">No runs are indexed yet. Launch a run or wait for canonical artifacts to appear.</div>`;
+  }
+  return `
+    <div class="runs-table-wrap">
+      <table class="runs-table">
+        <thead>
+          <tr>
+            <th>Run</th>
+            <th>Mode</th>
+            <th>Ticker</th>
+            <th>Created</th>
+            <th>Commit</th>
+            <th>Return</th>
+            <th>Sharpe</th>
+            <th>Drawdown</th>
+            <th>Trades</th>
+            <th>Flags</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${runs.map((run) => renderRunsRow(run, store, decision)).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderRunsRow(run, store, decision) {
+  const runId = run?.run_id || "";
+  const commitLabel = shortCommit(run?.git_commit) || "-";
+  const candidateLabel = decision.isCandidateRun(store, runId) ? "Unmark candidate" : "Mark candidate";
+  return `
+    <tr class="runs-row">
+      <td class="mono-cell">${escapeHtml(runId)}</td>
+      <td>${escapeHtml(titleCase(run?.mode || "unknown"))}</td>
+      <td>${escapeHtml(run?.ticker || "-")}</td>
+      <td>${escapeHtml(formatDateTime(run?.created_at))}</td>
+      <td class="mono-cell">${escapeHtml(commitLabel)}</td>
+      <td class="${escapeHtml(toneClass(run?.total_return, true))}">${escapeHtml(formatPercent(run?.total_return))}</td>
+      <td>${escapeHtml(formatNumber(run?.sharpe_simple))}</td>
+      <td class="${escapeHtml(toneClass(run?.max_drawdown, false))}">${escapeHtml(formatPercent(run?.max_drawdown))}</td>
+      <td>${escapeHtml(formatCount(run?.trades))}</td>
+      <td><div class="run-flags-cell">${renderCandidateFlags(store, runId, decision)}</div></td>
+      <td>
+        <div class="runs-row-actions">
+          <button class="ghost-btn" type="button" data-open-run="${escapeHtml(runId)}">Open run</button>
+          <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(runId)}">Artifacts</button>
+          <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(runId)}">${escapeHtml(candidateLabel)}</button>
+        </div>
+      </td>
+    </tr>
   `;
 }
 
