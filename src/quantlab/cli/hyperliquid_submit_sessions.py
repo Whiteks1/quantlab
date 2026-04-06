@@ -348,6 +348,30 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
             "reconciliation_fill_count": report.get("fill_count"),
             "reconciliation_filled_size": report.get("filled_size"),
         }
+        status.update(
+            _derive_hyperliquid_submission_alert_summary(
+                {
+                    "session_id": summary["session_id"],
+                    "status": status["status"],
+                    "submit_state": summary.get("submit_state"),
+                    "submitted": summary.get("submitted"),
+                    "submit_response_present": True,
+                    "cancel_response_present": False,
+                    "cancel_accepted": False,
+                    "cancel_state": None,
+                    "supervision_present": False,
+                    "supervision_attention_required": False,
+                    "supervision_errors": [],
+                    "effective_order_known": bool(report["status_known"]),
+                    "effective_order_state": report["normalized_state"],
+                    "order_status_present": True,
+                    "reconciliation_present": True,
+                    "order_status_errors": report.get("errors"),
+                    "reconciliation_errors": report.get("errors"),
+                    "submit_errors": summary.get("submit_errors"),
+                }
+            )
+        )
         if report.get("errors"):
             status["message"] = ", ".join(str(item) for item in report["errors"])
         store.write_status(status)
@@ -362,6 +386,8 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  fill_state            : {report.get('fill_state')}")
         print(f"  fill_count            : {report.get('fill_count')}")
         print(f"  status_known          : {report['status_known']}")
+        print(f"  alert_status          : {status['alert_status']}")
+        print(f"  alert_code            : {status['latest_alert_code']}")
         return True
 
     if getattr(args, "hyperliquid_submit_sessions_health", None):
@@ -436,6 +462,30 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
             "order_status_known": report["status_known"],
             "order_status_state": report["normalized_state"],
         }
+        status.update(
+            _derive_hyperliquid_submission_alert_summary(
+                {
+                    "session_id": summary["session_id"],
+                    "status": status["status"],
+                    "submit_state": summary.get("submit_state"),
+                    "submitted": summary.get("submitted"),
+                    "submit_response_present": True,
+                    "cancel_response_present": False,
+                    "cancel_accepted": False,
+                    "cancel_state": None,
+                    "supervision_present": False,
+                    "supervision_attention_required": False,
+                    "supervision_errors": [],
+                    "effective_order_known": bool(report["status_known"]),
+                    "effective_order_state": report["normalized_state"],
+                    "order_status_present": True,
+                    "reconciliation_present": False,
+                    "order_status_errors": report.get("errors"),
+                    "reconciliation_errors": [],
+                    "submit_errors": summary.get("submit_errors"),
+                }
+            )
+        )
         if report.get("errors"):
             status["message"] = ", ".join(str(item) for item in report["errors"])
         store.write_status(status)
@@ -446,6 +496,8 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  status_path    : {status_path}")
         print(f"  state          : {report['normalized_state']}")
         print(f"  status_known   : {report['status_known']}")
+        print(f"  alert_status   : {status['alert_status']}")
+        print(f"  alert_code     : {status['latest_alert_code']}")
         return True
 
     if getattr(args, "hyperliquid_submit_sessions_list", None):

@@ -258,6 +258,8 @@ def test_refresh_hyperliquid_submit_status(monkeypatch, tmp_path):
     assert session_status["status"] == "open"
     assert session_status["order_status_known"] is True
     assert session_status["order_status_state"] == "open"
+    assert session_status["alert_status"] == "ok"
+    assert session_status["alerts_present"] is False
 
 
 def test_refresh_hyperliquid_submit_reconciliation(monkeypatch, tmp_path):
@@ -314,6 +316,8 @@ def test_refresh_hyperliquid_submit_reconciliation(monkeypatch, tmp_path):
     assert session_status["reconciliation_source"] == "open_orders"
     assert session_status["reconciliation_fill_state"] == "partial"
     assert session_status["reconciliation_filled_size"] == "0.15"
+    assert session_status["alert_status"] == "ok"
+    assert session_status["alerts_present"] is False
 
 
 def test_refresh_hyperliquid_submit_cancel(monkeypatch, tmp_path):
