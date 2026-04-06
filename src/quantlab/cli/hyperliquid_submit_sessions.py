@@ -23,6 +23,7 @@ from quantlab.brokers.session_store import (
     HYPERLIQUID_SUBMIT_STATUS_FILENAME,
     HYPERLIQUID_SUPERVISION_FILENAME,
     HyperliquidSubmitStore,
+    write_hyperliquid_submit_health,
 )
 from quantlab.errors import ConfigError
 from quantlab.runs.artifacts import load_json_with_fallback
@@ -446,8 +447,10 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
     if getattr(args, "hyperliquid_submit_sessions_health", None):
         root_dir = _require_directory(args.hyperliquid_submit_sessions_health, "Hyperliquid submit sessions root")
         health = build_hyperliquid_submission_health(root_dir)
+        health_path = write_hyperliquid_submit_health(root_dir, health)
 
         print(f"\nHyperliquid submission health: {root_dir}\n")
+        print(f"  health_path           : {health_path}")
         print(f"  total_sessions          : {health['total_sessions']}")
         print(f"  submit_response_sessions: {health['submit_response_sessions']}")
         print(f"  cancel_response_sessions: {health['cancel_response_sessions']}")
@@ -993,6 +996,7 @@ def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
     )
     latest_issue = max(alerts, key=_hyperliquid_alert_sort_key) if alerts else None
     alert_counts = Counter(alert["severity"] for alert in alerts)
+    generated_at = dt.datetime.now().replace(microsecond=0).isoformat()
     if alert_counts.get("critical", 0):
         alert_status = "critical"
     elif alerts:
@@ -1001,6 +1005,8 @@ def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
         alert_status = "ok"
 
     return {
+        "artifact_type": "quantlab.hyperliquid.submit_health",
+        "generated_at": generated_at,
         "root_dir": str(root),
         "total_sessions": len(sessions),
         "submit_response_sessions": sum(1 for session in sessions if session.get("submit_response_present")),

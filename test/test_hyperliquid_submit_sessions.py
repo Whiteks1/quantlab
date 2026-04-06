@@ -184,7 +184,14 @@ def test_hyperliquid_submit_health_summary(tmp_path, capsys):
     assert handle_hyperliquid_submit_sessions_commands(args) is True
 
     output = capsys.readouterr().out
+    health_artifact = tmp_path / "hyperliquid_submits_health.json"
+    assert health_artifact.exists()
+    health_payload = json.loads(health_artifact.read_text(encoding="utf-8"))
+    assert health_payload["artifact_type"] == "quantlab.hyperliquid.submit_health"
+    assert health_payload["alert_status"] == "warning"
+    assert health_payload["latest_alert_code"] == "HYPERLIQUID_ORDER_STATUS_MISSING"
     assert "Hyperliquid submission health" in output
+    assert "health_path" in output
     assert "total_sessions" in output
     assert "reconciliation_sessions" in output
     assert "alert_status            : warning" in output
