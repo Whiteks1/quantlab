@@ -13,6 +13,7 @@ If Cursor is available, also honor `.cursor/mcp.json` and use the project MCP to
   - CLI routing in `src/quantlab/cli/`
   - desktop shell work in `desktop/`
   - public docs in `docs/`
+  - public landing surface in `landing/`
   - generated artifacts in `outputs/`
 - Keep `main.py` limited to compatibility/bootstrap behavior.
 - Prefer reversible changes over broad refactors.
@@ -20,12 +21,15 @@ If Cursor is available, also honor `.cursor/mcp.json` and use the project MCP to
 - Treat broker and execution changes as safety-sensitive.
 - Preserve deterministic behavior and artifact contracts unless the task explicitly changes them.
 - Prefer the repo MCP tools for routine validation:
-- `quantlab_check`
-- `quantlab_version`
-- `quantlab_runs_list`
-- `quantlab_paper_sessions_health`
-- `quantlab_desktop_smoke`
-- `docs/brand-guidelines.md`
+  - `quantlab_check`
+  - `quantlab_version`
+  - `quantlab_runs_list`
+  - `quantlab_paper_sessions_health`
+  - `quantlab_desktop_smoke`
+- For public web work, use these references:
+  - `docs/brand-guidelines.md`
+  - `docs/landing-governance.md`
+  - `landing/AGENTS.md`
 
 ## Before Implementing
 
@@ -36,6 +40,7 @@ If Cursor is available, also honor `.cursor/mcp.json` and use the project MCP to
 5. Inspect the exact files involved in the task.
 6. Confirm existing behavior before changing it.
 7. For repo-level Codex guidance, use `.agents/prompts/quantlab-agent-definitive.md`.
+8. For public landing work, also read `docs/landing-governance.md` and `landing/AGENTS.md`.
 
 ## Quality Bar
 
