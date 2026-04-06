@@ -146,6 +146,33 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
             "supervision_last_observed_at": supervision_report["last_observed_at"],
             "supervision_monitoring_mode": supervision_report["monitoring_mode"],
         }
+        status.update(
+            {
+                key: value
+                for key, value in _derive_hyperliquid_submission_alert_summary(
+                    {
+                        "session_id": summary["session_id"],
+                        "status": status["status"],
+                        "submit_state": summary.get("submit_state"),
+                        "submitted": summary.get("submitted"),
+                        "submit_response_present": True,
+                        "cancel_response_present": False,
+                        "cancel_accepted": False,
+                        "cancel_state": None,
+                        "supervision_present": True,
+                        "supervision_attention_required": supervision_report["attention_required"],
+                        "supervision_errors": supervision_report.get("errors"),
+                        "effective_order_known": reconciliation_report["status_known"],
+                        "effective_order_state": reconciliation_report["normalized_state"],
+                        "order_status_present": True,
+                        "reconciliation_present": True,
+                        "order_status_errors": order_report.get("errors"),
+                        "reconciliation_errors": reconciliation_report.get("errors"),
+                        "submit_errors": summary.get("submit_errors"),
+                    }
+                ).items()
+            }
+        )
         supervision_errors = supervision_report.get("errors") or []
         if supervision_errors:
             status["message"] = ", ".join(str(item) for item in supervision_errors)
@@ -159,6 +186,8 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  polls_completed     : {supervision_report['polls_completed']}")
         print(f"  effective_state     : {supervision_report['final_reconciliation_state']}")
         print(f"  fill_state          : {supervision_report['final_fill_state']}")
+        print(f"  alert_status        : {status['alert_status']}")
+        print(f"  alert_counts        : {status['alert_counts']}")
         return True
     if getattr(args, "hyperliquid_submit_sessions_fills", None):
         session_dir = _require_directory(

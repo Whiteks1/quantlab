@@ -523,6 +523,8 @@ def test_refresh_hyperliquid_submit_supervision(monkeypatch, tmp_path):
     assert session_status["supervision_state"] == "active"
     assert session_status["supervision_poll_count"] == 2
     assert session_status["fill_summary_state"] == "partial"
+    assert session_status["alert_status"] == "ok"
+    assert session_status["alerts_present"] is False
 
 
 def test_hyperliquid_submit_alerts_include_cancel_failures(tmp_path, capsys):
