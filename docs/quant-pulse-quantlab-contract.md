@@ -14,6 +14,31 @@ Its job is to emit prioritized research intents, regime filters, and product pri
 - QuantLab remains autonomous.
 - Quant Pulse only matters to QuantLab when it improves the research and validation cycle.
 
+## Exact flow between repos
+
+Quant Pulse should not hand QuantLab a raw article stream.
+QuantLab should consume only canonical intents that cross the signal threshold.
+
+```mermaid
+flowchart LR
+  A["Quant Pulse sources"] --> B["content/pulse.source.json"]
+  B --> C["build:feed"]
+  C --> D["public/data/pulse.json"]
+  D --> E["Editorial synthesis"]
+  E --> F["research intent payload"]
+  F --> G["QuantLab intake"]
+  G --> H{"Route"}
+  H -->|research_hypothesis| I["run / forward_eval / paper"]
+  H -->|risk_filter| J["risk control / venue gating"]
+  H -->|product_priority| K["product backlog / instrumentation"]
+```
+
+Quant Pulse keeps the human feed and the intent handoff separate:
+
+- `public/data/pulse.json` is for reading and review
+- the intent payload is for downstream QuantLab consumption
+- context-only stories stay upstream and do not become QuantLab work
+
 ## What Quant Pulse may provide
 
 Allowed outputs from Quant Pulse:
@@ -29,6 +54,10 @@ Allowed outputs from Quant Pulse:
 - `risk_filter_hint`
 - `product_priority_hint`
 
+The canonical machine-readable format is defined upstream in Quant Pulse by:
+
+- `config/research-intent.schema.json`
+
 ## When QuantLab should consume a signal
 
 QuantLab should consume a Quant Pulse signal only if it can be translated into at least one of these:
@@ -38,6 +67,13 @@ QuantLab should consume a Quant Pulse signal only if it can be translated into a
 - a product or instrumentation priority
 
 If a signal cannot become one of those three things, it should not drive QuantLab's roadmap or execution behavior.
+
+QuantLab routing after intake should be explicit:
+
+- `research_hypothesis` -> research, comparison, forward evaluation, paper sessions
+- `risk_filter` -> venue gating, exposure control, or exclusion logic
+- `product_priority` -> backlog, tooling, or instrumentation
+- context-only upstream items -> archive only, no action
 
 ## Recommended hypothesis families
 
@@ -79,6 +115,11 @@ QuantLab research intent:
 - validate trend-following on BTC and ETH versus the rest of the universe
 - compare against baseline and mean-reversion alternatives
 - forward-evaluate before any paper or execution use
+
+## Consumer rule
+
+QuantLab should treat the upstream intent as a structured hint, not as an execution instruction.
+QuantLab remains responsible for the final decision to test, filter, defer, or ignore.
 
 ## Operational rule
 
