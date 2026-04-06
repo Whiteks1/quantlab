@@ -36,6 +36,7 @@ import {
 
 const CONFIG = {
   runsIndexPath: "/outputs/runs/runs_index.json",
+  localRunsIndexPath: "outputs/runs/runs_index.json",
   launchControlPath: "/api/launch-control",
   paperHealthPath: "/api/paper-sessions-health",
   brokerHealthPath: "/api/broker-submissions-health",
@@ -77,6 +78,7 @@ const state = {
   snapshotStatus: {
     status: "idle",
     error: null,
+    source: "none",
     lastSuccessAt: null,
     consecutiveErrors: 0,
     refreshPaused: false,
@@ -188,6 +190,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   const initialState = await window.quantlabDesktop.getWorkspaceState();
   state.workspace = initialState;
+  await refreshSnapshot();
   renderWorkspaceState();
   renderWorkflow();
   unsubscribeWorkspaceState = window.quantlabDesktop.onWorkspaceState((payload) => {
@@ -326,29 +329,38 @@ function stopRefreshLoop() {
 }
 
 async function refreshSnapshot() {
-  if (!state.workspace.serverUrl) {
-    stopRefreshLoop();
-    return;
-  }
   try {
-    const runsRegistry = await window.quantlabDesktop.requestJson(CONFIG.runsIndexPath);
+    const { runsRegistry, source, primaryError } = await loadRunsRegistrySnapshot();
+    if (!state.workspace.serverUrl) stopRefreshLoop();
     state.detailCache.clear();
-    const extra = await Promise.allSettled([
-      window.quantlabDesktop.requestJson(CONFIG.launchControlPath),
-      window.quantlabDesktop.requestJson(CONFIG.paperHealthPath),
-      window.quantlabDesktop.requestJson(CONFIG.brokerHealthPath),
-      window.quantlabDesktop.requestJson(CONFIG.stepbitWorkspacePath),
-    ]);
+    const optionalErrors = [];
+    if (primaryError?.message) optionalErrors.push(primaryError.message);
+    const extra = state.workspace.serverUrl
+      ? await Promise.allSettled([
+        window.quantlabDesktop.requestJson(CONFIG.launchControlPath),
+        window.quantlabDesktop.requestJson(CONFIG.paperHealthPath),
+        window.quantlabDesktop.requestJson(CONFIG.brokerHealthPath),
+        window.quantlabDesktop.requestJson(CONFIG.stepbitWorkspacePath),
+      ])
+      : [];
+    extra.forEach((result) => {
+      if (result.status === "rejected" && result.reason?.message) optionalErrors.push(result.reason.message);
+    });
+    const launchControlResult = extra[0];
+    const paperHealthResult = extra[1];
+    const brokerHealthResult = extra[2];
+    const stepbitWorkspaceResult = extra[3];
     state.snapshot = {
       runsRegistry,
-      launchControl: extra[0].status === "fulfilled" ? extra[0].value : state.snapshot?.launchControl || null,
-      paperHealth: extra[1].status === "fulfilled" ? extra[1].value : state.snapshot?.paperHealth || null,
-      brokerHealth: extra[2].status === "fulfilled" ? extra[2].value : state.snapshot?.brokerHealth || null,
-      stepbitWorkspace: extra[3].status === "fulfilled" ? extra[3].value : state.snapshot?.stepbitWorkspace || null,
+      launchControl: launchControlResult?.status === "fulfilled" ? launchControlResult.value : state.snapshot?.launchControl || null,
+      paperHealth: paperHealthResult?.status === "fulfilled" ? paperHealthResult.value : state.snapshot?.paperHealth || null,
+      brokerHealth: brokerHealthResult?.status === "fulfilled" ? brokerHealthResult.value : state.snapshot?.brokerHealth || null,
+      stepbitWorkspace: stepbitWorkspaceResult?.status === "fulfilled" ? stepbitWorkspaceResult.value : state.snapshot?.stepbitWorkspace || null,
     };
     state.snapshotStatus = {
-      status: "ok",
-      error: null,
+      status: optionalErrors.length || source === "local" ? "degraded" : "ok",
+      error: optionalErrors[0] || null,
+      source,
       lastSuccessAt: new Date().toISOString(),
       consecutiveErrors: 0,
       refreshPaused: false,
@@ -374,6 +386,7 @@ async function refreshSnapshot() {
     state.snapshotStatus = {
       status: "error",
       error: error?.message || "The local API is unavailable.",
+      source: "none",
       lastSuccessAt: state.snapshotStatus.lastSuccessAt,
       consecutiveErrors,
       refreshPaused,
@@ -381,6 +394,20 @@ async function refreshSnapshot() {
     renderWorkspaceState();
     // Keep the shell usable even if optional surfaces are down.
   }
+}
+
+async function loadRunsRegistrySnapshot() {
+  let primaryError = null;
+  if (state.workspace.serverUrl) {
+    try {
+      const runsRegistry = await window.quantlabDesktop.requestJson(CONFIG.runsIndexPath);
+      return { runsRegistry, source: "api", primaryError: null };
+    } catch (error) {
+      primaryError = error;
+    }
+  }
+  const runsRegistry = await window.quantlabDesktop.readProjectJson(CONFIG.localRunsIndexPath);
+  return { runsRegistry, source: "local", primaryError };
 }
 
 function renderAll() {
@@ -696,6 +723,8 @@ function renderWorkspaceState() {
     ? error
     : serverUrl
     ? `${serverUrl}/research_ui/index.html${source === "external" ? " · external server" : ""}`
+    : state.snapshotStatus.source === "local"
+    ? "research_ui unavailable · using local runs index"
     : "Waiting for localhost server URL.";
   const runtimeAlert = buildRuntimeAlert();
   elements.runtimeAlert.textContent = runtimeAlert.message;
@@ -711,7 +740,19 @@ function renderWorkspaceState() {
     createRuntimeChipNode("Runs", `${runs.length} indexed`, runs.length ? "up" : "warn"),
     createRuntimeChipNode("Paper", String(paperCount), paperCount ? "up" : "warn"),
     createRuntimeChipNode("Broker", String(brokerCount), brokerCount ? "up" : "warn"),
-    createRuntimeChipNode("API", state.snapshotStatus.status === "error" ? "degraded" : state.snapshotStatus.lastSuccessAt ? "ok" : "pending", state.snapshotStatus.status === "error" ? "down" : state.snapshotStatus.lastSuccessAt ? "up" : "warn"),
+    createRuntimeChipNode(
+      "API",
+      state.snapshotStatus.status === "error"
+        ? "down"
+        : state.snapshotStatus.status === "degraded"
+        ? state.snapshotStatus.source === "local" ? "local fallback" : "degraded"
+        : state.snapshotStatus.lastSuccessAt ? "ok" : "pending",
+      state.snapshotStatus.status === "error"
+        ? "down"
+        : state.snapshotStatus.status === "degraded"
+        ? "warn"
+        : state.snapshotStatus.lastSuccessAt ? "up" : "warn",
+    ),
     createRuntimeChipNode("Stepbit app", stepbit.frontend_reachable ? "up" : "down", stepbit.frontend_reachable ? "up" : "down"),
     createRuntimeChipNode("Stepbit core", stepbit.core_ready ? "ready" : stepbit.core_reachable ? "up" : "down", stepbit.core_ready ? "up" : stepbit.core_reachable ? "warn" : "down"),
   );
@@ -719,12 +760,20 @@ function renderWorkspaceState() {
 }
 
 function buildRuntimeAlert() {
+  const localRunsAvailable = getRuns().length > 0;
   if (state.workspace.status === "error" || state.workspace.status === "stopped") {
     const recentLogs = (state.workspace.logs || []).slice(-4).join("\n");
     return {
-      tone: "down",
+      tone: localRunsAvailable ? "warn" : "down",
       actionLabel: "Retry boot",
-      message: `${state.workspace.status === "error" ? "Boot failed" : "Runtime stopped"}${state.workspace.error ? `: ${state.workspace.error}` : "."}${recentLogs ? `\n\nRecent log:\n${recentLogs}` : ""}`,
+      message: `${state.workspace.status === "error" ? "Boot failed" : "Runtime stopped"}${state.workspace.error ? `: ${state.workspace.error}` : "."}${localRunsAvailable ? "\n\nLocal runs and native tabs remain available without research_ui." : ""}${recentLogs ? `\n\nRecent log:\n${recentLogs}` : ""}`,
+    };
+  }
+  if (state.snapshotStatus.status === "degraded") {
+    return {
+      tone: "warn",
+      actionLabel: state.workspace.serverUrl ? "Retry API" : "Retry boot",
+      message: `Desktop is running with degraded connectivity. ${state.snapshotStatus.source === "local" ? "Native surfaces are using the local runs index." : "Some local API surfaces are unavailable."}${state.snapshotStatus.error ? `\n\nLatest issue: ${state.snapshotStatus.error}` : ""}`,
     };
   }
   if (state.snapshotStatus.status === "error") {
@@ -741,7 +790,9 @@ function buildRuntimeAlert() {
     return {
       tone: "warn",
       actionLabel: "",
-      message: "QuantLab Desktop is waiting for the local research surface to become reachable.",
+      message: localRunsAvailable
+        ? "QuantLab Desktop is waiting for the local research surface to become reachable. Native surfaces are already using the local runs index."
+        : "QuantLab Desktop is waiting for the local research surface to become reachable.",
     };
   }
   return { tone: "", actionLabel: "", message: "" };
@@ -1551,6 +1602,7 @@ function summarizeRuntimeInChat() {
   pushMessage("assistant", [
     `QuantLab server: ${state.workspace.status}`,
     `Server URL: ${state.workspace.serverUrl || "pending"}`,
+    `Snapshot source: ${state.snapshotStatus.source || "none"}`,
     `Indexed runs: ${runs.length}`,
     `Selected runs: ${state.selectedRunIds.length}`,
     `Candidates: ${getCandidateEntries().length}`,
@@ -1609,7 +1661,7 @@ function openRunsNativeTab() {
 
 function openResearchTab(navKind, title, hash) {
   if (!state.workspace.serverUrl) {
-    pushMessage("assistant", "The local research surface is still starting. Wait a moment and retry.");
+    pushMessage("assistant", "research_ui is unavailable. Browser-based tabs are disabled, but native/local surfaces remain usable.");
     return;
   }
   const id = `iframe:${hash}`;
@@ -2302,13 +2354,21 @@ async function loadRunDetail(runId) {
   if (!run?.path) throw new Error(`Run ${runId} has no accessible artifact path.`);
   let detail = { report: null, reportUrl: null, directoryEntries: [], directoryTruncated: false };
   for (const artifact of CONFIG.detailArtifacts) {
+    const localArtifactPath = joinProjectPath(run.path, artifact);
     const href = buildRunArtifactHref(run.path, artifact);
     try {
-      const report = await window.quantlabDesktop.requestJson(href);
-      detail = { ...detail, report, reportUrl: href };
+      const report = await window.quantlabDesktop.readProjectJson(localArtifactPath);
+      detail = { ...detail, report, reportUrl: href || localArtifactPath };
       break;
-    } catch (_error) {
-      // Keep trying the remaining artifact names.
+    } catch (_localError) {
+      if (!href) continue;
+      try {
+        const report = await window.quantlabDesktop.requestJson(href);
+        detail = { ...detail, report, reportUrl: href };
+        break;
+      } catch (_error) {
+        // Keep trying the remaining artifact names.
+      }
     }
   }
   try {
@@ -2855,10 +2915,38 @@ function absoluteUrl(relativeOrUrl) {
 async function loadOptionalText(relativePath) {
   if (!relativePath) return "";
   try {
-    return await window.quantlabDesktop.requestText(relativePath);
+    if (state.workspace.serverUrl) {
+      return await window.quantlabDesktop.requestText(relativePath);
+    }
+  } catch (_error) {
+    // Fall through to local file access.
+  }
+  const projectPath = projectPathFromHref(relativePath);
+  if (!projectPath) return "";
+  try {
+    return await window.quantlabDesktop.readProjectText(projectPath);
   } catch (_error) {
     return "";
   }
+}
+
+function joinProjectPath(basePath, leafName) {
+  return `${String(basePath || "").replace(/[\\/]+$/, "")}\\${leafName}`;
+}
+
+function projectPathFromHref(relativeOrUrl) {
+  const raw = String(relativeOrUrl || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      return projectPathFromHref(new URL(raw).pathname);
+    } catch (_error) {
+      return "";
+    }
+  }
+  const normalized = raw.replace(/^\/+/, "");
+  if (!normalized || normalized.startsWith("api/")) return "";
+  return normalized;
 }
 
 function buildFailureExplanation(job, stderrText) {
