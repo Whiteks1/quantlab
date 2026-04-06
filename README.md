@@ -64,6 +64,10 @@ External integration work remains subordinate to QuantLab Research-owned priorit
 Stepbit-facing hardening is valid when it reduces real boundary friction, but it does not set the product roadmap.
 Quant Pulse-facing intake is also subordinate to QuantLab Research-owned priorities and should only be used when it produces testable research or clear product value.
 
+## Brand
+
+See [docs/brand-guidelines.md](./docs/brand-guidelines.md) for the public brand architecture, voice, and visual direction for QuantLab Research.
+
 Known technical debt still tracked internally:
 
 - duplicate workflow docs in `.agents/workflows/`: `strategy-research.md` vs `strategy_research.md`
