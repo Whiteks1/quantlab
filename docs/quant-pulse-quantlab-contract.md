@@ -1,23 +1,23 @@
-# Quant Pulse -> QuantLab Signal Intake Contract
+# Quant Pulse -> QuantLab Research Signal Intake Contract
 
 ## Purpose
 
-Quant Pulse is an upstream signal layer for QuantLab.
+Quant Pulse is an upstream signal layer for QuantLab Research.
 
 Its job is not to produce trade picks directly.
-Its job is to emit prioritized research intents, regime filters, and product priorities that QuantLab can validate through reproducible research.
+Its job is to emit prioritized research intents, regime filters, and product priorities that QuantLab Research can validate through reproducible research.
 
 ## Core relationship
 
 - Quant Pulse filters and structures signals.
-- QuantLab validates those signals through `run`, `forward_eval`, paper sessions, and controlled execution boundaries.
-- QuantLab remains autonomous.
-- Quant Pulse only matters to QuantLab when it improves the research and validation cycle.
+- QuantLab Research validates those signals through `run`, `forward_eval`, paper sessions, and controlled execution boundaries.
+- QuantLab Research remains autonomous.
+- Quant Pulse only matters to QuantLab Research when it improves the research and validation cycle.
 
 ## Exact flow between repos
 
 Quant Pulse should not hand QuantLab a raw article stream.
-QuantLab should consume only canonical intents that cross the signal threshold.
+QuantLab Research should consume only canonical intents that cross the signal threshold.
 
 ```mermaid
 flowchart LR
@@ -26,7 +26,7 @@ flowchart LR
   C --> D["public/data/pulse.json"]
   D --> E["Editorial synthesis"]
   E --> F["research intent payload"]
-  F --> G["QuantLab intake"]
+  F --> G["QuantLab Research intake"]
   G --> H{"Route"}
   H -->|research_hypothesis| I["run / forward_eval / paper"]
   H -->|risk_filter| J["risk control / venue gating"]
@@ -60,15 +60,15 @@ The canonical machine-readable format is defined upstream in Quant Pulse by:
 
 ## When QuantLab should consume a signal
 
-QuantLab should consume a Quant Pulse signal only if it can be translated into at least one of these:
+QuantLab Research should consume a Quant Pulse signal only if it can be translated into at least one of these:
 
 - a testable research hypothesis
 - a risk filter
 - a product or instrumentation priority
 
-If a signal cannot become one of those three things, it should not drive QuantLab's roadmap or execution behavior.
+If a signal cannot become one of those three things, it should not drive QuantLab Research's roadmap or execution behavior.
 
-QuantLab routing after intake should be explicit:
+QuantLab Research routing after intake should be explicit:
 
 - `research_hypothesis` -> research, comparison, forward evaluation, paper sessions
 - `risk_filter` -> venue gating, exposure control, or exclusion logic
@@ -77,7 +77,7 @@ QuantLab routing after intake should be explicit:
 
 ## Recommended hypothesis families
 
-Quant Pulse signals should usually map into one of these QuantLab families:
+Quant Pulse signals should usually map into one of these QuantLab Research families:
 
 - trend
 - mean reversion
@@ -87,7 +87,7 @@ Quant Pulse signals should usually map into one of these QuantLab families:
 
 ## Strong signal categories
 
-Especially useful Quant Pulse input categories for QuantLab:
+Especially useful Quant Pulse input categories for QuantLab Research:
 
 - Crypto & Markets
 - Web3 market structure
@@ -110,7 +110,7 @@ Quant Pulse signal:
 
 - "Regulatory pressure is improving the case for majors"
 
-QuantLab research intent:
+QuantLab Research research intent:
 
 - validate trend-following on BTC and ETH versus the rest of the universe
 - compare against baseline and mean-reversion alternatives
@@ -118,12 +118,12 @@ QuantLab research intent:
 
 ## Consumer rule
 
-QuantLab should treat the upstream intent as a structured hint, not as an execution instruction.
-QuantLab remains responsible for the final decision to test, filter, defer, or ignore.
+QuantLab Research should treat the upstream intent as a structured hint, not as an execution instruction.
+QuantLab Research remains responsible for the final decision to test, filter, defer, or ignore.
 
 ## Operational rule
 
-Quant Pulse should only influence QuantLab when the signal can be expressed clearly enough to support:
+Quant Pulse should only influence QuantLab Research when the signal can be expressed clearly enough to support:
 
 - research
 - validation
