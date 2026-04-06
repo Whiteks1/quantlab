@@ -146,6 +146,8 @@ def test_list_hyperliquid_submit_sessions(tmp_path, capsys):
     assert handle_hyperliquid_submit_sessions_commands(args) is True
     output = capsys.readouterr().out
     assert "Hyperliquid submit sessions in" in output
+    assert "alert_status" in output
+    assert "warning" in output
     assert "submitted_remote" in output
 
 

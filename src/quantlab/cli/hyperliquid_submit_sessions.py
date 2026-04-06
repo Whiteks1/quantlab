@@ -642,7 +642,7 @@ def _require_directory(path_str: str | Path, label: str) -> Path:
 
 
 def _print_sessions_table(sessions: list[dict[str, Any]]) -> None:
-    fields = ["session_id", "status", "submit_state", "effective_order_state", "created_at"]
+    fields = ["session_id", "status", "alert_status", "submit_state", "effective_order_state", "created_at"]
     widths = {
         field: max(len(field), max((len(str(row.get(field) or "")) for row in sessions), default=0))
         for field in fields
