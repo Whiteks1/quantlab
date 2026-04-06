@@ -1,16 +1,16 @@
 :root {
-  --bg: #071018;
-  --bg-soft: #0d1823;
-  --panel: rgba(15, 25, 36, 0.82);
-  --panel-strong: #101c28;
-  --border: rgba(163, 183, 205, 0.14);
-  --text: #edf3fa;
-  --muted: #9eb0c4;
-  --accent: #59d0c3;
-  --accent-soft: rgba(89, 208, 195, 0.18);
-  --accent-2: #ffd08a;
-  --danger: #ff8f8f;
-  --shadow: 0 28px 80px rgba(0, 0, 0, 0.32);
+  --bg: #0A0F17;
+  --bg-soft: #111827;
+  --panel: rgba(22, 31, 46, 0.82);
+  --panel-strong: #1B2638;
+  --border: rgba(170, 187, 208, 0.14);
+  --text: #F5F7FB;
+  --muted: #C5CEDB;
+  --accent: #5AA9FF;
+  --accent-soft: rgba(90, 169, 255, 0.18);
+  --accent-2: #39D98A;
+  --danger: #E85D75;
+  --shadow: 0 28px 80px rgba(0, 0, 0, 0.36);
   --radius-lg: 28px;
   --radius-md: 18px;
   --radius-sm: 12px;
@@ -30,9 +30,9 @@ body {
   font-family: "Manrope", sans-serif;
   color: var(--text);
   background:
-    radial-gradient(circle at top left, rgba(89, 208, 195, 0.16), transparent 28%),
-    radial-gradient(circle at top right, rgba(255, 208, 138, 0.12), transparent 24%),
-    linear-gradient(180deg, #061018 0%, #08131d 35%, #09141d 100%);
+    radial-gradient(circle at top left, rgba(90, 169, 255, 0.16), transparent 28%),
+    radial-gradient(circle at top right, rgba(57, 217, 138, 0.12), transparent 24%),
+    linear-gradient(180deg, #0A0F17 0%, #0C1520 35%, #0A111A 100%);
 }
 
 a {
@@ -75,7 +75,7 @@ a {
   border-radius: 14px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, rgba(89, 208, 195, 0.25), rgba(255, 208, 138, 0.15));
+  background: linear-gradient(135deg, rgba(90, 169, 255, 0.28), rgba(57, 217, 138, 0.16));
   border: 1px solid var(--border);
   font-weight: 800;
 }
@@ -135,7 +135,7 @@ a {
 .header-cta:hover,
 .button:hover {
   transform: translateY(-1px);
-  border-color: rgba(89, 208, 195, 0.42);
+  border-color: rgba(90, 169, 255, 0.42);
 }
 
 .section {
@@ -213,8 +213,8 @@ h3 {
 }
 
 .button-primary {
-  background: linear-gradient(135deg, rgba(89, 208, 195, 0.95), rgba(72, 180, 170, 0.95));
-  color: #062327;
+  background: linear-gradient(135deg, rgba(90, 169, 255, 0.96), rgba(57, 217, 138, 0.9));
+  color: #06131C;
   font-weight: 800;
 }
 
@@ -275,7 +275,7 @@ h3 {
 
 .workspace-sidebar {
   padding: 1rem;
-  background: linear-gradient(180deg, rgba(6, 15, 24, 0.84), rgba(8, 17, 27, 0.6));
+  background: linear-gradient(180deg, rgba(10, 15, 23, 0.84), rgba(17, 24, 39, 0.6));
   border-right: 1px solid rgba(163, 183, 205, 0.08);
 }
 
@@ -302,7 +302,7 @@ h3 {
 .workspace-main {
   padding: 1rem;
   background:
-    linear-gradient(180deg, rgba(13, 24, 35, 0.95), rgba(10, 18, 28, 0.9));
+    linear-gradient(180deg, rgba(17, 24, 39, 0.95), rgba(10, 15, 23, 0.9));
 }
 
 .preview-strip {
@@ -320,13 +320,13 @@ h3 {
 }
 
 .strip-chip.up {
-  background: rgba(89, 208, 195, 0.1);
-  color: #9ff3ea;
+  background: rgba(90, 169, 255, 0.1);
+  color: #CFE5FF;
 }
 
 .strip-chip.warn {
-  background: rgba(255, 208, 138, 0.12);
-  color: #ffe0af;
+  background: rgba(57, 217, 138, 0.12);
+  color: #D5FAE4;
 }
 
 .preview-grid {
@@ -344,7 +344,7 @@ h3 {
 }
 
 .preview-card.primary {
-  background: linear-gradient(180deg, rgba(89, 208, 195, 0.12), rgba(255, 255, 255, 0.02));
+  background: linear-gradient(180deg, rgba(90, 169, 255, 0.12), rgba(255, 255, 255, 0.02));
 }
 
 .preview-card.wide {
@@ -426,7 +426,7 @@ h3 {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(89, 208, 195, 0.12);
+  background: rgba(90, 169, 255, 0.12);
   color: var(--accent);
   margin-bottom: 0.9rem;
   font-family: "IBM Plex Mono", monospace;
@@ -581,7 +581,7 @@ h3 {
 
 .launch-button {
   background: var(--accent-soft);
-  color: #bffaf4;
+  color: #D7E9FF;
   grid-column: 1 / -1;
 }
 

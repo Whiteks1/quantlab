@@ -20,11 +20,12 @@ If Cursor is available, also honor `.cursor/mcp.json` and use the project MCP to
 - Treat broker and execution changes as safety-sensitive.
 - Preserve deterministic behavior and artifact contracts unless the task explicitly changes them.
 - Prefer the repo MCP tools for routine validation:
-  - `quantlab_check`
-  - `quantlab_version`
-  - `quantlab_runs_list`
-  - `quantlab_paper_sessions_health`
-  - `quantlab_desktop_smoke`
+- `quantlab_check`
+- `quantlab_version`
+- `quantlab_runs_list`
+- `quantlab_paper_sessions_health`
+- `quantlab_desktop_smoke`
+- `docs/brand-guidelines.md`
 
 ## Before Implementing
 
