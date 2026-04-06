@@ -5,7 +5,7 @@ title: "[Bug] "
 labels: bug
 ---
 
-## Problem
+## Issue
 
 Describe the issue.
 
@@ -31,3 +31,7 @@ What happened instead?
 ## Notes
 
 - 
+
+## Evidence
+
+- Add a screenshot, log excerpt, or doc link if the issue touches a visible surface or a canonical contract.
