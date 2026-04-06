@@ -1,0 +1,8 @@
+blank_issues_disabled: true
+contact_links:
+  - name: QuantLab landing governance
+    url: https://github.com/Whiteks1/quantlab/blob/main/docs/landing-governance.md
+    about: Read the landing governance before opening a public web issue.
+  - name: Repo agent guide
+    url: https://github.com/Whiteks1/quantlab/blob/main/AGENTS.md
+    about: Read the workflow rules before opening a maintenance issue.

@@ -4,13 +4,14 @@ QuantLab works best with small, self-contained slices.
 
 The preferred workflow is:
 
-1. choose one clear slice
-2. work locally first
-3. commit in a small battery of logical commits
-4. push once the slice is coherent
-5. open one focused PR
-6. merge
-7. let the branch be deleted after merge
+1. open or reuse one clear issue
+2. choose one clear slice
+3. work locally first
+4. commit in a small battery of logical commits
+5. push once the slice is coherent
+6. open one focused PR linked to the issue
+7. merge
+8. let the branch be deleted after merge
 
 ## Recommended Slice Shape
 
@@ -46,6 +47,7 @@ Recommended default:
   - coherent code
   - focused validation
   - a usable PR body
+  - an issue reference if the work is not an urgent exception
 
 ## Battery of Commits
 
@@ -87,6 +89,7 @@ Prefer:
 - short validation lists
 - one issue closure per PR when possible
 - integration PRs that summarize included slices instead of acting like changelogs
+- PRs that clearly name the issue they close or continue
 
 Avoid:
 
@@ -119,7 +122,7 @@ After merge:
 
 QuantLab prefers:
 
-- small local-first slices
+- issue-led, local-first slices
 - explicit validation
 - clean PR narratives
 - minimal branch noise
