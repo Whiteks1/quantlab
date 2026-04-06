@@ -158,6 +158,8 @@ def test_show_hyperliquid_submit_session(tmp_path, capsys):
     assert handle_hyperliquid_submit_sessions_commands(args) is True
     output = capsys.readouterr().out
     assert "Hyperliquid submit session" in output
+    assert "alert_status            : warning" in output
+    assert "latest_alert_code       : HYPERLIQUID_ORDER_STATUS_MISSING" in output
     assert "submitted_remote" in output
 
 

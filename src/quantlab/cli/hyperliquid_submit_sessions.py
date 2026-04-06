@@ -441,7 +441,13 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         summary = load_hyperliquid_submit_summary(session_dir)
 
         print(f"\nHyperliquid submit session: {session_dir}\n")
+        for key in ("alert_status", "latest_alert_code", "latest_alert_session_id", "alerts_present"):
+            print(f"  {key:24s}: {summary.get(key)}")
+        print()
+        highlighted_keys = {"alert_status", "latest_alert_code", "latest_alert_session_id", "alerts_present"}
         for key, val in summary.items():
+            if key in highlighted_keys:
+                continue
             print(f"  {key:24s}: {val}")
         return True
 
