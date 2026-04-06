@@ -218,6 +218,10 @@ def test_hyperliquid_submit_alerts_snapshot(tmp_path, capsys):
     assert handle_hyperliquid_submit_sessions_commands(args) is True
 
     payload = json.loads(capsys.readouterr().out)
+    alerts_artifact = tmp_path / "hyperliquid_submits_alerts.json"
+    assert alerts_artifact.exists()
+    alerts_payload = json.loads(alerts_artifact.read_text(encoding="utf-8"))
+    assert alerts_payload["artifact_type"] == "quantlab.hyperliquid.submit_alerts"
     assert payload["alert_status"] == "critical"
     assert payload["has_alerts"] is True
     assert payload["alerts"][0]["alert_code"] == "HYPERLIQUID_ORDER_STATUS_UNKNOWN"

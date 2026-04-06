@@ -23,6 +23,7 @@ from quantlab.brokers.session_store import (
     HYPERLIQUID_SUBMIT_STATUS_FILENAME,
     HYPERLIQUID_SUPERVISION_FILENAME,
     HyperliquidSubmitStore,
+    write_hyperliquid_submit_alerts,
     write_hyperliquid_submit_health,
 )
 from quantlab.errors import ConfigError
@@ -479,6 +480,7 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
     if getattr(args, "hyperliquid_submit_sessions_alerts", None):
         root_dir = _require_directory(args.hyperliquid_submit_sessions_alerts, "Hyperliquid submit sessions root")
         alerts = build_hyperliquid_submission_alerts(root_dir)
+        write_hyperliquid_submit_alerts(root_dir, alerts)
         print(json.dumps(alerts, indent=2, sort_keys=True))
         return True
 
@@ -1083,8 +1085,9 @@ def build_hyperliquid_submission_alerts(root_dir: str | Path) -> dict[str, Any]:
         alert_status = "ok"
 
     return {
-        "root_dir": str(root),
+        "artifact_type": "quantlab.hyperliquid.submit_alerts",
         "generated_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+        "root_dir": str(root),
         "total_sessions": len(sessions),
         "submit_response_sessions": sum(1 for session in sessions if session.get("submit_response_present")),
         "cancel_response_sessions": sum(1 for session in sessions if session.get("cancel_response_present")),

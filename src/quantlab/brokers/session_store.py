@@ -28,6 +28,7 @@ HYPERLIQUID_CANCEL_RESPONSE_FILENAME = "hyperliquid_cancel_response.json"
 HYPERLIQUID_FILL_SUMMARY_FILENAME = "hyperliquid_fill_summary.json"
 HYPERLIQUID_SUPERVISION_FILENAME = "hyperliquid_supervision.json"
 HYPERLIQUID_SUBMIT_HEALTH_FILENAME = "hyperliquid_submits_health.json"
+HYPERLIQUID_SUBMIT_ALERTS_FILENAME = "hyperliquid_submits_alerts.json"
 
 
 class BrokerDryRunStore:
@@ -194,3 +195,10 @@ def write_hyperliquid_submit_health(root_dir: str | Path, health: dict[str, Any]
     root.mkdir(parents=True, exist_ok=True)
     save_json(dict(health), root / HYPERLIQUID_SUBMIT_HEALTH_FILENAME)
     return (root / HYPERLIQUID_SUBMIT_HEALTH_FILENAME).resolve()
+
+
+def write_hyperliquid_submit_alerts(root_dir: str | Path, alerts: dict[str, Any]) -> Path:
+    root = Path(root_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    save_json(dict(alerts), root / HYPERLIQUID_SUBMIT_ALERTS_FILENAME)
+    return (root / HYPERLIQUID_SUBMIT_ALERTS_FILENAME).resolve()
