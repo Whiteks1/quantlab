@@ -397,6 +397,83 @@ function renderRunSweepLinkageBlock(ctx, sweepEntries) {
   `;
 }
 
+function renderRunMetricsSummary(run) {
+  return `
+    <div class="tab-summary-grid run-metrics-summary">
+      ${renderSummaryCard("Return", formatPercent(run.total_return), toneClass(run.total_return, true))}
+      ${renderSummaryCard("Sharpe", formatNumber(run.sharpe_simple))}
+      ${renderSummaryCard("Drawdown", formatPercent(run.max_drawdown), toneClass(run.max_drawdown, false))}
+      ${renderSummaryCard("Trades", formatCount(run.trades))}
+    </div>
+  `;
+}
+
+function renderRunDecisionBlock(run, ctx, candidateEntry, decisionNote, hasDecisionPeers) {
+  return `
+    <section class="artifact-panel">
+      <div class="section-label">Decision / validation</div>
+      <h3>What should happen next</h3>
+      <div class="run-row-flags">${renderCandidateFlags(ctx.store, run.run_id, ctx.decision)}</div>
+      <div class="artifact-meta">Current state: ${escapeHtml(ctx.decision.summarizeCandidateState(ctx.store, run.run_id))}</div>
+      <div class="candidate-note">${decisionNote}</div>
+      <div class="workflow-actions">
+        <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(run.run_id)}">${ctx.decision.isCandidateRun(ctx.store, run.run_id) ? "Unmark candidate" : "Mark candidate"}</button>
+        <button class="ghost-btn" type="button" data-shortlist-run="${escapeHtml(run.run_id)}">${ctx.decision.isShortlistedRun(ctx.store, run.run_id) ? "Remove shortlist" : "Add shortlist"}</button>
+        <button class="ghost-btn" type="button" data-set-baseline="${escapeHtml(run.run_id)}">${ctx.decision.isBaselineRun(ctx.store, run.run_id) ? "Clear baseline" : "Set baseline"}</button>
+        <button class="ghost-btn" type="button" data-edit-note="${escapeHtml(run.run_id)}">${candidateEntry?.note ? "Edit note" : "Add note"}</button>
+      </div>
+      <div class="workflow-actions">
+        <button class="ghost-btn" type="button" data-open-decision-compare="${escapeHtml(run.run_id)}" ${hasDecisionPeers ? "" : "disabled"}>Compare with decision set</button>
+        <button class="ghost-btn" type="button" data-open-candidates="true">Open candidates</button>
+      </div>
+      ${hasDecisionPeers ? `<div class="artifact-meta">This run can be compared directly against the current shortlist or baseline.</div>` : `<div class="artifact-meta">Pin a baseline or shortlist another run to enable decision compare from here.</div>`}
+    </section>
+  `;
+}
+
+function renderRunConfigProvenanceBlock(run, report) {
+  return `
+    <section class="artifact-panel">
+      <div class="section-label">Config + provenance</div>
+      <h3>How this run was produced</h3>
+      <dl class="metric-list compact">
+        ${compareMetric("Mode", titleCase(run.mode || "unknown"), "")}
+        ${compareMetric("Ticker", run.ticker || "-", "")}
+        ${compareMetric("Window", `${run.start || "-"} -> ${run.end || "-"}`, "")}
+        ${compareMetric("Commit", shortCommit(run.git_commit) || "-", "")}
+        ${compareMetric("Path", run.path || "-", "")}
+        ${compareMetric("Config path", report?.header?.config_path || "-", "")}
+        ${compareMetric("Config hash", report?.header?.config_hash || "-", "")}
+        ${compareMetric("Python", report?.header?.python_version || "-", "")}
+        ${compareMetric("Reproduce", report?.reproduce?.command || "-", "")}
+      </dl>
+    </section>
+  `;
+}
+
+function renderRunArtifactsContinuityBlock(run, fileEntries, detail, latestRelatedJob, continuityState, sweepEntries) {
+  return `
+    <section class="artifact-panel">
+      <div class="section-label">Artifacts + continuity</div>
+      <h3>Evidence and operational links</h3>
+      <dl class="metric-list compact">
+        ${compareMetric("Artifacts", fileEntries.length ? `${fileEntries.length} files` : "Pending", "")}
+        ${compareMetric("Launch continuity", continuityState, "")}
+        ${compareMetric("Sweep linkage", sweepEntries.length ? `${sweepEntries.length} tracked rows` : "None", "")}
+      </dl>
+      <div class="workflow-actions">
+        <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(run.run_id)}">Inspect artifacts</button>
+        <button class="ghost-btn" type="button" data-open-browser-run="${escapeHtml(run.run_id)}">Browser view</button>
+        ${latestRelatedJob ? `<button class="ghost-btn" type="button" data-open-related-job="${escapeHtml(run.run_id)}">Latest launch review</button>` : ""}
+        ${latestRelatedJob?.stderr_href ? `<button class="ghost-btn" type="button" data-open-job-link="${escapeHtml(latestRelatedJob.stderr_href)}">Open stderr in browser</button>` : ""}
+      </div>
+      <div class="section-label">Workspace files</div>
+      <h3>Local artifact directory</h3>
+      ${renderLocalFilesList(fileEntries.slice(0, 10), detail.directoryTruncated)}
+    </section>
+  `;
+}
+
 export function renderCompareTab(tab, ctx) {
   const runs = (tab.runIds || []).map(ctx.findRun).filter(Boolean);
   if (runs.length < 2) {

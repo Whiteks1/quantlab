@@ -326,7 +326,6 @@ button:disabled {
     text-transform: none;
     letter-spacing: 0;
 }
-
 .run-metrics-summary {
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
@@ -345,7 +344,6 @@ button:disabled {
 .run-detail-evidence-grid {
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
-
 .tab-summary-grid,
 .artifact-grid,
 .workflow-grid,
