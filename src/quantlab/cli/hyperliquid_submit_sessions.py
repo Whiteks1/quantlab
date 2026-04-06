@@ -571,6 +571,49 @@ def load_hyperliquid_submit_summary(session_dir: str | Path) -> dict[str, Any]:
         "supervision_path": str(path / HYPERLIQUID_SUPERVISION_FILENAME) if supervision_path else None,
         "order_status_path": str(path / HYPERLIQUID_ORDER_STATUS_FILENAME) if order_status_path else None,
         "reconciliation_path": str(path / HYPERLIQUID_RECONCILIATION_FILENAME) if reconciliation_path else None,
+        **_derive_hyperliquid_submission_alert_summary(
+            {
+                "session_id": metadata.get("session_id") or status.get("session_id") or path.name,
+                "status": status.get("status") or metadata.get("status"),
+                "submit_state": submit_response.get("submit_state"),
+                "submitted": submit_response.get("submitted"),
+                "submit_response_present": bool(response_path),
+                "cancel_response_present": bool(cancel_response_path),
+                "cancel_accepted": cancel_response.get("cancel_accepted"),
+                "cancel_state": cancel_response.get("cancel_state"),
+                "supervision_present": bool(supervision_path),
+                "supervision_attention_required": supervision.get("attention_required"),
+                "supervision_errors": supervision.get("errors"),
+                "effective_order_known": effective_order_known,
+                "effective_order_state": effective_order_state,
+                "order_status_present": bool(order_status_path),
+                "reconciliation_present": bool(reconciliation_path),
+                "order_status_errors": order_status.get("errors"),
+                "reconciliation_errors": reconciliation.get("errors"),
+                "submit_errors": submit_response.get("errors"),
+            }
+        ),
+    }
+
+
+def _derive_hyperliquid_submission_alert_summary(session: dict[str, Any]) -> dict[str, Any]:
+    alerts = _collect_hyperliquid_submission_alerts([session])
+    alert_counts = Counter(alert["severity"] for alert in alerts)
+    if alert_counts.get("critical", 0):
+        alert_status = "critical"
+    elif alerts:
+        alert_status = "warning"
+    else:
+        alert_status = "ok"
+
+    latest_alert = max(alerts, key=_hyperliquid_alert_sort_key) if alerts else None
+    return {
+        "alert_status": alert_status,
+        "alert_counts": dict(alert_counts),
+        "alerts_present": bool(alerts),
+        "latest_alert_session_id": latest_alert.get("session_id") if latest_alert else None,
+        "latest_alert_code": latest_alert.get("alert_code") if latest_alert else None,
+        "latest_alert_at": latest_alert.get("activity_at") if latest_alert else None,
     }
 
 

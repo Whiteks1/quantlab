@@ -132,6 +132,9 @@ def test_load_hyperliquid_submit_summary(tmp_path):
     assert summary["submitted"] is True
     assert summary["signed_action_present"] is True
     assert summary["submit_response_present"] is True
+    assert summary["alerts_present"] is False
+    assert summary["alert_status"] == "ok"
+    assert summary["latest_alert_code"] is None
     assert summary["reconciliation_fill_state"] == "partial"
     assert summary["reconciliation_filled_size"] == "0.15"
 
@@ -161,8 +164,13 @@ def test_refresh_hyperliquid_submit_index(tmp_path):
     args = _make_args(hyperliquid_submit_sessions_index=str(tmp_path))
 
     assert handle_hyperliquid_submit_sessions_commands(args) is True
-    assert (tmp_path / "hyperliquid_submits_index.json").exists()
-    assert (tmp_path / "hyperliquid_submits_index.csv").exists()
+    json_path = tmp_path / "hyperliquid_submits_index.json"
+    csv_path = tmp_path / "hyperliquid_submits_index.csv"
+    assert json_path.exists()
+    assert csv_path.exists()
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert payload["sessions"][0]["alert_status"] == "warning"
+    assert payload["sessions"][0]["latest_alert_code"] == "HYPERLIQUID_ORDER_STATUS_MISSING"
 
 
 def test_hyperliquid_submit_health_summary(tmp_path, capsys):
