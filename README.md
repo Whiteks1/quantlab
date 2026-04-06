@@ -19,6 +19,12 @@ The architectural rule is simple:
 - Stepbit does not govern QuantLab
 - QuantLab may consume Stepbit capabilities through a narrow, reversible boundary
 
+Quant Pulse is a separate upstream signal layer:
+
+- it can feed QuantLab with prioritized research intents, regime filters, and product hints
+- QuantLab should only consume those signals when they improve research, validation, risk control, or product priorities
+- the intake contract is documented in [docs/quant-pulse-quantlab-contract.md](./docs/quant-pulse-quantlab-contract.md)
+
 ## Current Status
 
 QuantLab is currently transitioning from a strong paper-operations base into **Stage D.2 - supervised broker submit safety and reconciliation**.
@@ -48,6 +54,7 @@ A secondary boundary track remains active:
 
 External integration work remains subordinate to QuantLab-owned priorities.
 Stepbit-facing hardening is valid when it reduces real boundary friction, but it does not set the product roadmap.
+Quant Pulse-facing intake is also subordinate to QuantLab-owned priorities and should only be used when it produces testable research or clear product value.
 
 Known technical debt still tracked internally:
 
@@ -266,6 +273,7 @@ See also:
 - [docs/pretrade-handoff-intake.md](./docs/pretrade-handoff-intake.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/workflow-operativo-codex.md](./docs/workflow-operativo-codex.md)
+- [docs/quant-pulse-quantlab-contract.md](./docs/quant-pulse-quantlab-contract.md)
 - [docs/run-artifact-contract.md](./docs/run-artifact-contract.md)
 - [docs/stepbit-io-v1.md](./docs/stepbit-io-v1.md)
 - [docs/quantlab-stepbit-boundaries.md](./docs/quantlab-stepbit-boundaries.md)

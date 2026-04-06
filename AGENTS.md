@@ -34,6 +34,7 @@ If Cursor is available, also honor `.cursor/mcp.json` and use the project MCP to
 4. Inspect `.cursor/rules/` and `.cursor/mcp.json` when working in this repo.
 5. Inspect the exact files involved in the task.
 6. Confirm existing behavior before changing it.
+7. For repo-level Codex guidance, use `.agents/prompts/quantlab-agent-definitive.md`.
 
 ## Quality Bar
 

@@ -4,6 +4,7 @@ Treat `.agents/` as repository context and operating guidance, not as product ru
 
 Before making changes, read and treat these files as source of truth for the task:
 
+- `AGENTS.md`
 - `.agents/project-brief.md`
 - `.agents/architecture.md`
 - `.agents/code-map.md`
@@ -13,6 +14,7 @@ Before making changes, read and treat these files as source of truth for the tas
 - `.agents/workflow.md`
 - `.agents/session-log.md`
 - `.agents/cursor-codex-cheatsheet.md`
+- `docs/quant-pulse-quantlab-contract.md` when the task involves upstream signal intake or cross-repo boundary rules
 
 If the task is stage-specific or issue-specific, also read the relevant file in:
 
@@ -24,8 +26,9 @@ If the task is stage-specific or issue-specific, also read the relevant file in:
 - Preserve repository architecture and artifact contracts unless the task explicitly changes them.
 - Keep `main.py` thin and CLI/bootstrap-only.
 - Prefer read-only inspection and validation for tooling tasks.
-- Do not widen scope into adjacent broker, execution, or UI surfaces unless the task explicitly requires it.
+- Do not widen scope into adjacent broker, execution, UI, or signal-intake surfaces unless the task explicitly requires it.
 - Use a dedicated `codex/<short-topic>` branch from up-to-date `main` when implementation is needed.
+- Treat Quant Pulse intake as upstream and subordinate to QuantLab-owned decisions: only signals that improve research, validation, risk control, or product priorities should influence this repo.
 
 ## Current QuantLab priorities to respect
 
@@ -33,6 +36,7 @@ If the task is stage-specific or issue-specific, also read the relevant file in:
 - Read-only artifact/output visibility is preferred over new execution surface.
 - Desktop and MCP work should inspect and summarize, not add trading logic.
 - Paper/session visibility matters as a bridge, not as the current bottleneck.
+- Quant Pulse intake is valid only when it can be expressed as a testable research hypothesis, a risk filter, or a product/instrumentation priority.
 
 ## Two-phase workflow
 
@@ -90,6 +94,9 @@ Choose validation based on the touched area:
   - focused `pytest`
   - `python main.py --check` when CLI/runtime behavior is touched
   - `git diff --check`
+- `docs/quant-pulse-quantlab-contract.md` or other intake-boundary docs:
+  - `git diff --check`
+  - verify the wording matches the actual repo boundary and current roadmap
 
 Prefer the repository MCP tools for routine validation when they apply:
 

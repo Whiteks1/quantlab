@@ -14,6 +14,7 @@ Guía rápida para el flujo de trabajo en este repo. No sustituye a `AGENTS.md`,
 Para trabajo directo en el repo, usa:
 
 - `.agents/prompts/codex-master-prompt.md`
+- `docs/quant-pulse-quantlab-contract.md` cuando la tarea toque la frontera Quant Pulse → QuantLab
 
 Ese prompt define la versión larga del flujo de dos fases.
 
@@ -26,6 +27,7 @@ Read AGENTS.md and the relevant .agents files first:
 - .agents/current-state.md
 - .agents/cursor-codex-cheatsheet.md
 - .agents/prompts/codex-master-prompt.md
+- docs/quant-pulse-quantlab-contract.md when upstream intake boundaries are involved
 - .cursor/rules/ and .cursor/mcp.json if relevant
 
 Task:
