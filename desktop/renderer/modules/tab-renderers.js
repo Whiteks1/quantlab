@@ -540,13 +540,15 @@ export function renderArtifactsTab(tab, ctx) {
   const report = detail.report;
   const artifacts = Array.isArray(report?.artifacts) ? report.artifacts : [];
   const primaryResult = selectPrimaryResult(run, report);
+  const latestRelatedJob = ctx.getRunRelatedJobs(run.run_id)[0] || null;
+  const configEntries = summarizeObjectEntries(report?.config_resolved);
   return `
-    <div class="artifact-shell">
+    <div class="artifact-shell evidence-shell">
       <div class="artifact-top">
         <div>
           <div class="section-label">Artifacts</div>
           <h3>${escapeHtml(run.run_id)}</h3>
-          <div class="artifact-meta">${escapeHtml(run.ticker || "-")} · ${escapeHtml(formatDateTime(run.created_at))}</div>
+          <div class="artifact-meta">${escapeHtml(run.ticker || "-")} · ${escapeHtml(titleCase(run.mode || "unknown"))} · ${escapeHtml(formatDateTime(run.created_at))}</div>
         </div>
         <div class="workflow-actions">
           <button class="ghost-btn" type="button" data-open-run="${escapeHtml(run.run_id)}">Open run</button>
@@ -562,35 +564,64 @@ export function renderArtifactsTab(tab, ctx) {
         ${renderSummaryCard("Primary return", primaryResult ? formatPercent(primaryResult.total_return) : "-", primaryResult ? toneClass(primaryResult.total_return, true) : "")}
         ${renderSummaryCard("Primary sharpe", primaryResult ? formatNumber(primaryResult.sharpe_simple) : "-")}
       </div>
-      <div class="artifact-grid">
-        <section class="artifact-panel">
-          <div class="section-label">Run metadata</div>
-          <h3>Window and output path</h3>
-          <div class="artifact-meta">${escapeHtml(`${run.start || "-"} -> ${run.end || "-"}`)}</div>
-          <div class="artifact-path">${escapeHtml(run.path || "-")}</div>
-        </section>
-        <section class="artifact-panel">
-          <div class="section-label">Artifact manifest</div>
-          <h3>Files</h3>
-          ${artifacts.length ? `<div class="artifact-list">
-            ${artifacts.map((artifact) => {
-              const href = buildRunArtifactHref(run.path, artifact.file_name);
-              return `<button class="artifact-link" type="button" data-open-external="${escapeHtml(href)}"><span>${escapeHtml(artifact.file_name)}</span><span>${escapeHtml(formatBytes(artifact.size_bytes))}</span></button>`;
-            }).join("")}
-          </div>` : `<div class="empty-state">The canonical report does not expose an artifact manifest for this run.</div>`}
-        </section>
-      </div>
-      <div class="artifact-grid">
-        <section class="artifact-panel">
-          <div class="section-label">Resolved config</div>
-          <h3>Decision context</h3>
-          ${renderCompactEntryList(summarizeObjectEntries(report?.config_resolved))}
-        </section>
-        <section class="artifact-panel">
-          <div class="section-label">Local files</div>
-          <h3>Run directory</h3>
-          ${renderLocalFilesList(detail.directoryEntries || [], detail.directoryTruncated)}
-        </section>
+      <div class="evidence-grid">
+        <div class="evidence-main">
+          <section class="artifact-panel">
+            <div class="section-label">Canonical outputs</div>
+            <h3>Artifact manifest</h3>
+            <div class="artifact-meta">Machine-readable files exposed by the canonical report for this run.</div>
+            ${artifacts.length ? `<div class="artifact-list">
+              ${artifacts.map((artifact) => {
+                const href = buildRunArtifactHref(run.path, artifact.file_name);
+                return `<button class="artifact-link" type="button" data-open-external="${escapeHtml(href)}"><span>${escapeHtml(artifact.file_name)}</span><span>${escapeHtml(formatBytes(artifact.size_bytes))}</span></button>`;
+              }).join("")}
+            </div>` : `<div class="empty-state">The canonical report does not expose an artifact manifest for this run.</div>`}
+          </section>
+          <section class="artifact-panel">
+            <div class="section-label">Key outputs</div>
+            <h3>Primary result and resolved context</h3>
+            <div class="artifact-grid">
+              <section class="artifact-panel nested-panel">
+                <div class="section-label">Primary result</div>
+                <h3>${escapeHtml(primaryResult ? "Decision metric snapshot" : "No structured result available")}</h3>
+                ${primaryResult ? `
+                  <dl class="metric-list">
+                    ${compareMetric("Return", formatPercent(primaryResult.total_return), toneClass(primaryResult.total_return, true))}
+                    ${compareMetric("Sharpe", formatNumber(primaryResult.sharpe_simple), "")}
+                    ${compareMetric("Drawdown", formatPercent(primaryResult.max_drawdown), toneClass(primaryResult.max_drawdown, false))}
+                    ${compareMetric("Trades", formatCount(primaryResult.trades), "")}
+                  </dl>
+                ` : `<div class="empty-state">The canonical report did not expose a structured primary result for this run.</div>`}
+              </section>
+              <section class="artifact-panel nested-panel">
+                <div class="section-label">Resolved config</div>
+                <h3>Effective parameters</h3>
+                ${renderCompactEntryList(configEntries)}
+              </section>
+            </div>
+          </section>
+        </div>
+        <div class="evidence-side">
+          <section class="artifact-panel">
+            <div class="section-label">Evidence continuity</div>
+            <h3>Run outputs and links</h3>
+            <dl class="metric-list compact">
+              ${compareMetric("Window", `${run.start || "-"} -> ${run.end || "-"}`, "")}
+              ${compareMetric("Output path", run.path || "-", "")}
+              ${compareMetric("Raw report", detail.reportUrl ? "Available" : "Missing", "")}
+              ${compareMetric("Launch review", latestRelatedJob?.request_id || "None", "")}
+            </dl>
+            <div class="workflow-actions">
+              ${detail.reportUrl ? `<button class="ghost-btn" type="button" data-open-external="${escapeHtml(detail.reportUrl)}">Open report.json</button>` : ""}
+              ${latestRelatedJob?.stderr_href ? `<button class="ghost-btn" type="button" data-open-external="${escapeHtml(latestRelatedJob.stderr_href)}">Open stderr</button>` : ""}
+            </div>
+          </section>
+          <section class="artifact-panel">
+            <div class="section-label">Local files</div>
+            <h3>Workspace directory</h3>
+            ${renderLocalFilesList(detail.directoryEntries || [], detail.directoryTruncated)}
+          </section>
+        </div>
       </div>
     </div>
   `;
