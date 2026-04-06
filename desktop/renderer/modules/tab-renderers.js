@@ -209,6 +209,7 @@ function renderRunDecisionBlock(run, ctx, candidateEntry, decisionNote, hasDecis
       <div class="section-label">Decision / validation</div>
       <h3>What should happen next</h3>
       <div class="run-row-flags">${renderCandidateFlags(ctx.store, run.run_id, ctx.decision)}</div>
+      <div class="artifact-meta">Current state: ${escapeHtml(ctx.decision.summarizeCandidateState(ctx.store, run.run_id))}</div>
       <div class="candidate-note">${decisionNote}</div>
       <div class="workflow-actions">
         <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(run.run_id)}">${ctx.decision.isCandidateRun(ctx.store, run.run_id) ? "Unmark candidate" : "Mark candidate"}</button>
