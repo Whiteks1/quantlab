@@ -1,21 +1,18 @@
 ## Summary
 
-This PR:
-- 
-- 
-- 
+- Describe the slice in one or two bullets.
+- Mention the user-facing or boundary change.
 
 ## Why
 
-This slice matters because:
-- 
-- 
+- Explain why this slice belongs now.
+- State the concrete benefit.
 
 ## Scope
 
 This PR does not:
-- 
-- 
+- Add unrelated feature work.
+- Expand scope beyond the slice.
 
 ## Validation
 
@@ -23,11 +20,16 @@ Validated with:
 - ``
 - ``
 
+## Compatibility / Risk
+
+- Note any compatibility impact, if any.
+- Note any operational or behavioral risk, if any.
+
 ## Notes
 
 - Keep this section short.
-- For normal QuantLab slices, prefer opening the PR after the branch already has a coherent local battery of commits rather than pushing the first incomplete checkpoint.
-- If this is a stacked or integration PR, summarize the included slices instead of rewriting a long changelog.
-- Prefer closing only the issue this PR directly resolves. If this PR integrates earlier merged stacked work, mention that in prose rather than adding a long list of `Closes #...`.
+- For stacked or integration PRs, summarize the included slices instead of writing a changelog.
+- Prefer one issue closure per PR when possible.
+- If this PR only aligns docs or contracts, say so explicitly.
 
 Closes #
