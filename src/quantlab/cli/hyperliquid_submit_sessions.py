@@ -228,6 +228,30 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
             "fill_summary_count": report["fill_count"],
             "fill_summary_filled_size": report["filled_size"],
         }
+        status.update(
+            _derive_hyperliquid_submission_alert_summary(
+                {
+                    "session_id": summary["session_id"],
+                    "status": status["status"],
+                    "submit_state": summary.get("submit_state"),
+                    "submitted": summary.get("submitted"),
+                    "submit_response_present": True,
+                    "cancel_response_present": bool(summary.get("cancel_response_present")),
+                    "cancel_accepted": summary.get("cancel_accepted"),
+                    "cancel_state": summary.get("cancel_state"),
+                    "supervision_present": bool(summary.get("supervision_present")),
+                    "supervision_attention_required": summary.get("supervision_attention_required"),
+                    "supervision_errors": summary.get("supervision_errors"),
+                    "effective_order_known": summary.get("effective_order_known"),
+                    "effective_order_state": summary.get("effective_order_state"),
+                    "order_status_present": bool(summary.get("order_status_present")),
+                    "reconciliation_present": bool(summary.get("reconciliation_present")),
+                    "order_status_errors": summary.get("order_status_errors"),
+                    "reconciliation_errors": summary.get("reconciliation_errors"),
+                    "submit_errors": summary.get("submit_errors"),
+                }
+            )
+        )
         if report.get("errors"):
             status["message"] = ", ".join(str(item) for item in report["errors"])
         store.write_status(status)
@@ -239,6 +263,8 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  fill_state     : {report['fill_state']}")
         print(f"  fill_count     : {report['fill_count']}")
         print(f"  filled_size    : {report['filled_size']}")
+        print(f"  alert_status   : {status['alert_status']}")
+        print(f"  latest_alert   : {status['latest_alert_code']}")
         return True
 
     if getattr(args, "hyperliquid_submit_sessions_cancel", None):
@@ -291,6 +317,31 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
             "cancel_remote_called": report["remote_cancel_called"],
             "cancel_accepted": report["cancel_accepted"],
         }
+        status.update(
+            _derive_hyperliquid_submission_alert_summary(
+                {
+                    "session_id": summary["session_id"],
+                    "status": status["status"],
+                    "submit_state": summary.get("submit_state"),
+                    "submitted": summary.get("submitted"),
+                    "submit_response_present": True,
+                    "cancel_response_present": True,
+                    "cancel_accepted": report["cancel_accepted"],
+                    "cancel_state": report["cancel_state"],
+                    "supervision_present": bool(summary.get("supervision_present")),
+                    "supervision_attention_required": summary.get("supervision_attention_required"),
+                    "supervision_errors": summary.get("supervision_errors"),
+                    "effective_order_known": summary.get("effective_order_known"),
+                    "effective_order_state": summary.get("effective_order_state"),
+                    "order_status_present": bool(summary.get("order_status_present")),
+                    "reconciliation_present": bool(summary.get("reconciliation_present")),
+                    "order_status_errors": summary.get("order_status_errors"),
+                    "reconciliation_errors": summary.get("reconciliation_errors"),
+                    "submit_errors": summary.get("submit_errors"),
+                    "cancel_errors": report.get("errors"),
+                }
+            )
+        )
         if report.get("errors"):
             status["message"] = ", ".join(str(item) for item in report["errors"])
         store.write_status(status)
@@ -302,6 +353,8 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  cancel_state        : {report['cancel_state']}")
         print(f"  cancel_accepted     : {report['cancel_accepted']}")
         print(f"  remote_cancel_called: {report['remote_cancel_called']}")
+        print(f"  alert_status        : {status['alert_status']}")
+        print(f"  latest_alert        : {status['latest_alert_code']}")
         return True
 
     if getattr(args, "hyperliquid_submit_sessions_reconcile", None):

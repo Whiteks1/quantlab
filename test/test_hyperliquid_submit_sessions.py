@@ -373,6 +373,9 @@ def test_refresh_hyperliquid_submit_cancel(monkeypatch, tmp_path):
     assert session_status["status"] == "cancel_pending"
     assert session_status["cancel_state"] == "canceled_remote"
     assert session_status["cancel_accepted"] is True
+    assert session_status["alert_status"] == "warning"
+    assert session_status["alerts_present"] is True
+    assert session_status["latest_alert_code"] == "HYPERLIQUID_ORDER_STATUS_MISSING"
 
 
 def test_refresh_hyperliquid_submit_fill_summary(monkeypatch, tmp_path):
@@ -425,6 +428,9 @@ def test_refresh_hyperliquid_submit_fill_summary(monkeypatch, tmp_path):
     assert session_status["fill_summary_known"] is True
     assert session_status["fill_summary_state"] == "partial"
     assert session_status["fill_summary_filled_size"] == "0.15"
+    assert session_status["alert_status"] == "warning"
+    assert session_status["alerts_present"] is True
+    assert session_status["latest_alert_code"] == "HYPERLIQUID_ORDER_STATUS_MISSING"
 
 
 def test_refresh_hyperliquid_submit_supervision(monkeypatch, tmp_path):
