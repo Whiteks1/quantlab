@@ -276,7 +276,7 @@ button:disabled {
 .run-identity-side,
 .run-detail-main,
 .run-detail-side,
-.run-detail-deep {
+.run-detail-evidence-grid {
     display: grid;
     gap: 12px;
 }
@@ -299,12 +299,40 @@ button:disabled {
     color: var(--muted);
 }
 
+.run-identity-state {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.run-state-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(18, 28, 40, 0.82);
+    color: var(--muted);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.74rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.run-state-chip strong {
+    color: var(--text);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
 .run-metrics-summary {
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .run-detail-grid,
-.run-detail-deep {
+.run-detail-evidence-grid {
     display: grid;
     gap: 16px;
 }
@@ -312,6 +340,10 @@ button:disabled {
 .run-detail-grid {
     grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
     align-items: start;
+}
+
+.run-detail-evidence-grid {
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 
 .tab-summary-grid,
@@ -415,8 +447,9 @@ button:disabled {
     gap: 10px;
 }
 
-.run-detail-deep {
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+.run-evidence-stack {
+    display: grid;
+    gap: 12px;
 }
 
 .artifact-link {
@@ -912,7 +945,7 @@ button:disabled {
     .workflow-grid { grid-template-columns: 1fr; }
     .experiments-grid { grid-template-columns: 1fr; }
     .run-detail-grid,
-    .run-detail-deep,
+    .run-detail-evidence-grid,
     .evidence-grid { grid-template-columns: 1fr; }
 }
 
