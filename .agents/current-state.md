@@ -5,6 +5,7 @@
 - **Last Updated**: 2026-03-27
 - **Focus**: Stage D.2 is centered on closing ambiguity around supervised Hyperliquid submit, especially idempotency, reconciliation, and post-submit operator safety.
 - **Authority Note**: Stepbit-facing integration remains a secondary boundary track. QuantLab stays autonomous and external consumer needs do not override QuantLab-owned priorities.
+- **Signal Intake Note**: Quant Pulse is an upstream signal layer, not a controller. QuantLab should only consume Quant Pulse output when it can be translated into a research intent, risk filter, or product priority.
 - **Product Identity Note**: Publicly, QuantLab should now be described as a `web3 app` in direction, but still as a supervised and safety-first execution system in current maturity.
 - **Performance Note**: QuantLab remains Python-first. Native acceleration is now treated as a measured hotspot tactic, with the backtest engine as the first realistic candidate if profiling justifies escalation.
 
@@ -40,6 +41,7 @@
   - preserve paper-session discipline as a prerequisite, not the current bottleneck
   - keep Hyperliquid as the active execution boundary while positioning Kraken as legacy compatibility and Hyperliquid as the first next venue intended for personal connection
   - treat Bitget as a later optional comparison venue after Hyperliquid, not a current priority
+  - Quant Pulse intake is valid only when it improves research, validation, or product priorities
   - review whether the current boundary can express Hyperliquid signer, wallet, routing, and websocket semantics without ad hoc adapter leaks
   - keep the first Hyperliquid supervised submit path intentionally narrow and auditable before adding richer session, status, or websocket execution work
   - add local operator visibility over canonical Hyperliquid submit sessions before widening execution further

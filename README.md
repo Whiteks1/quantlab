@@ -1,27 +1,41 @@
-# QuantLab
+# QuantLab Research
 
-QuantLab is a web3 trading and execution app with a CLI-first core for reproducible strategy research, supervised execution safety, and venue-aware operational workflows.
+QuantLab Research is a local-first quantitative lab for reproducible research, disciplined paper validation, and supervised execution.
+
+It is built on QuantLab Core, the internal engine that makes hypotheses, configurations, runs, artifacts, and outcomes explicit, traceable, and reviewable. The goal is not narrative polish, but research clarity, operational discipline, and controlled progression from validation to execution.
+
+Brand architecture:
+
+- QuantLab Research is the public-facing product name
+- QuantLab Core is the internal engine and validation layer
+- Quant Pulse is the upstream signal layer that feeds prioritized research intents
 
 Today, the product should be read as:
 
-- a sovereign QuantLab app for research, paper ops, and execution discipline
+- a sovereign QuantLab Research app for research, paper ops, and execution discipline
 - moving toward practical onchain and broker-connected trading operation
 - still intentionally supervised, not yet broad autonomous live routing
 
 It is intentionally split from Stepbit:
 
-- QuantLab is the primary system for research, paper-trading discipline, execution safety, and future broker-connected operation.
+- QuantLab Research is the primary system for research, paper-trading discipline, execution safety, and future broker-connected operation.
 - Stepbit is an optional external system that can provide AI, reasoning, workflow, and automation capabilities.
 
 The architectural rule is simple:
 
-- QuantLab remains autonomous
+- QuantLab Research remains autonomous
 - Stepbit does not govern QuantLab
-- QuantLab may consume Stepbit capabilities through a narrow, reversible boundary
+- QuantLab Research may consume Stepbit capabilities through a narrow, reversible boundary
+
+Quant Pulse is a separate upstream signal layer:
+
+- it can feed QuantLab Research with prioritized research intents, regime filters, and product hints
+- QuantLab Research should only consume those signals when they improve research, validation, risk control, or product priorities
+- the intake contract is documented in [docs/quant-pulse-quantlab-contract.md](./docs/quant-pulse-quantlab-contract.md)
 
 ## Current Status
 
-QuantLab is currently transitioning from a strong paper-operations base into **Stage D.2 - supervised broker submit safety and reconciliation**.
+QuantLab Research is currently transitioning from a strong paper-operations base into **Stage D.2 - supervised broker submit safety and reconciliation**.
 
 The paper layer is now materially operational, and the current broker-facing focus is:
 
@@ -34,7 +48,7 @@ Execution venue strategy note:
 - `Hyperliquid` is the active execution venue direction
 - `Kraken` remains implemented compatibility / history, not the active next target
 - `Bitget` is a later optional comparison venue, after Hyperliquid, not the next default target
-- this is why `QuantLab web3 app` is now the right public direction, even though the product is still earlier in runtime maturity than that label's end-state implies
+  - this is why `QuantLab Research web3 app` is now the right public direction, even though the product is still earlier in runtime maturity than that label's end-state implies
 - `BrokerAdapter` remains the current code name, but the architecture should now be read as an execution-venue boundary, not only a CEX-style broker boundary
 - a minimal `ExecutionContext` layer now exists in code so future venue work can model signer and routing semantics without overloading `ExecutionIntent`
 - local signer-backed Hyperliquid action signing, supervised submit artifacts, canonical submit sessions, direct post-submit status, richer fill/close reconciliation, a bounded continuous-supervision surface, and a first supervised cancel boundary now exist
@@ -46,8 +60,13 @@ A secondary boundary track remains active:
 - automatic refresh of `outputs/runs/runs_index.*`
 - reliable health/version surfaces via `--check` and `--version`
 
-External integration work remains subordinate to QuantLab-owned priorities.
+External integration work remains subordinate to QuantLab Research-owned priorities.
 Stepbit-facing hardening is valid when it reduces real boundary friction, but it does not set the product roadmap.
+Quant Pulse-facing intake is also subordinate to QuantLab Research-owned priorities and should only be used when it produces testable research or clear product value.
+
+## Brand
+
+See [docs/brand-guidelines.md](./docs/brand-guidelines.md) for the public brand architecture, voice, and visual direction for QuantLab Research.
 
 Known technical debt still tracked internally:
 
@@ -179,7 +198,7 @@ Its current role is:
 - provide a chat-centered command bus
 - persist a local decision layer for `Candidates`, `Shortlist`, and `Baseline`
 - open `Launch`, `Run Workspace`, `Candidates`, `Compare`, `Artifacts`, `Paper Ops`, and launch review as desktop tabs
-- surface local runtime visibility for QuantLab and Stepbit
+- surface local runtime visibility for QuantLab Research and Stepbit
 
 Start it with:
 
@@ -266,6 +285,7 @@ See also:
 - [docs/pretrade-handoff-intake.md](./docs/pretrade-handoff-intake.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/workflow-operativo-codex.md](./docs/workflow-operativo-codex.md)
+- [docs/quant-pulse-quantlab-contract.md](./docs/quant-pulse-quantlab-contract.md)
 - [docs/run-artifact-contract.md](./docs/run-artifact-contract.md)
 - [docs/stepbit-io-v1.md](./docs/stepbit-io-v1.md)
 - [docs/quantlab-stepbit-boundaries.md](./docs/quantlab-stepbit-boundaries.md)

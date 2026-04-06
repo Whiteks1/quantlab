@@ -132,6 +132,9 @@ def test_load_hyperliquid_submit_summary(tmp_path):
     assert summary["submitted"] is True
     assert summary["signed_action_present"] is True
     assert summary["submit_response_present"] is True
+    assert summary["alerts_present"] is False
+    assert summary["alert_status"] == "ok"
+    assert summary["latest_alert_code"] is None
     assert summary["reconciliation_fill_state"] == "partial"
     assert summary["reconciliation_filled_size"] == "0.15"
 
@@ -143,6 +146,8 @@ def test_list_hyperliquid_submit_sessions(tmp_path, capsys):
     assert handle_hyperliquid_submit_sessions_commands(args) is True
     output = capsys.readouterr().out
     assert "Hyperliquid submit sessions in" in output
+    assert "alert_status" in output
+    assert "warning" in output
     assert "submitted_remote" in output
 
 
@@ -153,6 +158,8 @@ def test_show_hyperliquid_submit_session(tmp_path, capsys):
     assert handle_hyperliquid_submit_sessions_commands(args) is True
     output = capsys.readouterr().out
     assert "Hyperliquid submit session" in output
+    assert "alert_status            : warning" in output
+    assert "latest_alert_code       : HYPERLIQUID_ORDER_STATUS_MISSING" in output
     assert "submitted_remote" in output
 
 
@@ -161,32 +168,34 @@ def test_refresh_hyperliquid_submit_index(tmp_path):
     args = _make_args(hyperliquid_submit_sessions_index=str(tmp_path))
 
     assert handle_hyperliquid_submit_sessions_commands(args) is True
-    assert (tmp_path / "hyperliquid_submits_index.json").exists()
-    assert (tmp_path / "hyperliquid_submits_index.csv").exists()
+    json_path = tmp_path / "hyperliquid_submits_index.json"
+    csv_path = tmp_path / "hyperliquid_submits_index.csv"
+    assert json_path.exists()
+    assert csv_path.exists()
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert payload["sessions"][0]["alert_status"] == "warning"
+    assert payload["sessions"][0]["latest_alert_code"] == "HYPERLIQUID_ORDER_STATUS_MISSING"
 
 
 def test_hyperliquid_submit_health_summary(tmp_path, capsys):
-    session_dir = _write_session(tmp_path)
-    (session_dir / "hyperliquid_order_status.json").write_text(
-        json.dumps(
-            {
-                "artifact_type": "quantlab.hyperliquid.order_status",
-                "generated_at": "2026-03-27T12:05:00",
-                "status_known": True,
-                "normalized_state": "open",
-                "errors": [],
-            }
-        ),
-        encoding="utf-8",
-    )
+    _write_session(tmp_path)
 
     args = _make_args(hyperliquid_submit_sessions_health=str(tmp_path))
     assert handle_hyperliquid_submit_sessions_commands(args) is True
 
     output = capsys.readouterr().out
+    health_artifact = tmp_path / "hyperliquid_submits_health.json"
+    assert health_artifact.exists()
+    health_payload = json.loads(health_artifact.read_text(encoding="utf-8"))
+    assert health_payload["artifact_type"] == "quantlab.hyperliquid.submit_health"
+    assert health_payload["alert_status"] == "warning"
+    assert health_payload["latest_alert_code"] == "HYPERLIQUID_ORDER_STATUS_MISSING"
     assert "Hyperliquid submission health" in output
+    assert "health_path" in output
     assert "total_sessions" in output
     assert "reconciliation_sessions" in output
+    assert "alert_status            : warning" in output
+    assert "latest_alert_code       : HYPERLIQUID_ORDER_STATUS_MISSING" in output
     assert "latest_submit_id" in output
 
 
@@ -209,6 +218,10 @@ def test_hyperliquid_submit_alerts_snapshot(tmp_path, capsys):
     assert handle_hyperliquid_submit_sessions_commands(args) is True
 
     payload = json.loads(capsys.readouterr().out)
+    alerts_artifact = tmp_path / "hyperliquid_submits_alerts.json"
+    assert alerts_artifact.exists()
+    alerts_payload = json.loads(alerts_artifact.read_text(encoding="utf-8"))
+    assert alerts_payload["artifact_type"] == "quantlab.hyperliquid.submit_alerts"
     assert payload["alert_status"] == "critical"
     assert payload["has_alerts"] is True
     assert payload["alerts"][0]["alert_code"] == "HYPERLIQUID_ORDER_STATUS_UNKNOWN"
@@ -256,6 +269,8 @@ def test_refresh_hyperliquid_submit_status(monkeypatch, tmp_path):
     assert session_status["status"] == "open"
     assert session_status["order_status_known"] is True
     assert session_status["order_status_state"] == "open"
+    assert session_status["alert_status"] == "ok"
+    assert session_status["alerts_present"] is False
 
 
 def test_refresh_hyperliquid_submit_reconciliation(monkeypatch, tmp_path):
@@ -312,6 +327,8 @@ def test_refresh_hyperliquid_submit_reconciliation(monkeypatch, tmp_path):
     assert session_status["reconciliation_source"] == "open_orders"
     assert session_status["reconciliation_fill_state"] == "partial"
     assert session_status["reconciliation_filled_size"] == "0.15"
+    assert session_status["alert_status"] == "ok"
+    assert session_status["alerts_present"] is False
 
 
 def test_refresh_hyperliquid_submit_cancel(monkeypatch, tmp_path):
@@ -367,6 +384,9 @@ def test_refresh_hyperliquid_submit_cancel(monkeypatch, tmp_path):
     assert session_status["status"] == "cancel_pending"
     assert session_status["cancel_state"] == "canceled_remote"
     assert session_status["cancel_accepted"] is True
+    assert session_status["alert_status"] == "warning"
+    assert session_status["alerts_present"] is True
+    assert session_status["latest_alert_code"] == "HYPERLIQUID_ORDER_STATUS_MISSING"
 
 
 def test_refresh_hyperliquid_submit_fill_summary(monkeypatch, tmp_path):
@@ -419,6 +439,9 @@ def test_refresh_hyperliquid_submit_fill_summary(monkeypatch, tmp_path):
     assert session_status["fill_summary_known"] is True
     assert session_status["fill_summary_state"] == "partial"
     assert session_status["fill_summary_filled_size"] == "0.15"
+    assert session_status["alert_status"] == "warning"
+    assert session_status["alerts_present"] is True
+    assert session_status["latest_alert_code"] == "HYPERLIQUID_ORDER_STATUS_MISSING"
 
 
 def test_refresh_hyperliquid_submit_supervision(monkeypatch, tmp_path):
@@ -521,6 +544,8 @@ def test_refresh_hyperliquid_submit_supervision(monkeypatch, tmp_path):
     assert session_status["supervision_state"] == "active"
     assert session_status["supervision_poll_count"] == 2
     assert session_status["fill_summary_state"] == "partial"
+    assert session_status["alert_status"] == "ok"
+    assert session_status["alerts_present"] is False
 
 
 def test_hyperliquid_submit_alerts_include_cancel_failures(tmp_path, capsys):

@@ -18,6 +18,7 @@ build/
 venv/
 env/
 desktop/node_modules/
+bun.lockb
 
 # =========================
 # Environment secrets

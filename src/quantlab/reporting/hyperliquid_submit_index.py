@@ -43,6 +43,12 @@ _INDEX_FIELDS = [
     "supervision_attention_required",
     "supervision_poll_count",
     "supervision_monitoring_mode",
+    "alert_status",
+    "alert_counts",
+    "alerts_present",
+    "latest_alert_session_id",
+    "latest_alert_code",
+    "latest_alert_at",
     "effective_order_state",
     "path",
 ]

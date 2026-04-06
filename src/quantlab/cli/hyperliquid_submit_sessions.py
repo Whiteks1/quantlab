@@ -23,6 +23,8 @@ from quantlab.brokers.session_store import (
     HYPERLIQUID_SUBMIT_STATUS_FILENAME,
     HYPERLIQUID_SUPERVISION_FILENAME,
     HyperliquidSubmitStore,
+    write_hyperliquid_submit_alerts,
+    write_hyperliquid_submit_health,
 )
 from quantlab.errors import ConfigError
 from quantlab.runs.artifacts import load_json_with_fallback
@@ -146,6 +148,33 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
             "supervision_last_observed_at": supervision_report["last_observed_at"],
             "supervision_monitoring_mode": supervision_report["monitoring_mode"],
         }
+        status.update(
+            {
+                key: value
+                for key, value in _derive_hyperliquid_submission_alert_summary(
+                    {
+                        "session_id": summary["session_id"],
+                        "status": status["status"],
+                        "submit_state": summary.get("submit_state"),
+                        "submitted": summary.get("submitted"),
+                        "submit_response_present": True,
+                        "cancel_response_present": False,
+                        "cancel_accepted": False,
+                        "cancel_state": None,
+                        "supervision_present": True,
+                        "supervision_attention_required": supervision_report["attention_required"],
+                        "supervision_errors": supervision_report.get("errors"),
+                        "effective_order_known": reconciliation_report["status_known"],
+                        "effective_order_state": reconciliation_report["normalized_state"],
+                        "order_status_present": True,
+                        "reconciliation_present": True,
+                        "order_status_errors": order_report.get("errors"),
+                        "reconciliation_errors": reconciliation_report.get("errors"),
+                        "submit_errors": summary.get("submit_errors"),
+                    }
+                ).items()
+            }
+        )
         supervision_errors = supervision_report.get("errors") or []
         if supervision_errors:
             status["message"] = ", ".join(str(item) for item in supervision_errors)
@@ -159,6 +188,8 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  polls_completed     : {supervision_report['polls_completed']}")
         print(f"  effective_state     : {supervision_report['final_reconciliation_state']}")
         print(f"  fill_state          : {supervision_report['final_fill_state']}")
+        print(f"  alert_status        : {status['alert_status']}")
+        print(f"  alert_counts        : {status['alert_counts']}")
         return True
     if getattr(args, "hyperliquid_submit_sessions_fills", None):
         session_dir = _require_directory(
@@ -199,6 +230,30 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
             "fill_summary_count": report["fill_count"],
             "fill_summary_filled_size": report["filled_size"],
         }
+        status.update(
+            _derive_hyperliquid_submission_alert_summary(
+                {
+                    "session_id": summary["session_id"],
+                    "status": status["status"],
+                    "submit_state": summary.get("submit_state"),
+                    "submitted": summary.get("submitted"),
+                    "submit_response_present": True,
+                    "cancel_response_present": bool(summary.get("cancel_response_present")),
+                    "cancel_accepted": summary.get("cancel_accepted"),
+                    "cancel_state": summary.get("cancel_state"),
+                    "supervision_present": bool(summary.get("supervision_present")),
+                    "supervision_attention_required": summary.get("supervision_attention_required"),
+                    "supervision_errors": summary.get("supervision_errors"),
+                    "effective_order_known": summary.get("effective_order_known"),
+                    "effective_order_state": summary.get("effective_order_state"),
+                    "order_status_present": bool(summary.get("order_status_present")),
+                    "reconciliation_present": bool(summary.get("reconciliation_present")),
+                    "order_status_errors": summary.get("order_status_errors"),
+                    "reconciliation_errors": summary.get("reconciliation_errors"),
+                    "submit_errors": summary.get("submit_errors"),
+                }
+            )
+        )
         if report.get("errors"):
             status["message"] = ", ".join(str(item) for item in report["errors"])
         store.write_status(status)
@@ -210,6 +265,8 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  fill_state     : {report['fill_state']}")
         print(f"  fill_count     : {report['fill_count']}")
         print(f"  filled_size    : {report['filled_size']}")
+        print(f"  alert_status   : {status['alert_status']}")
+        print(f"  latest_alert   : {status['latest_alert_code']}")
         return True
 
     if getattr(args, "hyperliquid_submit_sessions_cancel", None):
@@ -262,6 +319,31 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
             "cancel_remote_called": report["remote_cancel_called"],
             "cancel_accepted": report["cancel_accepted"],
         }
+        status.update(
+            _derive_hyperliquid_submission_alert_summary(
+                {
+                    "session_id": summary["session_id"],
+                    "status": status["status"],
+                    "submit_state": summary.get("submit_state"),
+                    "submitted": summary.get("submitted"),
+                    "submit_response_present": True,
+                    "cancel_response_present": True,
+                    "cancel_accepted": report["cancel_accepted"],
+                    "cancel_state": report["cancel_state"],
+                    "supervision_present": bool(summary.get("supervision_present")),
+                    "supervision_attention_required": summary.get("supervision_attention_required"),
+                    "supervision_errors": summary.get("supervision_errors"),
+                    "effective_order_known": summary.get("effective_order_known"),
+                    "effective_order_state": summary.get("effective_order_state"),
+                    "order_status_present": bool(summary.get("order_status_present")),
+                    "reconciliation_present": bool(summary.get("reconciliation_present")),
+                    "order_status_errors": summary.get("order_status_errors"),
+                    "reconciliation_errors": summary.get("reconciliation_errors"),
+                    "submit_errors": summary.get("submit_errors"),
+                    "cancel_errors": report.get("errors"),
+                }
+            )
+        )
         if report.get("errors"):
             status["message"] = ", ".join(str(item) for item in report["errors"])
         store.write_status(status)
@@ -273,6 +355,8 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  cancel_state        : {report['cancel_state']}")
         print(f"  cancel_accepted     : {report['cancel_accepted']}")
         print(f"  remote_cancel_called: {report['remote_cancel_called']}")
+        print(f"  alert_status        : {status['alert_status']}")
+        print(f"  latest_alert        : {status['latest_alert_code']}")
         return True
 
     if getattr(args, "hyperliquid_submit_sessions_reconcile", None):
@@ -319,6 +403,30 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
             "reconciliation_fill_count": report.get("fill_count"),
             "reconciliation_filled_size": report.get("filled_size"),
         }
+        status.update(
+            _derive_hyperliquid_submission_alert_summary(
+                {
+                    "session_id": summary["session_id"],
+                    "status": status["status"],
+                    "submit_state": summary.get("submit_state"),
+                    "submitted": summary.get("submitted"),
+                    "submit_response_present": True,
+                    "cancel_response_present": False,
+                    "cancel_accepted": False,
+                    "cancel_state": None,
+                    "supervision_present": False,
+                    "supervision_attention_required": False,
+                    "supervision_errors": [],
+                    "effective_order_known": bool(report["status_known"]),
+                    "effective_order_state": report["normalized_state"],
+                    "order_status_present": True,
+                    "reconciliation_present": True,
+                    "order_status_errors": report.get("errors"),
+                    "reconciliation_errors": report.get("errors"),
+                    "submit_errors": summary.get("submit_errors"),
+                }
+            )
+        )
         if report.get("errors"):
             status["message"] = ", ".join(str(item) for item in report["errors"])
         store.write_status(status)
@@ -333,13 +441,17 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  fill_state            : {report.get('fill_state')}")
         print(f"  fill_count            : {report.get('fill_count')}")
         print(f"  status_known          : {report['status_known']}")
+        print(f"  alert_status          : {status['alert_status']}")
+        print(f"  alert_code            : {status['latest_alert_code']}")
         return True
 
     if getattr(args, "hyperliquid_submit_sessions_health", None):
         root_dir = _require_directory(args.hyperliquid_submit_sessions_health, "Hyperliquid submit sessions root")
         health = build_hyperliquid_submission_health(root_dir)
+        health_path = write_hyperliquid_submit_health(root_dir, health)
 
         print(f"\nHyperliquid submission health: {root_dir}\n")
+        print(f"  health_path           : {health_path}")
         print(f"  total_sessions          : {health['total_sessions']}")
         print(f"  submit_response_sessions: {health['submit_response_sessions']}")
         print(f"  cancel_response_sessions: {health['cancel_response_sessions']}")
@@ -352,6 +464,10 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  latest_close_state      : {health.get('latest_close_state')}")
         print(f"  latest_fill_state       : {health.get('latest_fill_state')}")
         print(f"  latest_supervision_state: {health.get('latest_supervision_state')}")
+        print(f"  alert_status            : {health.get('alert_status')}")
+        print(f"  alert_counts            : {health.get('alert_counts')}")
+        print(f"  latest_alert_id         : {health.get('latest_alert_session_id')}")
+        print(f"  latest_alert_code       : {health.get('latest_alert_code')}")
         print(f"  latest_submit_id        : {health.get('latest_submit_session_id')}")
         print(f"  latest_submit_state     : {health.get('latest_submit_state')}")
         print(f"  latest_order_state      : {health.get('latest_order_state')}")
@@ -364,6 +480,7 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
     if getattr(args, "hyperliquid_submit_sessions_alerts", None):
         root_dir = _require_directory(args.hyperliquid_submit_sessions_alerts, "Hyperliquid submit sessions root")
         alerts = build_hyperliquid_submission_alerts(root_dir)
+        write_hyperliquid_submit_alerts(root_dir, alerts)
         print(json.dumps(alerts, indent=2, sort_keys=True))
         return True
 
@@ -403,6 +520,30 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
             "order_status_known": report["status_known"],
             "order_status_state": report["normalized_state"],
         }
+        status.update(
+            _derive_hyperliquid_submission_alert_summary(
+                {
+                    "session_id": summary["session_id"],
+                    "status": status["status"],
+                    "submit_state": summary.get("submit_state"),
+                    "submitted": summary.get("submitted"),
+                    "submit_response_present": True,
+                    "cancel_response_present": False,
+                    "cancel_accepted": False,
+                    "cancel_state": None,
+                    "supervision_present": False,
+                    "supervision_attention_required": False,
+                    "supervision_errors": [],
+                    "effective_order_known": bool(report["status_known"]),
+                    "effective_order_state": report["normalized_state"],
+                    "order_status_present": True,
+                    "reconciliation_present": False,
+                    "order_status_errors": report.get("errors"),
+                    "reconciliation_errors": [],
+                    "submit_errors": summary.get("submit_errors"),
+                }
+            )
+        )
         if report.get("errors"):
             status["message"] = ", ".join(str(item) for item in report["errors"])
         store.write_status(status)
@@ -413,6 +554,8 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         print(f"  status_path    : {status_path}")
         print(f"  state          : {report['normalized_state']}")
         print(f"  status_known   : {report['status_known']}")
+        print(f"  alert_status   : {status['alert_status']}")
+        print(f"  alert_code     : {status['latest_alert_code']}")
         return True
 
     if getattr(args, "hyperliquid_submit_sessions_list", None):
@@ -437,7 +580,13 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         summary = load_hyperliquid_submit_summary(session_dir)
 
         print(f"\nHyperliquid submit session: {session_dir}\n")
+        for key in ("alert_status", "latest_alert_code", "latest_alert_session_id", "alerts_present"):
+            print(f"  {key:24s}: {summary.get(key)}")
+        print()
+        highlighted_keys = {"alert_status", "latest_alert_code", "latest_alert_session_id", "alerts_present"}
         for key, val in summary.items():
+            if key in highlighted_keys:
+                continue
             print(f"  {key:24s}: {val}")
         return True
 
@@ -567,6 +716,49 @@ def load_hyperliquid_submit_summary(session_dir: str | Path) -> dict[str, Any]:
         "supervision_path": str(path / HYPERLIQUID_SUPERVISION_FILENAME) if supervision_path else None,
         "order_status_path": str(path / HYPERLIQUID_ORDER_STATUS_FILENAME) if order_status_path else None,
         "reconciliation_path": str(path / HYPERLIQUID_RECONCILIATION_FILENAME) if reconciliation_path else None,
+        **_derive_hyperliquid_submission_alert_summary(
+            {
+                "session_id": metadata.get("session_id") or status.get("session_id") or path.name,
+                "status": status.get("status") or metadata.get("status"),
+                "submit_state": submit_response.get("submit_state"),
+                "submitted": submit_response.get("submitted"),
+                "submit_response_present": bool(response_path),
+                "cancel_response_present": bool(cancel_response_path),
+                "cancel_accepted": cancel_response.get("cancel_accepted"),
+                "cancel_state": cancel_response.get("cancel_state"),
+                "supervision_present": bool(supervision_path),
+                "supervision_attention_required": supervision.get("attention_required"),
+                "supervision_errors": supervision.get("errors"),
+                "effective_order_known": effective_order_known,
+                "effective_order_state": effective_order_state,
+                "order_status_present": bool(order_status_path),
+                "reconciliation_present": bool(reconciliation_path),
+                "order_status_errors": order_status.get("errors"),
+                "reconciliation_errors": reconciliation.get("errors"),
+                "submit_errors": submit_response.get("errors"),
+            }
+        ),
+    }
+
+
+def _derive_hyperliquid_submission_alert_summary(session: dict[str, Any]) -> dict[str, Any]:
+    alerts = _collect_hyperliquid_submission_alerts([session])
+    alert_counts = Counter(alert["severity"] for alert in alerts)
+    if alert_counts.get("critical", 0):
+        alert_status = "critical"
+    elif alerts:
+        alert_status = "warning"
+    else:
+        alert_status = "ok"
+
+    latest_alert = max(alerts, key=_hyperliquid_alert_sort_key) if alerts else None
+    return {
+        "alert_status": alert_status,
+        "alert_counts": dict(alert_counts),
+        "alerts_present": bool(alerts),
+        "latest_alert_session_id": latest_alert.get("session_id") if latest_alert else None,
+        "latest_alert_code": latest_alert.get("alert_code") if latest_alert else None,
+        "latest_alert_at": latest_alert.get("activity_at") if latest_alert else None,
     }
 
 
@@ -595,7 +787,7 @@ def _require_directory(path_str: str | Path, label: str) -> Path:
 
 
 def _print_sessions_table(sessions: list[dict[str, Any]]) -> None:
-    fields = ["session_id", "status", "submit_state", "effective_order_state", "created_at"]
+    fields = ["session_id", "status", "alert_status", "submit_state", "effective_order_state", "created_at"]
     widths = {
         field: max(len(field), max((len(str(row.get(field) or "")) for row in sessions), default=0))
         for field in fields
@@ -805,8 +997,18 @@ def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
         [session for session in sessions if session.get("submit_response_present")]
     )
     latest_issue = max(alerts, key=_hyperliquid_alert_sort_key) if alerts else None
+    alert_counts = Counter(alert["severity"] for alert in alerts)
+    generated_at = dt.datetime.now().replace(microsecond=0).isoformat()
+    if alert_counts.get("critical", 0):
+        alert_status = "critical"
+    elif alerts:
+        alert_status = "warning"
+    else:
+        alert_status = "ok"
 
     return {
+        "artifact_type": "quantlab.hyperliquid.submit_health",
+        "generated_at": generated_at,
         "root_dir": str(root),
         "total_sessions": len(sessions),
         "submit_response_sessions": sum(1 for session in sessions if session.get("submit_response_present")),
@@ -848,6 +1050,12 @@ def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
                 if session.get("submit_response_present")
             )
         ),
+        "alert_status": alert_status,
+        "alert_counts": dict(alert_counts),
+        "alerts_present": bool(alerts),
+        "latest_alert_session_id": latest_issue.get("session_id") if latest_issue else None,
+        "latest_alert_code": latest_issue.get("alert_code") if latest_issue else None,
+        "latest_alert_at": latest_issue.get("activity_at") if latest_issue else None,
         "latest_submit_session_id": latest_submit.get("session_id") if latest_submit else None,
         "latest_submit_state": latest_submit.get("submit_state") if latest_submit else None,
         "latest_order_state": latest_submit.get("effective_order_state") if latest_submit else None,
@@ -877,8 +1085,9 @@ def build_hyperliquid_submission_alerts(root_dir: str | Path) -> dict[str, Any]:
         alert_status = "ok"
 
     return {
-        "root_dir": str(root),
+        "artifact_type": "quantlab.hyperliquid.submit_alerts",
         "generated_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+        "root_dir": str(root),
         "total_sessions": len(sessions),
         "submit_response_sessions": sum(1 for session in sessions if session.get("submit_response_present")),
         "cancel_response_sessions": sum(1 for session in sessions if session.get("cancel_response_present")),

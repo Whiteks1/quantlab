@@ -212,6 +212,24 @@ Exit condition:
 
 - consumer systems can validate QuantLab integration deterministically and repeatedly without live-market dependence
 
+## Stage O.2 - Quant Pulse Signal Intake
+
+Status: proposed auxiliary signal boundary
+
+Goal:
+
+- consume upstream Quant Pulse research intents without making QuantLab dependent on an external editorial authority
+
+Scope:
+
+- structured signal intake for `signal_summary`, `priority`, `affected_universe`, `bias`, `horizon`, `hypothesis_type`, `validation_goal`, and `invalidation_condition`
+- routing signals into research workflows only when they improve validation, risk filters, or product priorities
+- keeping QuantLab autonomous while allowing Quant Pulse to act as a signal filter and prioritization layer
+
+Exit condition:
+
+- QuantLab can ingest upstream signals as structured research prompts while still deciding independently what is worth testing, filtering, or ignoring
+
 ## Stage D.0 - Real Execution Safety Boundary
 
 Status: initial boundary slice implemented

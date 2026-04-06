@@ -2,6 +2,14 @@
 
 Landing estatica preparada para publicarse en GitHub Pages.
 
+## Governance
+
+- Source of truth: `../docs/brand-guidelines.md`
+- Landing workflow: `../docs/landing-governance.md`
+- Folder-specific rules: `./AGENTS.md`
+
+If a copy, brand, or layout change touches the public position of QuantLab Research, update the canonical docs first and the landing surface second.
+
 ## Estructura
 
 - `index.html`

@@ -1,0 +1,41 @@
+---
+description: QuantLab landing and public web surface rules
+globs:
+  - "landing/**"
+  - "docs/landing-governance.md"
+  - "docs/brand-guidelines.md"
+alwaysApply: false
+---
+
+# QuantLab Landing Web Rules
+
+## Read First
+
+Before editing the public landing surface, read:
+
+- `@.agents/project-brief.md`
+- `@.agents/implementation-rules.md`
+- `@.agents/current-state.md`
+- `@docs/brand-guidelines.md`
+- `@docs/landing-governance.md`
+- `@landing/AGENTS.md`
+
+## Source Of Truth
+
+- Keep public positioning in `docs/brand-guidelines.md`.
+- Keep landing ownership and workflow in `docs/landing-governance.md`.
+- Keep rendered copy, layout, and styling in `landing/`.
+
+## Change Discipline
+
+- Make the smallest landing change that satisfies the task.
+- Do not duplicate hero copy, taglines, or palette decisions across files without a single canonical owner.
+- Do not expand the public landing into product logic, CLI logic, or broker logic.
+- Keep GitHub Pages deployment pointing at `landing/` only.
+- Preserve the current brand architecture unless the task explicitly changes it.
+
+## Quality Rules
+
+- If copy changes, verify it still matches the brand guide.
+- If layout or styling changes, keep the page readable on desktop and mobile.
+- If the public web surface changes, avoid introducing alternate naming systems or second-brand variants.
