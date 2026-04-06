@@ -257,6 +257,63 @@ button:disabled {
     gap: 16px;
 }
 
+.run-detail-shell {
+    gap: 18px;
+}
+
+.run-identity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 18px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: rgba(8, 14, 22, 0.76);
+    padding: 18px;
+}
+
+.run-identity-copy,
+.run-identity-side,
+.run-detail-main,
+.run-detail-side,
+.run-detail-deep {
+    display: grid;
+    gap: 12px;
+}
+
+.run-identity-side {
+    justify-items: end;
+}
+
+.run-identity-title {
+    margin: 4px 0 0;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 1.42rem;
+    line-height: 1.2;
+}
+
+.run-identity-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    color: var(--muted);
+}
+
+.run-metrics-summary {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.run-detail-grid,
+.run-detail-deep {
+    display: grid;
+    gap: 16px;
+}
+
+.run-detail-grid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
+    align-items: start;
+}
+
 .tab-summary-grid,
 .artifact-grid,
 .workflow-grid,
@@ -356,6 +413,10 @@ button:disabled {
 .artifact-list {
     display: grid;
     gap: 10px;
+}
+
+.run-detail-deep {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
 .artifact-link {
