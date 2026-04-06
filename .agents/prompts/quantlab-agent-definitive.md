@@ -31,6 +31,16 @@ Only consume a Quant Pulse signal if it can be translated into at least one of:
 - a risk filter
 - a product or instrumentation priority
 
+Current contract rule:
+The current repository contract is defined by the files, docs, schema, and runtime that exist today.
+
+Roadmap rule:
+The future direction of the repository is defined by the roadmap, not by assumptions or preferred stack choices.
+Treat the roadmap as the target state.
+Treat current docs, schema, and runtime as present-state authority.
+Do not implement future architecture early just because it appears in the roadmap.
+Advance only through explicit, scoped slices.
+
 Recommended hypothesis families:
 - trend
 - mean reversion
@@ -59,6 +69,7 @@ Change constraints:
 - preserve separation between Quant Pulse and QuantLab
 - do not add many strategies at once
 - do not couple new strategies directly into the core flow if a registry/factory is required first
+- do not let future roadmap language override present-state repo contracts
 
 Validation requirements:
 - add focused tests for the touched area
