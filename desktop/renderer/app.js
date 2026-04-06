@@ -28,6 +28,7 @@ import {
   renderExperimentsTab as renderExperimentsTabView,
   renderJobTab as renderJobTabView,
   renderPaperOpsTab as renderPaperOpsTabView,
+  renderRunsTab as renderRunsTabView,
   renderRunTab as renderRunTabView,
   renderSweepDecisionTab as renderSweepDecisionTabView,
   renderSummaryCard as renderSummaryCardView,
@@ -146,7 +147,8 @@ const paletteActions = [
   ["experiments", "Open Experiments", "Open the native experiments and sweeps workspace.", () => openExperimentsTab()],
   ["sweep-handoff", "Open Sweep Handoff", "Open the local sweep decision handoff compare.", () => openSweepDecisionTab()],
   ["launch", "Open Launch", "Open the QuantLab launch surface.", () => openResearchTab("launch", "Launch", "#/launch")],
-  ["runs", "Open Runs", "Open the run explorer.", () => openResearchTab("runs", "Runs", "#/")],
+  ["runs", "Open Runs", "Open the native run explorer.", () => openRunsNativeTab()],
+  ["runs-legacy", "Open Runs (Legacy)", "Open the browser-based run explorer.", () => openResearchTab("runs", "Runs (legacy)", "#/")],
   ["candidates", "Open Candidates", "Open the shortlist and baseline surface.", () => openCandidatesTab()],
   ["compare", "Open Compare", "Open a compare tab from selected runs.", () => openCompareSelectionTab()],
   ["shortlist-compare", "Open Shortlist Compare", "Compare the current shortlist or baseline set.", () => openShortlistCompareTab()],
@@ -215,7 +217,7 @@ function bindEvents() {
       if (action === "open-chat") focusChat();
       if (action === "open-experiments") openExperimentsTab();
       if (action === "open-launch") openResearchTab("launch", "Launch", "#/launch");
-      if (action === "open-runs") openResearchTab("runs", "Runs", "#/");
+      if (action === "open-runs") openRunsNativeTab();
       if (action === "open-candidates") openCandidatesTab();
       if (action === "open-compare") openCompareSelectionTab();
       if (action === "open-ops") openPaperOpsTab();
@@ -441,6 +443,7 @@ function normalizeShellTab(tab) {
     if (typeof tab.runId !== "string" || !tab.runId) return null;
     return { ...base, runId: tab.runId };
   }
+  if (base.kind === "runs" || base.kind === "paper") return base;
   if (base.kind === "compare") {
     const runIds = Array.isArray(tab.runIds) ? uniqueRunIds(tab.runIds.filter((value) => typeof value === "string" && value)).slice(0, CONFIG.maxCandidateCompare) : [];
     if (!runIds.length) return null;
@@ -463,7 +466,6 @@ function normalizeShellTab(tab) {
     if (typeof tab.requestId !== "string" || !tab.requestId) return null;
     return { ...base, requestId: tab.requestId };
   }
-  if (base.kind === "paper") return base;
   return null;
 }
 
@@ -857,6 +859,8 @@ function renderTabs() {
     renderMarkupInto(elements.tabContent, renderExperimentsTab(activeTab));
   } else if (activeTab.kind === "sweep-decision") {
     renderMarkupInto(elements.tabContent, renderSweepDecisionTab(activeTab));
+  } else if (activeTab.kind === "runs") {
+    renderMarkupInto(elements.tabContent, renderRunsTab(activeTab));
   } else if (activeTab.kind === "run") {
     renderMarkupInto(elements.tabContent, renderRunTab(activeTab));
   } else if (activeTab.kind === "compare") {
@@ -1148,6 +1152,20 @@ function bindTabContentEvents(tab) {
   }
   if (tab.kind === "run") {
     bindRunContextActions(elements.tabContent, tab.runId);
+  }
+  if (tab.kind === "runs") {
+    elements.tabContent.querySelectorAll("[data-open-run]").forEach((button) => {
+      button.addEventListener("click", () => openRunDetailTab(button.dataset.openRun));
+    });
+    elements.tabContent.querySelectorAll("[data-open-artifacts]").forEach((button) => {
+      button.addEventListener("click", () => openArtifactsTabForRun(button.dataset.openArtifacts));
+    });
+    elements.tabContent.querySelectorAll("[data-mark-candidate]").forEach((button) => {
+      button.addEventListener("click", () => toggleCandidate(button.dataset.markCandidate));
+    });
+    elements.tabContent.querySelectorAll("[data-open-runs-legacy]").forEach((button) => {
+      button.addEventListener("click", () => openResearchTab("runs", "Runs (legacy)", "#/"));
+    });
   }
   if (tab.kind === "compare") {
     elements.tabContent.querySelectorAll("[data-open-run]").forEach((button) => {
@@ -1447,8 +1465,8 @@ async function handleChatPrompt(prompt) {
     return;
   }
   if (normalized.includes("open runs") || normalized === "runs") {
-    openResearchTab("runs", "Runs", "#/");
-    pushMessage("assistant", "Opened the run explorer.");
+    openRunsNativeTab();
+    pushMessage("assistant", "Opened the native run explorer.");
     return;
   }
   if (normalized.includes("open baseline")) {
@@ -1578,6 +1596,15 @@ function openSweepDecisionTab(mode = "tracked") {
     rankMetric: "sharpe_simple",
   });
   pushMessage("assistant", "Opened the sweep decision handoff surface.");
+}
+
+function openRunsNativeTab() {
+  upsertTab({
+    id: "runs-native",
+    kind: "runs",
+    navKind: "runs",
+    title: "Runs",
+  });
 }
 
 function openResearchTab(navKind, title, hash) {
@@ -2160,6 +2187,10 @@ function renderRunTab(tab) {
   return renderRunTabView(tab, getRendererContext());
 }
 
+function renderRunsTab(tab) {
+  return renderRunsTabView(tab, getRendererContext());
+}
+
 function renderExperimentsTab(tab) {
   return renderExperimentsTabView(tab, getRendererContext());
 }
@@ -2248,7 +2279,7 @@ function upsertTab(nextTab) {
 }
 
 function rerenderContextualTabs() {
-  if (state.tabs.some((tab) => ["experiments", "sweep-decision", "run", "compare", "artifacts", "candidates", "paper", "job"].includes(tab.kind))) renderTabs();
+  if (state.tabs.some((tab) => ["experiments", "sweep-decision", "run", "runs", "compare", "artifacts", "candidates", "paper", "job"].includes(tab.kind))) renderTabs();
 }
 
 function refreshLiveJobTabs() {

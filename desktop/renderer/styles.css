@@ -640,6 +640,61 @@ button:disabled {
     color: var(--success);
 }
 
+.runs-tab {
+    gap: 16px;
+}
+
+.runs-table-wrap {
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: rgba(8, 14, 22, 0.76);
+}
+
+.runs-table {
+    width: 100%;
+    min-width: 980px;
+    border-collapse: collapse;
+}
+
+.runs-table th,
+.runs-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.runs-table th {
+    color: var(--muted);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: rgba(12, 19, 29, 0.96);
+    position: sticky;
+    top: 0;
+}
+
+.runs-row:hover {
+    background: rgba(18, 28, 40, 0.86);
+}
+
+.mono-cell {
+    font-family: "IBM Plex Mono", monospace;
+}
+
+.run-flags-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.runs-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 .candidate-card {
     border: 1px solid var(--border);
     border-radius: 16px;

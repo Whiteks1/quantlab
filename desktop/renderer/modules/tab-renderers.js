@@ -99,6 +99,25 @@ export function renderCandidateCard(entry, forceShow, ctx) {
   `;
 }
 
+export function renderRunsTab(_tab, ctx) {
+  const runs = ctx.getRuns();
+  return `
+    <div class="tab-shell runs-tab">
+      <div class="artifact-top">
+        <div>
+          <div class="section-label">Run explorer</div>
+          <h3>Runs</h3>
+          <div class="artifact-meta">Native execution log and traceability surface for indexed runs inside QuantLab Desktop.</div>
+        </div>
+        <div class="workflow-actions">
+          <button class="ghost-btn" type="button" data-open-runs-legacy="true">Open legacy view</button>
+        </div>
+      </div>
+      ${renderRunsTable(runs, ctx.store, ctx.decision)}
+    </div>
+  `;
+}
+
 export function renderRunTab(tab, ctx) {
   const run = ctx.findRun(tab.runId);
   if (!run) return `<div class="tab-placeholder">The requested run is no longer present in the registry.</div>`;
@@ -380,6 +399,63 @@ export function renderCompareTab(tab, ctx) {
         `).join("")}
       </div>
     </div>
+  `;
+}
+
+function renderRunsTable(runs, store, decision) {
+  if (!Array.isArray(runs) || !runs.length) {
+    return `<div class="empty-state">No runs are indexed yet. Launch a run or wait for canonical artifacts to appear.</div>`;
+  }
+  return `
+    <div class="runs-table-wrap">
+      <table class="runs-table">
+        <thead>
+          <tr>
+            <th>Run</th>
+            <th>Mode</th>
+            <th>Ticker</th>
+            <th>Created</th>
+            <th>Commit</th>
+            <th>Return</th>
+            <th>Sharpe</th>
+            <th>Drawdown</th>
+            <th>Trades</th>
+            <th>Flags</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${runs.map((run) => renderRunsRow(run, store, decision)).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderRunsRow(run, store, decision) {
+  const runId = run?.run_id || "";
+  const commitLabel = shortCommit(run?.git_commit) || "-";
+  const candidateLabel = decision.isCandidateRun(store, runId) ? "Unmark candidate" : "Mark candidate";
+  return `
+    <tr class="runs-row">
+      <td class="mono-cell">${escapeHtml(runId)}</td>
+      <td>${escapeHtml(titleCase(run?.mode || "unknown"))}</td>
+      <td>${escapeHtml(run?.ticker || "-")}</td>
+      <td>${escapeHtml(formatDateTime(run?.created_at))}</td>
+      <td class="mono-cell">${escapeHtml(commitLabel)}</td>
+      <td class="${escapeHtml(toneClass(run?.total_return, true))}">${escapeHtml(formatPercent(run?.total_return))}</td>
+      <td>${escapeHtml(formatNumber(run?.sharpe_simple))}</td>
+      <td class="${escapeHtml(toneClass(run?.max_drawdown, false))}">${escapeHtml(formatPercent(run?.max_drawdown))}</td>
+      <td>${escapeHtml(formatCount(run?.trades))}</td>
+      <td><div class="run-flags-cell">${renderCandidateFlags(store, runId, decision)}</div></td>
+      <td>
+        <div class="runs-row-actions">
+          <button class="ghost-btn" type="button" data-open-run="${escapeHtml(runId)}">Open run</button>
+          <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(runId)}">Artifacts</button>
+          <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(runId)}">${escapeHtml(candidateLabel)}</button>
+        </div>
+      </td>
+    </tr>
   `;
 }
 
