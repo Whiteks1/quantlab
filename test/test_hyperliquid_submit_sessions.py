@@ -170,11 +170,17 @@ def test_refresh_hyperliquid_submit_index(tmp_path):
     assert handle_hyperliquid_submit_sessions_commands(args) is True
     json_path = tmp_path / "hyperliquid_submits_index.json"
     csv_path = tmp_path / "hyperliquid_submits_index.csv"
+    md_path = tmp_path / "hyperliquid_submits_index.md"
     assert json_path.exists()
     assert csv_path.exists()
+    assert md_path.exists()
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert payload["sessions"][0]["alert_status"] == "warning"
     assert payload["sessions"][0]["latest_alert_code"] == "HYPERLIQUID_ORDER_STATUS_MISSING"
+    md_content = md_path.read_text(encoding="utf-8")
+    assert "# Hyperliquid Submits Index" in md_content
+    assert "## Summary" in md_content
+    assert "## Sessions" in md_content
 
 
 def test_hyperliquid_submit_health_summary(tmp_path, capsys):
