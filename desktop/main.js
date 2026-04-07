@@ -5,8 +5,9 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 const DESKTOP_ROOT = __dirname;
-const PROJECT_ROOT = path.resolve(DESKTOP_ROOT, "..");
-const WORKSPACE_ROOT = path.resolve(PROJECT_ROOT, "..");
+const CHECKOUT_ROOT = path.resolve(DESKTOP_ROOT, "..");
+const WORKSPACE_ROOT = path.resolve(CHECKOUT_ROOT, "..");
+const PROJECT_ROOT = resolveCanonicalProjectRoot(CHECKOUT_ROOT, WORKSPACE_ROOT);
 const SERVER_SCRIPT = path.join(PROJECT_ROOT, "research_ui", "server.py");
 const OUTPUTS_ROOT = process.env.QUANTLAB_DESKTOP_OUTPUTS_ROOT
   ? path.resolve(process.env.QUANTLAB_DESKTOP_OUTPUTS_ROOT)
@@ -27,6 +28,31 @@ const RESEARCH_UI_STARTUP_TIMEOUT_MS = 25000;
 const ELECTRON_STATE_ROOT = path.join(DESKTOP_OUTPUTS_ROOT, "electron");
 const IS_SMOKE_RUN = process.env.QUANTLAB_DESKTOP_SMOKE === "1";
 const SMOKE_OUTPUT_PATH = process.env.QUANTLAB_DESKTOP_SMOKE_OUTPUT || "";
+
+function isQuantLabProjectRoot(targetPath) {
+  if (!targetPath) return false;
+  const resolved = path.resolve(targetPath);
+  return fs.existsSync(path.join(resolved, "research_ui", "server.py"))
+    && fs.existsSync(path.join(resolved, "src"));
+}
+
+function resolveCanonicalProjectRoot(checkoutRoot, workspaceRoot) {
+  const overrideRoot = String(process.env.QUANTLAB_DESKTOP_PROJECT_ROOT || "").trim();
+  const siblingQuantLabRoot = path.join(workspaceRoot, "quant_lab");
+  const candidates = [
+    overrideRoot,
+    path.basename(checkoutRoot).toLowerCase() === "quant_lab" ? checkoutRoot : "",
+    siblingQuantLabRoot,
+    checkoutRoot,
+  ]
+    .filter(Boolean)
+    .map((candidate) => path.resolve(candidate));
+
+  for (const candidate of candidates) {
+    if (isQuantLabProjectRoot(candidate)) return candidate;
+  }
+  return path.resolve(checkoutRoot);
+}
 
 app.setPath("userData", path.join(ELECTRON_STATE_ROOT, "user-data"));
 app.setPath("cache", path.join(ELECTRON_STATE_ROOT, "cache"));
@@ -990,6 +1016,8 @@ if (singleInstanceLock) {
 
   app.whenReady().then(() => {
     createMainWindow();
+    appendLog(`[workspace] checkout root ${CHECKOUT_ROOT}`);
+    appendLog(`[workspace] canonical project root ${PROJECT_ROOT}`);
     startResearchUiServer();
     if (IS_SMOKE_RUN) {
       mainWindow.webContents.once("did-finish-load", () => {

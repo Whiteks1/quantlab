@@ -5,7 +5,12 @@ const { spawn } = require("child_process");
 
 async function main() {
   const desktopRoot = path.resolve(__dirname, "..");
-  const projectRoot = path.resolve(desktopRoot, "..");
+  const checkoutRoot = path.resolve(desktopRoot, "..");
+  const workspaceRoot = path.resolve(checkoutRoot, "..");
+  const canonicalProjectRoot = path.join(workspaceRoot, "quant_lab");
+  const projectRoot = await fs.access(path.join(canonicalProjectRoot, "research_ui", "server.py"))
+    .then(() => canonicalProjectRoot)
+    .catch(() => checkoutRoot);
   const electronBinary = require("electron");
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "quantlab-desktop-smoke-"));
   const outputPath = path.join(tempRoot, "result.json");
