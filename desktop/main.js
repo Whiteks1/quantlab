@@ -909,6 +909,17 @@ async function runDesktopSmoke() {
 
 ipcMain.handle("quantlab:get-workspace-state", async () => workspaceState);
 
+function okIpcResult(data) {
+  return { ok: true, data };
+}
+
+function errorIpcResult(error) {
+  return {
+    ok: false,
+    error: error && error.message ? error.message : String(error || "Unknown IPC error."),
+  };
+}
+
 ipcMain.handle("quantlab:request-json", async (_event, relativePath) => {
   try {
     if (!workspaceState.serverUrl) {

@@ -134,6 +134,7 @@ export function renderRunTab(tab, ctx) {
   const relatedJobs = ctx.getRunRelatedJobs(run.run_id);
   const latestRelatedJob = relatedJobs[0] || null;
   const sweepEntries = ctx.getSweepDecisionEntriesForRun(run.run_id);
+  const decisionState = ctx.decision.summarizeCandidateState(ctx.store, run.run_id);
   const hasDecisionPeers = ctx.decision.isBaselineRun(ctx.store, run.run_id)
     ? ctx.decision.getCandidateEntriesResolved(ctx.store, ctx.findRun).length > 1
     : Boolean(ctx.store.baseline_run_id || ctx.decision.isShortlistedRun(ctx.store, run.run_id));
@@ -144,7 +145,7 @@ export function renderRunTab(tab, ctx) {
   const relatedJobTone = latestRelatedJob?.status === "failed" ? "tone-down" : latestRelatedJob?.status === "succeeded" ? "tone-up" : "";
   return `
     <div class="tab-shell run-detail-shell">
-      ${renderRunIdentityHeader(run, ctx, latestRelatedJob)}
+      ${renderRunIdentityHeader(run, ctx, latestRelatedJob, decisionState, continuityState)}
       ${renderRunMetricsSummary(run)}
       <div class="run-detail-grid">
         <div class="run-detail-main">
@@ -155,18 +156,30 @@ export function renderRunTab(tab, ctx) {
           ${renderRunArtifactsContinuityBlock(run, fileEntries, detail, latestRelatedJob, continuityState, sweepEntries)}
         </div>
       </div>
-      <div class="run-detail-deep">
-        ${renderRunPrimaryResultBlock(primaryResult)}
-        ${renderRunResolvedConfigBlock(configEntries)}
-        ${renderRunLaunchReviewBlock(run, latestRelatedJob, relatedJobTone)}
-        ${renderRunTopResultsBlock(topResults)}
-        ${renderRunSweepLinkageBlock(ctx, sweepEntries)}
+      <div class="run-detail-evidence-grid">
+        <section class="artifact-panel">
+          <div class="section-label">Result evidence</div>
+          <h3>Decision metric snapshot</h3>
+          <div class="run-evidence-stack">
+            ${renderRunPrimaryResultBlock(primaryResult)}
+            ${renderRunTopResultsBlock(topResults)}
+          </div>
+        </section>
+        <section class="artifact-panel">
+          <div class="section-label">Operational evidence</div>
+          <h3>Provenance and linked continuity</h3>
+          <div class="run-evidence-stack">
+            ${renderRunResolvedConfigBlock(configEntries)}
+            ${renderRunLaunchReviewBlock(run, latestRelatedJob, relatedJobTone)}
+            ${renderRunSweepLinkageBlock(ctx, sweepEntries)}
+          </div>
+        </section>
       </div>
     </div>
   `;
 }
 
-function renderRunIdentityHeader(run, ctx, latestRelatedJob) {
+function renderRunIdentityHeader(run, ctx, latestRelatedJob, decisionState, continuityState) {
   return `
     <div class="run-identity-header">
       <div class="run-identity-copy">
@@ -177,6 +190,10 @@ function renderRunIdentityHeader(run, ctx, latestRelatedJob) {
           <span>${escapeHtml(titleCase(run.mode || "unknown"))}</span>
           <span>${escapeHtml(formatDateTime(run.created_at))}</span>
           <span class="mono-cell">${escapeHtml(shortCommit(run.git_commit) || "-")}</span>
+        </div>
+        <div class="run-identity-state">
+          <span class="run-state-chip">Decision <strong>${escapeHtml(decisionState)}</strong></span>
+          <span class="run-state-chip">Continuity <strong>${escapeHtml(continuityState)}</strong></span>
         </div>
       </div>
       <div class="run-identity-side">
@@ -271,7 +288,7 @@ function renderRunArtifactsContinuityBlock(run, fileEntries, detail, latestRelat
 
 function renderRunPrimaryResultBlock(primaryResult) {
   return `
-    <section class="artifact-panel">
+    <div class="nested-panel">
       <div class="section-label">Primary result</div>
       <h3>${escapeHtml(primaryResult ? "Decision metric snapshot" : "No structured result available")}</h3>
       ${primaryResult ? `
@@ -284,13 +301,13 @@ function renderRunPrimaryResultBlock(primaryResult) {
           ${compareMetric("Exposure", formatPercent(primaryResult.exposure), "")}
         </dl>
       ` : `<div class="empty-state">The canonical report did not expose a structured primary result for this run.</div>`}
-    </section>
+    </div>
   `;
 }
 
 function renderRunResolvedConfigBlock(configEntries) {
   return `
-    <section class="artifact-panel">
+    <div class="nested-panel">
       <div class="section-label">Resolved config</div>
       <h3>Effective parameters</h3>
       ${configEntries.length ? `
@@ -298,13 +315,13 @@ function renderRunResolvedConfigBlock(configEntries) {
           ${configEntries.map(([label, value]) => compareMetric(label, value, "")).join("")}
         </dl>
       ` : `<div class="empty-state">No resolved config was available in the canonical report.</div>`}
-    </section>
+    </div>
   `;
 }
 
 function renderRunLaunchReviewBlock(run, latestRelatedJob, relatedJobTone) {
   return `
-    <section class="artifact-panel">
+    <div class="nested-panel">
       <div class="section-label">Launch review</div>
       <h3>${escapeHtml(latestRelatedJob ? `Latest job ${latestRelatedJob.request_id}` : "No linked launch job")}</h3>
       ${latestRelatedJob ? `
@@ -319,13 +336,13 @@ function renderRunLaunchReviewBlock(run, latestRelatedJob, relatedJobTone) {
           ${latestRelatedJob.stderr_href ? `<button class="ghost-btn" type="button" data-open-job-link="${escapeHtml(latestRelatedJob.stderr_href)}">Open stderr in browser</button>` : ""}
         </div>
       ` : `<div class="empty-state">This run does not currently expose a launch job in the local launch registry.</div>`}
-    </section>
+    </div>
   `;
 }
 
 function renderRunTopResultsBlock(topResults) {
   return `
-    <section class="artifact-panel">
+    <div class="nested-panel">
       <div class="section-label">Top result rows</div>
       <h3>Best rows from report.json</h3>
       ${topResults.length ? `
@@ -346,13 +363,13 @@ function renderRunTopResultsBlock(topResults) {
           `).join("")}
         </div>
       ` : `<div class="empty-state">This run did not expose comparable result rows.</div>`}
-    </section>
+    </div>
   `;
 }
 
 function renderRunSweepLinkageBlock(ctx, sweepEntries) {
   return `
-    <section class="artifact-panel">
+    <div class="nested-panel">
       <div class="section-label">Sweep linkage</div>
       <h3>${escapeHtml(sweepEntries.length ? "Tracked sweep rows for this run" : "No sweep handoff rows")}</h3>
       ${sweepEntries.length ? `
@@ -376,10 +393,9 @@ function renderRunSweepLinkageBlock(ctx, sweepEntries) {
           <button class="ghost-btn" type="button" data-open-sweep-handoff="tracked">Open sweep handoff</button>
         </div>
       ` : `<div class="empty-state">This run is not currently represented in the local sweep handoff store.</div>`}
-    </section>
+    </div>
   `;
 }
-
 export function renderCompareTab(tab, ctx) {
   const runs = (tab.runIds || []).map(ctx.findRun).filter(Boolean);
   if (runs.length < 2) {
@@ -540,13 +556,15 @@ export function renderArtifactsTab(tab, ctx) {
   const report = detail.report;
   const artifacts = Array.isArray(report?.artifacts) ? report.artifacts : [];
   const primaryResult = selectPrimaryResult(run, report);
+  const latestRelatedJob = ctx.getRunRelatedJobs(run.run_id)[0] || null;
+  const configEntries = summarizeObjectEntries(report?.config_resolved);
   return `
-    <div class="artifact-shell">
+    <div class="artifact-shell evidence-shell">
       <div class="artifact-top">
         <div>
           <div class="section-label">Artifacts</div>
           <h3>${escapeHtml(run.run_id)}</h3>
-          <div class="artifact-meta">${escapeHtml(run.ticker || "-")} · ${escapeHtml(formatDateTime(run.created_at))}</div>
+          <div class="artifact-meta">${escapeHtml(run.ticker || "-")} · ${escapeHtml(titleCase(run.mode || "unknown"))} · ${escapeHtml(formatDateTime(run.created_at))}</div>
         </div>
         <div class="workflow-actions">
           <button class="ghost-btn" type="button" data-open-run="${escapeHtml(run.run_id)}">Open run</button>
@@ -562,35 +580,64 @@ export function renderArtifactsTab(tab, ctx) {
         ${renderSummaryCard("Primary return", primaryResult ? formatPercent(primaryResult.total_return) : "-", primaryResult ? toneClass(primaryResult.total_return, true) : "")}
         ${renderSummaryCard("Primary sharpe", primaryResult ? formatNumber(primaryResult.sharpe_simple) : "-")}
       </div>
-      <div class="artifact-grid">
-        <section class="artifact-panel">
-          <div class="section-label">Run metadata</div>
-          <h3>Window and output path</h3>
-          <div class="artifact-meta">${escapeHtml(`${run.start || "-"} -> ${run.end || "-"}`)}</div>
-          <div class="artifact-path">${escapeHtml(run.path || "-")}</div>
-        </section>
-        <section class="artifact-panel">
-          <div class="section-label">Artifact manifest</div>
-          <h3>Files</h3>
-          ${artifacts.length ? `<div class="artifact-list">
-            ${artifacts.map((artifact) => {
-              const href = buildRunArtifactHref(run.path, artifact.file_name);
-              return `<button class="artifact-link" type="button" data-open-external="${escapeHtml(href)}"><span>${escapeHtml(artifact.file_name)}</span><span>${escapeHtml(formatBytes(artifact.size_bytes))}</span></button>`;
-            }).join("")}
-          </div>` : `<div class="empty-state">The canonical report does not expose an artifact manifest for this run.</div>`}
-        </section>
-      </div>
-      <div class="artifact-grid">
-        <section class="artifact-panel">
-          <div class="section-label">Resolved config</div>
-          <h3>Decision context</h3>
-          ${renderCompactEntryList(summarizeObjectEntries(report?.config_resolved))}
-        </section>
-        <section class="artifact-panel">
-          <div class="section-label">Local files</div>
-          <h3>Run directory</h3>
-          ${renderLocalFilesList(detail.directoryEntries || [], detail.directoryTruncated)}
-        </section>
+      <div class="evidence-grid">
+        <div class="evidence-main">
+          <section class="artifact-panel">
+            <div class="section-label">Canonical outputs</div>
+            <h3>Artifact manifest</h3>
+            <div class="artifact-meta">Machine-readable files exposed by the canonical report for this run.</div>
+            ${artifacts.length ? `<div class="artifact-list">
+              ${artifacts.map((artifact) => {
+                const href = buildRunArtifactHref(run.path, artifact.file_name);
+                return `<button class="artifact-link" type="button" data-open-external="${escapeHtml(href)}"><span>${escapeHtml(artifact.file_name)}</span><span>${escapeHtml(formatBytes(artifact.size_bytes))}</span></button>`;
+              }).join("")}
+            </div>` : `<div class="empty-state">The canonical report does not expose an artifact manifest for this run.</div>`}
+          </section>
+          <section class="artifact-panel">
+            <div class="section-label">Key outputs</div>
+            <h3>Primary result and resolved context</h3>
+            <div class="artifact-grid">
+              <section class="artifact-panel nested-panel">
+                <div class="section-label">Primary result</div>
+                <h3>${escapeHtml(primaryResult ? "Decision metric snapshot" : "No structured result available")}</h3>
+                ${primaryResult ? `
+                  <dl class="metric-list">
+                    ${compareMetric("Return", formatPercent(primaryResult.total_return), toneClass(primaryResult.total_return, true))}
+                    ${compareMetric("Sharpe", formatNumber(primaryResult.sharpe_simple), "")}
+                    ${compareMetric("Drawdown", formatPercent(primaryResult.max_drawdown), toneClass(primaryResult.max_drawdown, false))}
+                    ${compareMetric("Trades", formatCount(primaryResult.trades), "")}
+                  </dl>
+                ` : `<div class="empty-state">The canonical report did not expose a structured primary result for this run.</div>`}
+              </section>
+              <section class="artifact-panel nested-panel">
+                <div class="section-label">Resolved config</div>
+                <h3>Effective parameters</h3>
+                ${renderCompactEntryList(configEntries)}
+              </section>
+            </div>
+          </section>
+        </div>
+        <div class="evidence-side">
+          <section class="artifact-panel">
+            <div class="section-label">Evidence continuity</div>
+            <h3>Run outputs and links</h3>
+            <dl class="metric-list compact">
+              ${compareMetric("Window", `${run.start || "-"} -> ${run.end || "-"}`, "")}
+              ${compareMetric("Output path", run.path || "-", "")}
+              ${compareMetric("Raw report", detail.reportUrl ? "Available" : "Missing", "")}
+              ${compareMetric("Launch review", latestRelatedJob?.request_id || "None", "")}
+            </dl>
+            <div class="workflow-actions">
+              ${detail.reportUrl ? `<button class="ghost-btn" type="button" data-open-external="${escapeHtml(detail.reportUrl)}">Open report.json</button>` : ""}
+              ${latestRelatedJob?.stderr_href ? `<button class="ghost-btn" type="button" data-open-external="${escapeHtml(latestRelatedJob.stderr_href)}">Open stderr</button>` : ""}
+            </div>
+          </section>
+          <section class="artifact-panel">
+            <div class="section-label">Local files</div>
+            <h3>Workspace directory</h3>
+            ${renderLocalFilesList(detail.directoryEntries || [], detail.directoryTruncated)}
+          </section>
+        </div>
       </div>
     </div>
   `;

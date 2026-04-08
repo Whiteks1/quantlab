@@ -2,10 +2,12 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 async function unwrapInvokeResult(channel, ...args) {
   const result = await ipcRenderer.invoke(channel, ...args);
-  if (!result || typeof result !== "object" || !("ok" in result)) return result;
+if (result && typeof result === "object" && Object.prototype.hasOwnProperty.call(result, "ok")) {
   if (result.ok) return result.data;
   throw new Error(result.error || `IPC request failed for ${channel}.`);
 }
+return result;
+
 
 contextBridge.exposeInMainWorld("quantlabDesktop", {
   getWorkspaceState: () => ipcRenderer.invoke("quantlab:get-workspace-state"),
