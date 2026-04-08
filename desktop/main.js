@@ -861,28 +861,47 @@ async function runDesktopSmoke() {
 
 ipcMain.handle("quantlab:get-workspace-state", async () => workspaceState);
 
+function okIpcResult(data) {
+  return { ok: true, data };
+}
+
+function errorIpcResult(error) {
+  return {
+    ok: false,
+    error: error && error.message ? error.message : String(error || "Unknown IPC error."),
+  };
+}
+
 ipcMain.handle("quantlab:request-json", async (_event, relativePath) => {
-  if (!workspaceState.serverUrl) {
-    throw new Error("Research UI server is not ready yet.");
+  try {
+    if (!workspaceState.serverUrl) {
+      throw new Error("Research UI server is not ready yet.");
+    }
+    const base = workspaceState.serverUrl.replace(/\/$/, "");
+    const response = await fetch(`${base}${relativePath}`);
+    if (!response.ok) {
+      throw new Error(`${relativePath} returned ${response.status}`);
+    }
+    return okIpcResult(await response.json());
+  } catch (error) {
+    return errorIpcResult(error);
   }
-  const base = workspaceState.serverUrl.replace(/\/$/, "");
-  const response = await fetch(`${base}${relativePath}`);
-  if (!response.ok) {
-    throw new Error(`${relativePath} returned ${response.status}`);
-  }
-  return response.json();
 });
 
 ipcMain.handle("quantlab:request-text", async (_event, relativePath) => {
-  if (!workspaceState.serverUrl) {
-    throw new Error("Research UI server is not ready yet.");
+  try {
+    if (!workspaceState.serverUrl) {
+      throw new Error("Research UI server is not ready yet.");
+    }
+    const base = workspaceState.serverUrl.replace(/\/$/, "");
+    const response = await fetch(`${base}${relativePath}`);
+    if (!response.ok) {
+      throw new Error(`${relativePath} returned ${response.status}`);
+    }
+    return okIpcResult(await response.text());
+  } catch (error) {
+    return errorIpcResult(error);
   }
-  const base = workspaceState.serverUrl.replace(/\/$/, "");
-  const response = await fetch(`${base}${relativePath}`);
-  if (!response.ok) {
-    throw new Error(`${relativePath} returned ${response.status}`);
-  }
-  return response.text();
 });
 
 ipcMain.handle("quantlab:get-candidates-store", async () => readCandidatesStore());
@@ -910,21 +929,25 @@ ipcMain.handle("quantlab:read-project-json", async (_event, targetPath) => {
 });
 
 ipcMain.handle("quantlab:post-json", async (_event, relativePath, payload) => {
-  if (!workspaceState.serverUrl) {
-    throw new Error("Research UI server is not ready yet.");
+  try {
+    if (!workspaceState.serverUrl) {
+      throw new Error("Research UI server is not ready yet.");
+    }
+    const base = workspaceState.serverUrl.replace(/\/$/, "");
+    const response = await fetch(`${base}${relativePath}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    });
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : {};
+    if (!response.ok) {
+      throw new Error(data.message || `${relativePath} returned ${response.status}`);
+    }
+    return okIpcResult(data);
+  } catch (error) {
+    return errorIpcResult(error);
   }
-  const base = workspaceState.serverUrl.replace(/\/$/, "");
-  const response = await fetch(`${base}${relativePath}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload ?? {}),
-  });
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : {};
-  if (!response.ok) {
-    throw new Error(data.message || `${relativePath} returned ${response.status}`);
-  }
-  return data;
 });
 
 ipcMain.handle("quantlab:open-external", async (_event, url) => {
