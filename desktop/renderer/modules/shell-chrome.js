@@ -63,12 +63,6 @@ export const PALETTE_ACTION_SPECS = [
     handler: "openRunsNativeTab",
   },
   {
-    id: "runs-legacy",
-    label: "Open Runs (Legacy)",
-    description: "Open the browser-based run explorer.",
-    handler: "openLegacyRunsTab",
-  },
-  {
     id: "candidates",
     label: "Open Candidates",
     description: "Open the shortlist and baseline surface.",
@@ -133,5 +127,12 @@ export const PALETTE_ACTION_SPECS = [
     label: "Show Runtime Status",
     description: "Summarize runtime health through the assistant support lane.",
     handler: "summarizeRuntimeInChat",
+  },
+  {
+    id: "runs-legacy",
+    label: "Open Runs (Legacy) — browser fallback",
+    description: "Browser-based run explorer. Use only when native Runs surface is unavailable.",
+    handler: "openLegacyRunsTab",
+    legacy: true,
   },
 ];

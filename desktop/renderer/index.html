@@ -219,31 +219,24 @@
                 </div>
 
                 <div class="support-column">
-                    <section class="command-bar card support-command">
-                        <div>
-                            <div class="section-label">Support command</div>
-                            <h2>Quick assistant entry</h2>
-                        </div>
-                        <label class="command-input-wrap" for="palette-input">
-                            <span>Optional support shortcut</span>
-                            <input id="palette-input" type="text" placeholder="Examples: open latest failed launch, explain latest failure">
-                        </label>
-                        <button class="ghost-btn" id="run-command" type="button">Run support command</button>
-                    </section>
-
                     <section class="chat-panel card">
                         <div class="section-head">
                             <div>
-                                <div class="section-label">Assistant support</div>
-                                <h2>Deterministic assistant</h2>
+                                <div class="section-label">Assistant</div>
+                                <h2>Support lane</h2>
                             </div>
                             <div id="chat-adapter-status" class="assistant-status">Stepbit adapter offline.</div>
+                        </div>
+
+                        <div class="assistant-quick-row">
+                            <input id="palette-input" type="text" placeholder="Quick: open latest run, explain failure…">
+                            <button class="ghost-btn" id="run-command" type="button">Run</button>
                         </div>
 
                         <div id="chat-log" class="chat-log"></div>
 
                         <form id="chat-form" class="chat-form">
-                            <textarea id="chat-input" rows="3" placeholder="Use support prompts when the workstation needs help: open compare, explain latest failure, show runtime status..."></textarea>
+                            <textarea id="chat-input" rows="3" placeholder="open compare, explain latest failure, show runtime status…"></textarea>
                             <div class="chat-actions">
                                 <button id="chat-stepbit" class="ghost-btn" type="button">Route to Stepbit</button>
                                 <button class="primary-btn" type="submit">Send</button>
