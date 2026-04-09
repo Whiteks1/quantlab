@@ -35,7 +35,15 @@ def test_check():
     assert payload["status"] == "ok"
     assert payload["quantlab_import"] is True
     assert isinstance(payload["venv_active"], bool)
-    assert Path(payload["project_root"]).name in {"quant_lab", "quantlab"}
+    project_root = Path(payload["project_root"])
+    main_path = Path(payload["main_path"])
+    src_root = Path(payload["src_root"])
+
+    assert project_root.exists()
+    assert main_path == project_root / "main.py"
+    assert src_root == project_root / "src"
+    assert main_path.exists()
+    assert src_root.exists()
 
 
 def test_module_entrypoint_version():

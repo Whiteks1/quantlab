@@ -1,5 +1,16 @@
 # Session Log - QuantLab
 
+## 2026-04-09 — CLI Health Worktree-Safe Check (Issue #293)
+- **Session Focus**: Remove a false negative in CLI health validation so `--check` remains trustworthy across non-canonical worktree names.
+- **Tasks Completed**:
+  - Updated `test/test_cli_health.py` to assert stable path invariants from `--check` instead of assuming the checkout folder must be named `quant_lab` or `quantlab`.
+  - Kept the runtime health payload unchanged because it already exposes the correct machine-facing fields: `project_root`, `main_path`, and `src_root`.
+- **Key Decisions**:
+  - The health surface should report the real filesystem path; tests should validate truthfulness, not enforce a naming convention on checkouts.
+  - This slice stays test-only and does not change CLI behavior.
+- **Validation Notes**:
+  - Verified with `python -m pytest -q test/test_cli_health.py`.
+
 - 2026-04-09: Started issue #275 in a clean Desktop/UI worktree from `main`. Scope is limited to desktop validation semantics: explicit fallback smoke, explicit real-path smoke, and CI wiring that makes the distinction visible without mixing in renderer or core changes.
 - 2026-04-09: Expanded issue #275 scope minimally to include `desktop/preload.js` because current `main` still carries the known preload bridge syntax regression. Without that blocker fix, both fallback and real-path smoke stop at `bridgeReady: false`, so the desktop validation slice cannot be validated.
 - 2026-04-09: Completed local validation for issue #275. `desktop/package.json` now exposes explicit `smoke:fallback` and `smoke:real-path` scripts, `desktop/scripts/smoke.js` and `desktop/main.js` distinguish the two semantics, and both modes passed locally after restoring the preload bridge blocker fix. CI wiring was updated in `.github/workflows/ci.yml` to add a dedicated `desktop-real-path` job.
