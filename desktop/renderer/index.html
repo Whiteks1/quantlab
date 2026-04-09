@@ -21,7 +21,7 @@
             </div>
 
             <nav class="nav-list" aria-label="Primary">
-                <button class="nav-item is-active" data-action="open-chat">Chat</button>
+                <button class="nav-item is-active" data-action="open-chat">Assistant</button>
                 <button class="nav-item" data-action="open-experiments">Experiments</button>
                 <button class="nav-item" data-action="open-launch">Launch</button>
                 <button class="nav-item" data-action="open-runs">Runs</button>
@@ -79,11 +79,21 @@
             </header>
 
             <section class="command-bar">
-                <label class="command-input-wrap" for="palette-input">
-                    <span>Quick command</span>
-                    <input id="palette-input" type="text" placeholder="Type a command like 'open runs' or 'open latest run'">
-                </label>
-                <button class="ghost-btn" id="run-command" type="button">Run</button>
+                <div class="command-bar-copy">
+                    <div>
+                        <div class="section-label">Quick commands</div>
+                        <h2>Deterministic shortcuts</h2>
+                    </div>
+                    <p class="command-bar-meta">Open surfaces and run deterministic desktop actions here. Explanations and routed prompts appear in Assistant history below.</p>
+                </div>
+                <div class="command-entry-row">
+                    <label class="command-input-wrap" for="palette-input">
+                        <span>Command</span>
+                        <input id="palette-input" type="text" placeholder="Type a command like 'open runs' or 'open latest run'">
+                    </label>
+                    <button class="ghost-btn" id="run-command" type="button">Run command</button>
+                </div>
+                <div id="command-feedback" class="command-feedback">Use quick commands for open runs, compare selected, show artifacts, or show runtime status.</div>
             </section>
 
             <section class="workspace-grid">
@@ -91,18 +101,20 @@
                     <section class="chat-panel card">
                         <div class="section-head">
                             <div>
-                                <div class="section-label">QuantLab assistant</div>
-                                <h2>Command bus</h2>
+                                <div class="section-label">Assistant</div>
+                                <h2>History and routing</h2>
                             </div>
                             <div id="chat-adapter-status" class="assistant-status">Stepbit adapter offline.</div>
                         </div>
 
+                        <p class="assistant-meta">Use Assistant for explanations, summaries, and any prompt you want to route through Stepbit.</p>
+
                         <div id="chat-log" class="chat-log"></div>
 
                         <form id="chat-form" class="chat-form">
-                            <textarea id="chat-input" rows="3" placeholder="Ask for a deterministic action: open compare, show runtime status, open latest run..."></textarea>
+                            <textarea id="chat-input" rows="3" placeholder="Ask for an explanation, summary, or route a prompt via Stepbit."></textarea>
                             <div class="chat-actions">
-                                <button id="chat-stepbit" class="ghost-btn" type="button">Ask Stepbit</button>
+                                <button id="chat-stepbit" class="ghost-btn" type="button">Route via Stepbit</button>
                                 <button class="primary-btn" type="submit">Send</button>
                             </div>
                         </form>
