@@ -1,5 +1,16 @@
 # Session Log - QuantLab
 
+## 2026-04-09 — Single-Scope Merge Discipline Rule (Issue #277)
+- **Session Focus**: Add the minimum written rule needed to stop multi-scope technical branches from becoming normal practice.
+- **Tasks Completed**:
+  - Updated `AGENTS.md` to state that one branch should carry one technical story and that mixed-scope PRs are not accepted by default.
+  - Updated `CONTRIBUTING.md` to define the same rule at PR level and require explicit written justification for any core/desktop/docs/CI/cleanup mix.
+- **Key Decisions**:
+  - This slice adds only a minimal governance rule in existing authoritative workflow surfaces.
+  - The goal is not process overhead; it is to make unjustified multi-scope PRs visibly out of policy.
+- **Validation Notes**:
+  - Verified by checking that the rule is now present in both `AGENTS.md` and `CONTRIBUTING.md`.
+
 ## 2026-04-09 — D.2 State Alignment and Stale Governance Cleanup (Issue #307)
 - **Session Focus**: Bring `.agents/current-state.md` back into sync with the Hyperliquid D.2 work already merged into `main`, and clear stale governance noise.
 - **Tasks Completed**:
