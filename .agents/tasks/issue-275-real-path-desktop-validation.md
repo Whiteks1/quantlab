@@ -55,3 +55,5 @@ An explicit fallback smoke, an explicit real-path desktop validation, and CI cov
 ## Continuation note
 
 After the first PR pass, GitHub Actions exposed a CI-only weakness: the smoke runner assumed `result.json` always existed, but Electron could exit before `did-finish-load` and leave no smoke artifact behind. The issue scope remains unchanged; the fix is to make the smoke result write resilient on early exits and to surface a meaningful smoke failure when the artifact is missing.
+
+The second CI pass exposed a Linux-runner constraint rather than a shell-semantic bug: Electron aborts under GitHub-hosted Linux without a usable setuid sandbox. The issue scope still remains unchanged; the smoke runner needs the standard CI-only `--no-sandbox` launch adjustment while preserving normal local behavior.

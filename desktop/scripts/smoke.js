@@ -22,6 +22,11 @@ async function main() {
     .then(() => canonicalProjectRoot)
     .catch(() => checkoutRoot);
   const electronBinary = require("electron");
+  const electronArgs = ["."];
+  if (process.platform === "linux" && String(process.env.CI || "").toLowerCase() === "true") {
+    // GitHub-hosted Linux runners do not provide a usable setuid sandbox for Electron.
+    electronArgs.push("--no-sandbox");
+  }
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "quantlab-desktop-smoke-"));
   const outputPath = path.join(tempRoot, "result.json");
   const desktopOutputsRoot = path.join(tempRoot, "outputs");
@@ -90,7 +95,7 @@ async function main() {
   }
 
   try {
-    const child = spawn(electronBinary, ["."], {
+    const child = spawn(electronBinary, electronArgs, {
       cwd: desktopRoot,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
