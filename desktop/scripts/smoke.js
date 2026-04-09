@@ -3,7 +3,17 @@ const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
 
+function parseSmokeMode(argv = process.argv.slice(2)) {
+  const explicitMode = argv
+    .map((value) => String(value || "").trim())
+    .find((value) => value.startsWith("--mode="));
+  const mode = explicitMode ? explicitMode.split("=", 2)[1] : "fallback";
+  return mode === "real-path" ? "real-path" : "fallback";
+}
+
 async function main() {
+  const mode = parseSmokeMode();
+  const requireRealPath = mode === "real-path";
   const desktopRoot = path.resolve(__dirname, "..");
   const checkoutRoot = path.resolve(desktopRoot, "..");
   const workspaceRoot = path.resolve(checkoutRoot, "..");
@@ -12,6 +22,11 @@ async function main() {
     .then(() => canonicalProjectRoot)
     .catch(() => checkoutRoot);
   const electronBinary = require("electron");
+  const electronArgs = ["."];
+  if (process.platform === "linux" && String(process.env.CI || "").toLowerCase() === "true") {
+    // GitHub-hosted Linux runners do not provide a usable setuid sandbox for Electron.
+    electronArgs.push("--no-sandbox");
+  }
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "quantlab-desktop-smoke-"));
   const outputPath = path.join(tempRoot, "result.json");
   const desktopOutputsRoot = path.join(tempRoot, "outputs");
@@ -80,19 +95,22 @@ async function main() {
   }
 
   try {
-    const child = spawn(electronBinary, ["."], {
+    const child = spawn(electronBinary, electronArgs, {
       cwd: desktopRoot,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
         QUANTLAB_DESKTOP_SMOKE: "1",
+        QUANTLAB_DESKTOP_SMOKE_MODE: mode,
+        QUANTLAB_DESKTOP_SMOKE_REQUIRE_SERVER: requireRealPath ? "1" : "0",
         QUANTLAB_DESKTOP_SMOKE_OUTPUT: outputPath,
         QUANTLAB_DESKTOP_OUTPUTS_ROOT: desktopOutputsRoot,
       },
     });
     let stdout = "";
     let stderr = "";
+    let timedOut = false;
     child.stdout.on("data", (chunk) => {
       stdout += String(chunk || "");
     });
@@ -101,6 +119,7 @@ async function main() {
     });
 
     const timeout = setTimeout(() => {
+      timedOut = true;
       child.kill();
     }, 45000);
 
@@ -110,13 +129,31 @@ async function main() {
     });
     clearTimeout(timeout);
 
-    const raw = await fs.readFile(outputPath, "utf8");
-    const result = JSON.parse(raw);
-
-    if (exitCode !== 0 || !result.bridgeReady || !result.shellReady) {
+    let raw = "";
+    try {
+      raw = await fs.readFile(outputPath, "utf8");
+    } catch (error) {
       if (stdout.trim()) console.error(stdout.trim());
       if (stderr.trim()) console.error(stderr.trim());
-      throw new Error(`Desktop smoke failed: ${JSON.stringify(result)}`);
+      if (error && error.code === "ENOENT") {
+        const timeoutSuffix = timedOut ? " The Electron child was killed after the smoke timeout." : "";
+        throw new Error(
+          `Desktop ${mode} smoke exited before writing ${outputPath} (exit=${exitCode}).${timeoutSuffix}`,
+        );
+      }
+      throw error;
+    }
+    const result = JSON.parse(raw);
+
+    const smokeFailed = exitCode !== 0
+      || !result.bridgeReady
+      || !result.shellReady
+      || (requireRealPath && (!result.serverReady || !result.apiReady));
+
+    if (smokeFailed) {
+      if (stdout.trim()) console.error(stdout.trim());
+      if (stderr.trim()) console.error(stderr.trim());
+      throw new Error(`Desktop ${mode} smoke failed: ${JSON.stringify(result)}`);
     }
 
     const persistedWorkspaceRaw = await fs.readFile(workspaceStatePath, "utf8");
@@ -128,9 +165,11 @@ async function main() {
     }
 
     console.log(
-      result.serverReady
-        ? `Desktop smoke passed via ${result.serverUrl}`
-        : "Desktop smoke passed via local runs fallback",
+      requireRealPath
+        ? `Desktop real-path smoke passed via ${result.serverUrl}`
+        : result.serverReady
+          ? `Desktop fallback smoke passed via ${result.serverUrl}`
+          : "Desktop fallback smoke passed via local runs fallback",
     );
   } finally {
     if (seededRunsIndex) {

@@ -1,6 +1,47 @@
 # Session Log - QuantLab
 
 - 2026-04-09: Created the Desktop/UI UX remediation issue block after consolidating desktop findings into three root problems: workstation containment, right-rail support-lane clarity, and decision guidance across runs surfaces. Opened GitHub issues #286, #287, and #288 to map the next implementation sequence before touching renderer behavior.
+## 2026-04-09 — CLI Health Worktree-Safe Check (Issue #293)
+- **Session Focus**: Remove a false negative in CLI health validation so `--check` remains trustworthy across non-canonical worktree names.
+- **Tasks Completed**:
+  - Updated `test/test_cli_health.py` to assert stable path invariants from `--check` instead of assuming the checkout folder must be named `quant_lab` or `quantlab`.
+  - Kept the runtime health payload unchanged because it already exposes the correct machine-facing fields: `project_root`, `main_path`, and `src_root`.
+- **Key Decisions**:
+  - The health surface should report the real filesystem path; tests should validate truthfulness, not enforce a naming convention on checkouts.
+  - This slice stays test-only and does not change CLI behavior.
+- **Validation Notes**:
+  - Verified with `python -m pytest -q test/test_cli_health.py`.
+
+- 2026-04-09: Started issue #275 in a clean Desktop/UI worktree from `main`. Scope is limited to desktop validation semantics: explicit fallback smoke, explicit real-path smoke, and CI wiring that makes the distinction visible without mixing in renderer or core changes.
+- 2026-04-09: Expanded issue #275 scope minimally to include `desktop/preload.js` because current `main` still carries the known preload bridge syntax regression. Without that blocker fix, both fallback and real-path smoke stop at `bridgeReady: false`, so the desktop validation slice cannot be validated.
+- 2026-04-09: Completed local validation for issue #275. `desktop/package.json` now exposes explicit `smoke:fallback` and `smoke:real-path` scripts, `desktop/scripts/smoke.js` and `desktop/main.js` distinguish the two semantics, and both modes passed locally after restoring the preload bridge blocker fix. CI wiring was updated in `.github/workflows/ci.yml` to add a dedicated `desktop-real-path` job.
+
+## 2026-04-09 — Hyperliquid Canonical Submit Replay Guard (Issue #291)
+- **Session Focus**: Tighten Stage D.2 idempotency on the first supervised Hyperliquid submit path by blocking duplicate canonical session replays.
+- **Tasks Completed**:
+  - Added a canonical-session guard in `src/quantlab/cli/broker_preflight.py` so `--hyperliquid-submit-session` now fails early if the derived session already has `hyperliquid_submit_response.json`.
+  - Kept the scope narrow to the canonical session path; the sibling one-off artifact path was left unchanged.
+  - Added targeted pytest coverage to prove the duplicate replay is rejected and does not re-call the adapter submit path.
+- **Key Decisions**:
+  - The canonical session identity remains the existing derived `session_id`; this slice does not introduce a new replay token or override flag.
+  - Once a canonical session already has a persisted submit response, the safe operator path is inspect/reconcile, not blind resubmit.
+  - This is an idempotency-safety guard, not a broader retry policy.
+- **Validation Notes**:
+  - Verified with `PYTHONPATH=<worktree>/src python -m pytest -q test/test_cli_broker_preflight.py test/test_hyperliquid_broker_adapter.py test/test_hyperliquid_submit_sessions.py`.
+
+## 2026-04-09 — Stepbit External-Provider Compatibility Smoke (Issue #281)
+- **Session Focus**: Consolidate a QuantLab-owned smoke for the external Stepbit provider boundary without widening the runtime surface.
+- **Tasks Completed**:
+  - Added `test/test_stepbit_external_provider_compat.py` to cover external-consumer success paths for `run` and `sweep`.
+  - Added a deterministic failure-path assertion for `sweep` when the canonical `report.json` is missing.
+  - Fixed session signalling so `SESSION_COMPLETED.mode` remains the public command type instead of being overwritten by narrower artifact modes such as `grid`.
+- **Key Decisions**:
+  - The external boundary remains the existing CLI contract: `--json-request`, optional `--signal-file`, and canonical `report.json.machine_contract`.
+  - The public signal `mode` field must stay stable as the command type (`run`, `sweep`, etc.); internal artifact modes stay available inside `report.json.machine_contract.mode`.
+  - This slice stays test-first and contract-oriented; no new integration surface was introduced.
+- **Validation Notes**:
+  - Verified with `python -m pytest -q test/test_stepbit_external_provider_compat.py test/test_machine_sweep_smoke.py test/test_signals.py test/test_cli_run.py test/test_sweep_contract.py`
+  - Verified broader local compatibility with `python -m pytest -q -k "not test_check"`; local `test_check` remains worktree-path-sensitive because this checkout lives under `quant_lab-issue-281/`.
 
 ## 2026-03-24 — Canonical Run Machine Contract (Issue #62)
 - **Session Focus**: Reduce the remaining contract asymmetry between plain `run` and `sweep` inside canonical `report.json`.
@@ -204,6 +245,8 @@
 - 2026-04-08: Started issue #215 renderer tab dispatch registry in a clean Desktop/UI worktree from `main`. Scope is limited to `desktop/renderer/app.js` plus `.agents` continuity, replacing the `renderTabs()` tab-kind conditional chain with a local render registry while preserving the existing fallback placeholder behavior.
 - 2026-04-08: Completed issue #215 renderer tab dispatch registry. `renderTabs()` now dispatches through a local `TAB_RENDERERS` registry with the same fallback placeholder behavior, and validation passed against both desktop smoke and a live `research_ui` surface at `http://127.0.0.1:8000/research_ui/index.html`.
 - 2026-04-09: Tightened both workflow documents so real diffs now default to the full closeout path: issue or task, branch, checks, coherent commit, PR, merge, issue closure, and local/remote cleanup unless the user explicitly pauses or repository state blocks the next step.
+- 2026-04-09: Hardened issue #275 after the first CI run exposed an early-exit gap in desktop smoke. `desktop/main.js` now writes a smoke failure result for normal early shutdown paths, and `desktop/scripts/smoke.js` now reports a missing result artifact with child exit context instead of failing with a raw `ENOENT`.
+- 2026-04-09: Kept issue #275 open after the next CI run exposed a Linux-only Electron sandbox abort on GitHub-hosted runners. `desktop/scripts/smoke.js` now adds the standard CI-only `--no-sandbox` flag for Linux smoke runs without changing local desktop behavior.
 
 ---
 
@@ -217,3 +260,4 @@
   - [Task 2]
 - **Key Decisions**: [Logic, scope, or architecture changes]
 - **Next Steps**: [Planned work for the next session]
+

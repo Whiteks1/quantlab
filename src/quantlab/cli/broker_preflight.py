@@ -9,7 +9,11 @@ import json
 from pathlib import Path
 
 from quantlab.brokers import ExecutionContext, HyperliquidBrokerAdapter, KrakenBrokerAdapter
-from quantlab.brokers.session_store import BrokerOrderValidationStore, HyperliquidSubmitStore
+from quantlab.brokers.session_store import (
+    HYPERLIQUID_SUBMIT_RESPONSE_FILENAME,
+    BrokerOrderValidationStore,
+    HyperliquidSubmitStore,
+)
 from quantlab.cli.broker_dry_run import (
     _build_execution_intent_from_args,
     _build_execution_policy_from_args,
@@ -199,16 +203,6 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
         with open(signed_action_path, "r", encoding="utf-8") as fh:
             signed_action_artifact = json.load(fh)
 
-        adapter = HyperliquidBrokerAdapter()
-        submit_note = getattr(args, "hyperliquid_submit_note", None)
-        report = adapter.build_submit_report(
-            source_artifact_path=str(signed_action_path),
-            signed_action_artifact=signed_action_artifact,
-            reviewer=reviewer.strip(),
-            note=submit_note.strip() if isinstance(submit_note, str) and submit_note.strip() else None,
-            timeout_seconds=float(getattr(args, "hyperliquid_preflight_timeout", 10.0)),
-        ).to_dict()
-
         request_id = getattr(args, "_request_id", None)
         source_envelope = signed_action_artifact.get("signature_envelope", {})
         session_id = generate_run_id(
@@ -223,6 +217,30 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
         )
         root_dir = Path(getattr(args, "hyperliquid_submit_sessions_root", None) or "outputs/hyperliquid_submits").resolve()
         store = HyperliquidSubmitStore(session_id, base_dir=str(root_dir))
+        existing_response_path, existing_response = _load_existing_hyperliquid_submit_response(store)
+        if existing_response_path is not None:
+            existing_state = None
+            if isinstance(existing_response, dict):
+                existing_state = existing_response.get("submit_state")
+            message = (
+                f"Hyperliquid submit session '{session_id}' already has a persisted submit response at "
+                f"{existing_response_path}. Refusing to replay supervised submit; inspect or reconcile the "
+                "existing session instead."
+            )
+            if existing_state:
+                message = f"{message} Existing submit_state: {existing_state}."
+            raise ConfigError(message)
+
+        adapter = HyperliquidBrokerAdapter()
+        submit_note = getattr(args, "hyperliquid_submit_note", None)
+        report = adapter.build_submit_report(
+            source_artifact_path=str(signed_action_path),
+            signed_action_artifact=signed_action_artifact,
+            reviewer=reviewer.strip(),
+            note=submit_note.strip() if isinstance(submit_note, str) and submit_note.strip() else None,
+            timeout_seconds=float(getattr(args, "hyperliquid_preflight_timeout", 10.0)),
+        ).to_dict()
+
         session_path = store.initialize().resolve()
 
         status_value = _derive_hyperliquid_submit_status(report)
@@ -249,7 +267,7 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
         store.write_status(status)
         store.write_signed_action(signed_action_artifact)
         store.write_submit_response(report)
-        csv_path, json_path = write_hyperliquid_submits_index(root_dir)
+        csv_path, json_path, md_path = write_hyperliquid_submits_index(root_dir)
 
         print("\nHyperliquid submit session generated:\n")
         print(f"  session_path         : {session_path}")
@@ -257,6 +275,7 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
         print(f"  remote_submit_called : {report['remote_submit_called']}")
         print(f"  index_csv            : {csv_path}")
         print(f"  index_json           : {json_path}")
+        print(f"  index_md             : {md_path}")
 
         return {
             "status": "success",
@@ -427,7 +446,7 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
             store.write_metadata(metadata)
             store.write_status(status)
             store.write_report(report)
-            csv_path, json_path = write_broker_order_validations_index(root_dir)
+            csv_path, json_path, md_path = write_broker_order_validations_index(root_dir)
 
             print("\nKraken order validation session generated:\n")
             print(f"  session_path            : {session_path}")
@@ -435,6 +454,7 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
             print(f"  remote_validation_called: {report['remote_validation_called']}")
             print(f"  index_csv               : {csv_path}")
             print(f"  index_json              : {json_path}")
+            print(f"  index_md                : {md_path}")
 
             return {
                 "status": "success",
@@ -475,6 +495,20 @@ def _derive_hyperliquid_submit_status(report: dict[str, object]) -> str:
     if bool(report.get("remote_submit_called")):
         return "submit_rejected"
     return str(report.get("submit_state") or "submit_not_ready")
+
+
+def _load_existing_hyperliquid_submit_response(
+    store: HyperliquidSubmitStore,
+) -> tuple[Path | None, dict[str, object] | None]:
+    response_path = store.session_path / HYPERLIQUID_SUBMIT_RESPONSE_FILENAME
+    if not response_path.exists():
+        return None, None
+    try:
+        with open(response_path, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except json.JSONDecodeError:
+        payload = None
+    return response_path.resolve(), payload if isinstance(payload, dict) else None
 
 
 def _build_execution_context_from_args(args) -> ExecutionContext | None:
