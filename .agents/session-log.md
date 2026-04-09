@@ -1,5 +1,7 @@
 # Session Log - QuantLab
 
+- 2026-04-09: Created the Desktop/UI UX remediation issue block after consolidating desktop findings into three root problems: workstation containment, right-rail support-lane clarity, and decision guidance across runs surfaces. Opened GitHub issues #286, #287, and #288 to map the next implementation sequence before touching renderer behavior.
+
 ## 2026-03-24 — Canonical Run Machine Contract (Issue #62)
 - **Session Focus**: Reduce the remaining contract asymmetry between plain `run` and `sweep` inside canonical `report.json`.
 - **Tasks Completed**:
