@@ -1,5 +1,17 @@
 # Session Log - QuantLab
 
+## 2026-04-09 — Hyperliquid Aggregate Ambiguity Visibility (Issue #300)
+- **Session Focus**: Make aggregate Hyperliquid submit visibility call out the new D.2 ambiguity states explicitly instead of burying them in generic counts.
+- **Tasks Completed**:
+  - Updated `src/quantlab/cli/hyperliquid_submit_sessions.py` health output to expose explicit counts for `reconciliation_required` sessions and `submitted_remote_identifier_missing` submits.
+  - Updated `src/quantlab/reporting/hyperliquid_submit_index.py` to expose the same counts in JSON and to render them in the Markdown summary.
+  - Added focused tests covering the new aggregate counts in both health and index surfaces.
+- **Key Decisions**:
+  - This slice is visibility-only; it does not change any per-session state machine.
+  - The new counts are additive and explicit, so operators do not need to infer D.2 ambiguity from raw maps alone.
+- **Validation Notes**:
+  - Verified with `python -m pytest -q test/test_hyperliquid_submit_sessions.py`.
+
 ## 2026-04-09 — Hyperliquid Status Refresh Reconciliation Precedence (Issue #298)
 - **Session Focus**: Prevent `--hyperliquid-submit-sessions-status` from degrading canonical session status when a prior reconciliation already knows the effective remote order state.
 - **Tasks Completed**:
