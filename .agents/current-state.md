@@ -105,4 +105,32 @@
 
 
 ## Known Issues / Technical Debt
+
 - The canonical machine-facing contract is now shared by `run` and `sweep`, but downstream consumers may still carry old assumptions about `run` using only top-level `summary` / `kpi_summary`.
+- `codex/codex-workflow-prompt` remote branch has 5 unique commits not yet in main. Review and merge or close before next sanitation pass.
+
+## Repository Sanitation Status (2026-04-09)
+
+### Branches
+| Branch | Status |
+|--------|--------|
+| `codex/desktop-workstation-maturity` | 🟡 Active — ready to merge after #315 resolved |
+| `codex/hotfix-broker-index-unpack` | 🟡 PR #322 open — mergeable |
+| `codex/codex-workflow-prompt` | 🟠 5 unique commits — needs review or close |
+| `codex/quant-pulse-intake-boundary` | ✅ Deleted (0 unique commits vs main) |
+| `codex/fix-315-d2-coverage-restore` | ✅ Deleted (fix landed in main via other path) |
+
+### Root artifacts
+- `out.txt`, `output.txt`, `out_full.txt`, `out_k3.txt`, `out_k3_full.txt` — untracked, covered by `.gitignore` (`out*.txt`). No action required.
+
+### Coverage
+| Module | Status |
+|--------|--------|
+| `features/indicators.py` | ✅ 11 real tests (`test_indicators.py`) |
+| `strategies/rsi_ma_atr.py` | ✅ 12 real tests (`test_strategy_rsi_ma_atr.py`) |
+| `brokers/hyperliquid.py` | ✅ D.2 contract tests restored |
+| `reporting/hyperliquid_submit_index.py` | ✅ D.2 counter tests restored |
+
+### Governance
+- High-control modules declared in `implementation-rules.md` (#318 ✅)
+- D.2 contract (`submitted_remote_identifier_missing`, index counters) locked in main (#315 ✅)
