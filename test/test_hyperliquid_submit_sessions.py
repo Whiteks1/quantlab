@@ -279,6 +279,63 @@ def test_refresh_hyperliquid_submit_status(monkeypatch, tmp_path):
     assert session_status["alerts_present"] is False
 
 
+def test_refresh_hyperliquid_submit_status_preserves_known_reconciliation(monkeypatch, tmp_path):
+    from quantlab.cli import hyperliquid_submit_sessions as module
+
+    session_dir = _write_session(tmp_path)
+    (session_dir / "hyperliquid_reconciliation.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.reconciliation",
+                "generated_at": "2026-03-27T12:06:00",
+                "status_known": True,
+                "normalized_state": "open",
+                "resolution_source": "open_orders",
+                "errors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_status(self, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.hyperliquid.order_status",
+                    "adapter_name": "hyperliquid",
+                    "generated_at": "2026-03-27T12:07:00",
+                    "source_session_id": "20260327_hyperliquid_submit_demo",
+                    "execution_account_id": "0x1111111111111111111111111111111111111111",
+                    "query_mode": "oid",
+                    "query_identifier": "12345",
+                    "query_attempted": True,
+                    "status_known": False,
+                    "normalized_state": "unknown",
+                    "raw_status": None,
+                    "oid": 12345,
+                    "cloid": "abc123cloid",
+                    "order_status": None,
+                    "errors": ["temporary_missing_order"],
+                }
+
+        return _Fake()
+
+    monkeypatch.setattr(module.HyperliquidBrokerAdapter, "build_order_status_report", fake_status)
+
+    args = _make_args(hyperliquid_submit_sessions_status=str(session_dir))
+    assert handle_hyperliquid_submit_sessions_commands(args) is True
+
+    session_status = json.loads((session_dir / "session_status.json").read_text(encoding="utf-8"))
+    assert session_status["status"] == "open"
+    assert session_status["order_status_known"] is False
+    assert session_status["order_status_state"] == "unknown"
+    assert session_status["reconciliation_known"] is True
+    assert session_status["reconciliation_state"] == "open"
+    assert session_status["reconciliation_source"] == "open_orders"
+    assert session_status["alert_status"] == "ok"
+    assert session_status["alerts_present"] is False
+
+
 def test_refresh_hyperliquid_submit_reconciliation(monkeypatch, tmp_path):
     from quantlab.cli import hyperliquid_submit_sessions as module
 
