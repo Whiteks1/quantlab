@@ -811,9 +811,9 @@ function renderRunsRow(run, ctx) {
         </div>
       </td>
       <td>
-        <div class="run-primary-meta">
+        <div style="display: flex; flex-direction: column; gap: 4px; white-space: nowrap;">
           <span class="mono-cell">${escapeHtml(`${run?.start || "-"} -> ${run?.end || "-"}`)}</span>
-          <span class="run-posture-label">Trades: ${escapeHtml(formatCount(run?.trades))}</span>
+          <span style="color: var(--muted); font-size: 0.76rem;">Trades: ${escapeHtml(formatCount(run?.trades))}</span>
         </div>
       </td>
       <td class="${escapeHtml(toneClass(run?.total_return, true))}">${escapeHtml(formatPercent(run?.total_return))}</td>
