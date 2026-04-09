@@ -337,7 +337,7 @@ button:disabled {
 
 .chat-panel {
     display: grid;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto auto 1fr auto;
     min-height: 420px;
     background: linear-gradient(180deg, rgba(14, 20, 31, 0.88), rgba(10, 16, 24, 0.96));
 }
