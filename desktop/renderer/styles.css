@@ -502,6 +502,66 @@ button:disabled {
     background: rgba(8, 14, 22, 0.76);
 }
 
+.decision-banner {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 16px;
+    background: rgba(8, 14, 22, 0.84);
+    display: grid;
+    gap: 8px;
+}
+
+.decision-banner strong {
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.decision-banner.tone-positive,
+.decision-state-card.tone-positive,
+.table-state.tone-positive {
+    border-color: rgba(118, 211, 156, 0.32);
+}
+
+.decision-banner.tone-warning,
+.decision-state-card.tone-warning,
+.table-state.tone-warning {
+    border-color: rgba(240, 179, 93, 0.32);
+}
+
+.decision-banner.tone-negative,
+.decision-state-card.tone-negative,
+.table-state.tone-negative {
+    border-color: rgba(242, 125, 136, 0.32);
+}
+
+.decision-state-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.decision-state-card,
+.table-state {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: rgba(4, 10, 16, 0.78);
+    padding: 14px;
+    display: grid;
+    gap: 8px;
+}
+
+.decision-state-card strong,
+.table-state strong {
+    font-size: 0.98rem;
+}
+
+.decision-state-card p,
+.table-state span {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
 .summary-card .label {
     color: var(--muted);
     font-size: 0.76rem;
@@ -901,7 +961,7 @@ button:disabled {
 
 .runs-table {
     width: 100%;
-    min-width: 980px;
+    min-width: 1320px;
     border-collapse: collapse;
 }
 
@@ -941,6 +1001,11 @@ button:disabled {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+}
+
+.runs-readiness-panel {
+    display: grid;
+    gap: 16px;
 }
 
 .evidence-shell,
