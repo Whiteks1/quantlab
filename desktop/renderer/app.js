@@ -1,4 +1,9 @@
 import * as decisionStore from "./modules/decision-store.js";
+import {
+  NAV_ACTION_BY_KIND,
+  PALETTE_ACTION_SPECS,
+  SHELL_COPY,
+} from "./modules/shell-chrome.js";
 import * as sweepDecisionStore from "./modules/sweep-decision-store.js";
 import {
   absoluteUrl as buildAbsoluteUrl,
@@ -21,7 +26,6 @@ import {
   uniqueRunIds as dedupeRunIds,
 } from "./modules/utils.js";
 import {
-  compareMetric as renderMetricRow,
   renderArtifactsTab as renderArtifactsTabView,
   renderCandidatesTab as renderCandidatesTabView,
   renderCompareTab as renderCompareTabView,
@@ -30,8 +34,8 @@ import {
   renderPaperOpsTab as renderPaperOpsTabView,
   renderRunsTab as renderRunsTabView,
   renderRunTab as renderRunTabView,
+  renderSystemTab as renderSystemTabView,
   renderSweepDecisionTab as renderSweepDecisionTabView,
-  renderSummaryCard as renderSummaryCardView,
 } from "./modules/tab-renderers.js";
 
 const CONFIG = {
@@ -47,7 +51,6 @@ const CONFIG = {
   refreshIntervalMs: 15000,
   maxWorklistRuns: 8,
   maxRecentJobs: 4,
-  maxContextTabs: 6,
   maxLogPreviewChars: 5000,
   maxCandidateCompare: 4,
   maxExperimentsConfigs: 12,
@@ -73,12 +76,7 @@ const state = {
   experimentsWorkspace: { status: "idle", configs: [], sweeps: [], error: null, updatedAt: null },
   experimentConfigPreviewCache: new Map(),
   isSubmittingLaunch: false,
-  launchFeedback: "Use deterministic inputs or ask from chat.",
-  quickCommandFeedback: {
-    tone: "neutral",
-    text: "Use quick commands for open runs, compare selected, show artifacts, or show runtime status.",
-  },
-  decisionFeedback: null,
+  launchFeedback: SHELL_COPY.defaultLaunchFeedback,
   refreshTimer: null,
   isStepbitSubmitting: false,
   snapshotStatus: {
@@ -94,12 +92,12 @@ const state = {
     {
       role: "assistant",
       label: "quantlab",
-      content:
-        "QuantLab Desktop now supports a real workflow.\n\nTry:\n- open experiments\n- open sweep handoff\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/experiments/eth_2023_grid.yaml\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure\n- ask stepbit explain the latest failed launch",
+      content: SHELL_COPY.assistantWelcome,
     },
   ],
   tabs: [],
   activeTabId: null,
+  initialSurfaceResolved: false,
   paletteOpen: false,
   paletteQuery: "",
   workspaceStoreLoaded: false,
@@ -112,6 +110,7 @@ const elements = {
   runtimeAlert: document.getElementById("runtime-alert"),
   runtimeRetry: document.getElementById("runtime-retry"),
   runtimeChips: document.getElementById("runtime-chips"),
+  topbarEyebrow: document.getElementById("topbar-eyebrow"),
   chatLog: document.getElementById("chat-log"),
   chatForm: document.getElementById("chat-form"),
   chatInput: document.getElementById("chat-input"),
@@ -120,10 +119,12 @@ const elements = {
   tabsBar: document.getElementById("tabs-bar"),
   tabContent: document.getElementById("tab-content"),
   topbarTitle: document.getElementById("topbar-title"),
+  topbarSurfaceChip: document.getElementById("topbar-surface-chip"),
+  topbarRuntimeChip: document.getElementById("topbar-runtime-chip"),
+  topbarServerChip: document.getElementById("topbar-server-chip"),
   paletteSearch: document.getElementById("palette-search"),
   paletteInput: document.getElementById("palette-input"),
   runCommand: document.getElementById("run-command"),
-  commandFeedback: document.getElementById("command-feedback"),
   commandPaletteTrigger: document.getElementById("command-palette-trigger"),
   openBrowserRuns: document.getElementById("open-browser-runs"),
   paletteOverlay: document.getElementById("palette-overlay"),
@@ -149,38 +150,12 @@ const elements = {
   workflowRunsList: document.getElementById("workflow-runs-list"),
   workflowOpenCompare: document.getElementById("workflow-open-compare"),
   workflowClearSelection: document.getElementById("workflow-clear-selection"),
-  topbarSurfaceMeta: document.getElementById("topbar-surface-meta"),
-  workbenchMeta: document.getElementById("workbench-meta"),
 };
 
-const PRIMARY_SURFACE_IDS = new Set([
-  "experiments",
-  "iframe:#/launch",
-  "runs-native",
-  "compare:selected",
-  "candidates",
-  "paper-ops",
-]);
-
-const paletteActions = [
-  ["chat", "Open Assistant", "Return focus to the assistant history and input.", () => focusChat()],
-  ["experiments", "Open Experiments", "Open the native experiments and sweeps workspace.", () => openExperimentsTab()],
-  ["sweep-handoff", "Open Sweep Handoff", "Open the local sweep decision handoff compare.", () => openSweepDecisionTab()],
-  ["launch", "Open Launch", "Open the QuantLab launch surface.", () => openResearchTab("launch", "Launch", "#/launch", { replacePrimary: true })],
-  ["runs", "Open Runs", "Open the native run explorer.", () => openRunsNativeTab()],
-  ["runs-legacy", "Open Runs (Legacy)", "Open the browser-based run explorer.", () => openResearchTab("runs", "Runs (legacy)", "#/")],
-  ["candidates", "Open Candidates", "Open the shortlist and baseline surface.", () => openCandidatesTab()],
-  ["compare", "Open Compare", "Open a compare tab from selected runs.", () => openCompareSelectionTab(state.selectedRunIds, "selected runs", { replacePrimary: true })],
-  ["shortlist-compare", "Open Shortlist Compare", "Compare the current shortlist or baseline set.", () => openShortlistCompareTab()],
-  ["baseline-run", "Open Baseline Run", "Open the current baseline run workspace.", () => openBaselineRunTab()],
-  ["ops", "Open Paper Ops", "Open the native operational surface.", () => openPaperOpsTab()],
-  ["latest-run", "Open Latest Run", "Open the latest run detail.", () => openLatestRunTab()],
-  ["latest-failed", "Open Latest Failed Launch", "Review the most recent failed launch job.", () => openLatestFailedLaunchTab()],
-  ["explain-failure", "Explain Latest Failure", "Summarize the latest failed launch from stderr and job state.", () => explainLatestFailureInChat()],
-  ["stepbit-failure", "Ask Stepbit About Failure", "Use the Stepbit-backed adapter to inspect the latest failed launch.", () => askStepbitAboutLatestFailure()],
-  ["artifacts", "Show Artifacts", "Open artifacts for the selected or latest run.", () => openArtifactsForPreferredRun()],
-  ["runtime", "Show Runtime Status", "Summarize runtime health in chat.", () => summarizeRuntimeInChat()],
-].map(([id, label, description, run]) => ({ id, label, description, run }));
+const paletteActions = PALETTE_ACTION_SPECS.map((action) => ({
+  ...action,
+  run: buildPaletteActionHandler(action.handler),
+}));
 
 document.addEventListener("DOMContentLoaded", async () => {
   bindEvents();
@@ -235,26 +210,28 @@ function bindEvents() {
   document.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.dataset.action;
-      if (action === "open-chat") focusChat();
+      if (action === "open-assistant") focusAssistant();
+      if (action === "open-system") openSystemTab();
       if (action === "open-experiments") openExperimentsTab();
-      if (action === "open-launch") openResearchTab("launch", "Launch", "#/launch", { replacePrimary: true });
+      if (action === "open-launch") openResearchTab("launch", "Launch", "#/launch");
       if (action === "open-runs") openRunsNativeTab();
       if (action === "open-candidates") openCandidatesTab();
-      if (action === "open-compare") openCompareSelectionTab(state.selectedRunIds, "selected runs", { replacePrimary: true });
+      if (action === "open-compare") openCompareSelectionTab();
       if (action === "open-ops") openPaperOpsTab();
     });
   });
   document.querySelectorAll("[data-prompt]").forEach((button) => {
     button.addEventListener("click", () => {
       const prompt = button.dataset.prompt || "";
-      handleSupportShortcut(prompt);
+      elements.chatInput.value = prompt;
+      handleChatPrompt(prompt);
     });
   });
   elements.chatForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const prompt = elements.chatInput.value.trim();
     if (!prompt) return;
-    handleChatPrompt(prompt, { source: "assistant", echoUser: true });
+    handleChatPrompt(prompt);
     elements.chatInput.value = "";
   });
   elements.chatStepbit.addEventListener("click", () => {
@@ -266,14 +243,8 @@ function bindEvents() {
   elements.runCommand.addEventListener("click", () => {
     const prompt = elements.paletteInput.value.trim();
     if (!prompt) return;
-    handleQuickCommand(prompt);
-  });
-  elements.paletteInput.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
-    const prompt = elements.paletteInput.value.trim();
-    if (!prompt) return;
-    handleQuickCommand(prompt);
+    handleChatPrompt(prompt);
+    elements.paletteInput.value = "";
   });
   elements.commandPaletteTrigger.addEventListener("click", () => {
     state.paletteOpen = true;
@@ -370,16 +341,12 @@ async function refreshSnapshot() {
     extra.forEach((result) => {
       if (result.status === "rejected" && result.reason?.message) optionalErrors.push(result.reason.message);
     });
-    const launchControlResult = extra[0];
-    const paperHealthResult = extra[1];
-    const brokerHealthResult = extra[2];
-    const stepbitWorkspaceResult = extra[3];
     state.snapshot = {
       runsRegistry,
-      launchControl: launchControlResult?.status === "fulfilled" ? launchControlResult.value : state.snapshot?.launchControl || null,
-      paperHealth: paperHealthResult?.status === "fulfilled" ? paperHealthResult.value : state.snapshot?.paperHealth || null,
-      brokerHealth: brokerHealthResult?.status === "fulfilled" ? brokerHealthResult.value : state.snapshot?.brokerHealth || null,
-      stepbitWorkspace: stepbitWorkspaceResult?.status === "fulfilled" ? stepbitWorkspaceResult.value : state.snapshot?.stepbitWorkspace || null,
+      launchControl: extra[0]?.status === "fulfilled" ? extra[0].value : state.snapshot?.launchControl || null,
+      paperHealth: extra[1]?.status === "fulfilled" ? extra[1].value : state.snapshot?.paperHealth || null,
+      brokerHealth: extra[2]?.status === "fulfilled" ? extra[2].value : state.snapshot?.brokerHealth || null,
+      stepbitWorkspace: extra[3]?.status === "fulfilled" ? extra[3].value : state.snapshot?.stepbitWorkspace || null,
     };
     state.snapshotStatus = {
       status: optionalErrors.length || source === "local" ? "degraded" : "ok",
@@ -398,6 +365,7 @@ async function refreshSnapshot() {
     reconcileWorkspaceTabs();
     renderWorkspaceState();
     renderWorkflow();
+    maybeOpenDefaultSurface();
     refreshLiveJobTabs();
     rerenderContextualTabs();
     if (state.tabs.some((tab) => ["experiments", "sweep-decision"].includes(tab.kind))) {
@@ -435,34 +403,11 @@ async function loadRunsRegistrySnapshot() {
 }
 
 function renderAll() {
-  renderCommandFeedback();
   renderChat();
   renderTabs();
   renderPalette();
   renderWorkflow();
   renderChatAdapterStatus();
-}
-
-function renderCommandFeedback() {
-  elements.commandFeedback.textContent = state.quickCommandFeedback.text;
-  elements.commandFeedback.className = "command-feedback";
-  if (state.quickCommandFeedback.tone === "warning") {
-    elements.commandFeedback.classList.add("is-warning");
-  }
-  if (state.quickCommandFeedback.tone === "success") {
-    elements.commandFeedback.classList.add("is-success");
-  }
-}
-
-function setDecisionFeedback(text, tone = "neutral", runIds = []) {
-  state.decisionFeedback = {
-    text,
-    tone,
-    runIds: Array.isArray(runIds) ? runIds.filter(Boolean) : [],
-    updatedAt: new Date().toISOString(),
-  };
-  renderWorkflow();
-  rerenderContextualTabs();
 }
 
 function defaultShellWorkspaceStore() {
@@ -517,7 +462,7 @@ function normalizeShellTab(tab) {
     if (typeof tab.runId !== "string" || !tab.runId) return null;
     return { ...base, runId: tab.runId };
   }
-  if (base.kind === "runs" || base.kind === "paper") return base;
+  if (base.kind === "runs" || base.kind === "paper" || base.kind === "system") return base;
   if (base.kind === "compare") {
     const runIds = Array.isArray(tab.runIds) ? uniqueRunIds(tab.runIds.filter((value) => typeof value === "string" && value)).slice(0, CONFIG.maxCandidateCompare) : [];
     if (!runIds.length) return null;
@@ -601,10 +546,9 @@ function serializeShellWorkspaceStore() {
 
 function restoreShellWorkspaceStore(store) {
   const restored = normalizeShellWorkspaceStore(store);
-  state.tabs = collapsePrimarySurfaceTabs(restored.tabs, restored.active_tab_id);
-  state.activeTabId = state.tabs.some((tab) => tab.id === restored.active_tab_id)
-    ? restored.active_tab_id
-    : state.tabs[0]?.id || null;
+  state.tabs = restored.tabs;
+  state.activeTabId = restored.active_tab_id;
+  state.initialSurfaceResolved = restored.tabs.length > 0;
   state.selectedRunIds = restored.selected_run_ids;
   applyLaunchFormState(restored.launch_form);
 }
@@ -635,7 +579,7 @@ function reconcileWorkspaceTabs() {
   const experimentsReady = state.experimentsWorkspace.status === "ready";
   let changed = false;
 
-  let nextTabs = state.tabs
+  const nextTabs = state.tabs
     .map((tab) => {
       if (tab.kind === "run" || tab.kind === "artifacts") {
         if (!validRunIds.has(tab.runId)) {
@@ -685,8 +629,6 @@ function reconcileWorkspaceTabs() {
       return tab;
     })
     .filter(Boolean);
-
-  nextTabs = collapsePrimarySurfaceTabs(pruneContextTabs(nextTabs), state.activeTabId);
 
   const nextActiveTabId = nextTabs.some((tab) => tab.id === state.activeTabId) ? state.activeTabId : nextTabs[0]?.id || null;
   if (!changed && nextActiveTabId === state.activeTabId) return false;
@@ -757,13 +699,54 @@ function renderMarkupInto(container, markup) {
   container.replaceChildren(fragment);
 }
 
+function datasetPropertyName(attributeName) {
+  return String(attributeName || "").replace(/-([a-z])/g, (_match, letter) => letter.toUpperCase());
+}
+
+function bindDataAction(container, attributeName, handler, eventName = "click") {
+  const datasetKey = datasetPropertyName(attributeName);
+  container.querySelectorAll(`[data-${attributeName}]`).forEach((element) => {
+    element.addEventListener(eventName, (event) => handler(element.dataset[datasetKey], element, event));
+  });
+}
+
+function bindOpenExternalAction(container, attributeName) {
+  bindDataAction(container, attributeName, (value) => {
+    const url = absoluteUrl(value);
+    if (url) window.quantlabDesktop.openExternal(url);
+  });
+}
+
+function bindOpenPathAction(container, attributeName) {
+  bindDataAction(container, attributeName, (value) => {
+    if (value) window.quantlabDesktop.openPath(value);
+  });
+}
+
+function bindDataActions(container, actionSpecs) {
+  (actionSpecs || []).forEach(([attributeName, handler, eventName = "click"]) => {
+    bindDataAction(container, attributeName, handler, eventName);
+  });
+}
+
+function bindExternalActions(container, attributeNames) {
+  (attributeNames || []).forEach((attributeName) => bindOpenExternalAction(container, attributeName));
+}
+
+function bindPathActions(container, attributeNames) {
+  (attributeNames || []).forEach((attributeName) => bindOpenPathAction(container, attributeName));
+}
+
 function renderWorkspaceState() {
   const { status, serverUrl, error, source } = state.workspace;
   const runs = getRuns();
+  const localFallbackActive = state.snapshotStatus.source === "local" && runs.length > 0;
   const stepbit = state.snapshot?.stepbitWorkspace?.live_urls || {};
   const paperCount = state.snapshot?.paperHealth?.total_sessions || 0;
   const brokerCount = state.snapshot?.brokerHealth?.total_sessions || 0;
-  elements.runtimeSummary.textContent = status === "ready"
+  elements.runtimeSummary.textContent = localFallbackActive
+    ? "QuantLab shell ready from local artifacts"
+    : status === "ready"
     ? "QuantLab research surface ready"
     : status === "starting"
     ? "Starting local research surface"
@@ -771,11 +754,13 @@ function renderWorkspaceState() {
     ? "Research surface stopped"
     : "Research surface unavailable";
   elements.runtimeMeta.textContent = error
-    ? error
+    ? localFallbackActive
+      ? `Using outputs/runs/runs_index.json while research_ui is unavailable. ${error}`
+      : error
     : serverUrl
     ? `${serverUrl}/research_ui/index.html${source === "external" ? " · external server" : ""}`
-    : state.snapshotStatus.source === "local"
-    ? "research_ui unavailable · using local runs index"
+    : localFallbackActive
+    ? "Using outputs/runs/runs_index.json without a live research_ui server."
     : "Waiting for localhost server URL.";
   const runtimeAlert = buildRuntimeAlert();
   elements.runtimeAlert.textContent = runtimeAlert.message;
@@ -793,38 +778,43 @@ function renderWorkspaceState() {
     createRuntimeChipNode("Broker", String(brokerCount), brokerCount ? "up" : "warn"),
     createRuntimeChipNode(
       "API",
-      state.snapshotStatus.status === "error"
-        ? "down"
-        : state.snapshotStatus.status === "degraded"
-        ? state.snapshotStatus.source === "local" ? "local fallback" : "degraded"
-        : state.snapshotStatus.lastSuccessAt ? "ok" : "pending",
-      state.snapshotStatus.status === "error"
-        ? "down"
-        : state.snapshotStatus.status === "degraded"
+      state.snapshotStatus.source === "local"
+        ? "local-only"
+        : state.snapshotStatus.status === "error"
+        ? "degraded"
+        : state.snapshotStatus.lastSuccessAt
+        ? "ok"
+        : "pending",
+      state.snapshotStatus.source === "local"
         ? "warn"
-        : state.snapshotStatus.lastSuccessAt ? "up" : "warn",
+        : state.snapshotStatus.status === "error"
+        ? "down"
+        : state.snapshotStatus.lastSuccessAt
+        ? "up"
+        : "warn",
     ),
     createRuntimeChipNode("Stepbit app", stepbit.frontend_reachable ? "up" : "down", stepbit.frontend_reachable ? "up" : "down"),
     createRuntimeChipNode("Stepbit core", stepbit.core_ready ? "ready" : stepbit.core_reachable ? "up" : "down", stepbit.core_ready ? "up" : stepbit.core_reachable ? "warn" : "down"),
   );
+  syncTopbarChrome();
   renderChatAdapterStatus();
 }
 
 function buildRuntimeAlert() {
-  const localRunsAvailable = getRuns().length > 0;
+  if ((state.workspace.status === "error" || state.workspace.status === "stopped") && state.snapshotStatus.source === "local" && getRuns().length) {
+    const recentLogs = (state.workspace.logs || []).slice(-4).join("\n");
+    return {
+      tone: "warn",
+      actionLabel: "Retry boot",
+      message: `research_ui is unavailable, but the shell is still using the local runs index.${state.workspace.error ? ` ${state.workspace.error}` : ""}${recentLogs ? `\n\nRecent log:\n${recentLogs}` : ""}`,
+    };
+  }
   if (state.workspace.status === "error" || state.workspace.status === "stopped") {
     const recentLogs = (state.workspace.logs || []).slice(-4).join("\n");
     return {
-      tone: localRunsAvailable ? "warn" : "down",
+      tone: "down",
       actionLabel: "Retry boot",
-      message: `${state.workspace.status === "error" ? "Boot failed" : "Runtime stopped"}${state.workspace.error ? `: ${state.workspace.error}` : "."}${localRunsAvailable ? "\n\nLocal runs and native tabs remain available without research_ui." : ""}${recentLogs ? `\n\nRecent log:\n${recentLogs}` : ""}`,
-    };
-  }
-  if (state.snapshotStatus.status === "degraded") {
-    return {
-      tone: "warn",
-      actionLabel: state.workspace.serverUrl ? "Retry API" : "Retry boot",
-      message: `Desktop is running with degraded connectivity. ${state.snapshotStatus.source === "local" ? "Native surfaces are using the local runs index." : "Some local API surfaces are unavailable."}${state.snapshotStatus.error ? `\n\nLatest issue: ${state.snapshotStatus.error}` : ""}`,
+      message: `${state.workspace.status === "error" ? "Boot failed" : "Runtime stopped"}${state.workspace.error ? `: ${state.workspace.error}` : "."}${recentLogs ? `\n\nRecent log:\n${recentLogs}` : ""}`,
     };
   }
   if (state.snapshotStatus.status === "error") {
@@ -837,13 +827,18 @@ function buildRuntimeAlert() {
       message: `API unavailable: ${state.snapshotStatus.error || "local request failed."}${pausedSuffix}`,
     };
   }
+  if (state.snapshotStatus.status === "degraded" && state.snapshotStatus.source === "local") {
+    return {
+      tone: "warn",
+      actionLabel: state.workspace.serverUrl ? "Retry API" : "Retry boot",
+      message: "The shell is running from the local runs index. Browser-backed API surfaces stay limited until research_ui becomes reachable.",
+    };
+  }
   if (state.workspace.status === "starting") {
     return {
       tone: "warn",
       actionLabel: "",
-      message: localRunsAvailable
-        ? "QuantLab Desktop is waiting for the local research surface to become reachable. Native surfaces are already using the local runs index."
-        : "QuantLab Desktop is waiting for the local research surface to become reachable.",
+      message: "QuantLab Desktop is waiting for the local research surface to become reachable.",
     };
   }
   return { tone: "", actionLabel: "", message: "" };
@@ -911,67 +906,6 @@ function renderChatAdapterStatus() {
     : "Stepbit adapter offline.";
 }
 
-function isPrimarySurfaceTab(tab) {
-  return Boolean(tab?.id && PRIMARY_SURFACE_IDS.has(tab.id));
-}
-
-function getPrimarySurfaceTabs(tabs = state.tabs) {
-  return tabs.filter((tab) => isPrimarySurfaceTab(tab));
-}
-
-function getContextTabs(tabs = state.tabs) {
-  return tabs.filter((tab) => !isPrimarySurfaceTab(tab));
-}
-
-function collapsePrimarySurfaceTabs(tabs, preferredActiveId = null) {
-  const primaryTabs = getPrimarySurfaceTabs(tabs);
-  if (primaryTabs.length <= 1) return tabs;
-  const keepId = primaryTabs.find((tab) => tab.id === preferredActiveId)?.id || primaryTabs[primaryTabs.length - 1]?.id;
-  return tabs.filter((tab) => !isPrimarySurfaceTab(tab) || tab.id === keepId);
-}
-
-function pruneContextTabs(tabs, preferredActiveId = null) {
-  const contextTabs = getContextTabs(tabs);
-  if (contextTabs.length <= CONFIG.maxContextTabs) return tabs;
-  const protectedIds = new Set([preferredActiveId, state.activeTabId].filter(Boolean));
-  const overflow = contextTabs.length - CONFIG.maxContextTabs;
-  const dropIds = new Set();
-
-  for (const tab of contextTabs) {
-    if (dropIds.size >= overflow) break;
-    if (protectedIds.has(tab.id)) continue;
-    dropIds.add(tab.id);
-  }
-
-  for (const tab of contextTabs) {
-    if (dropIds.size >= overflow) break;
-    if (!dropIds.has(tab.id)) dropIds.add(tab.id);
-  }
-
-  return tabs.filter((tab) => !dropIds.has(tab.id));
-}
-
-function renderActiveSurfaceMeta(activeTab = null) {
-  const primaryCount = getPrimarySurfaceTabs().length;
-  const contextCount = getContextTabs().length;
-  const surfaceMode = !activeTab ? "support" : isPrimarySurfaceTab(activeTab) ? "primary" : "context";
-  const surfaceLabel = !activeTab ? "Support lane" : surfaceMode === "primary" ? "Primary surface" : "Context tab";
-  const focusLabel = activeTab?.title || "Assistant support";
-
-  appendChildren(
-    elements.topbarSurfaceMeta,
-    createElementNode("span", { className: `surface-meta-chip ${surfaceMode}`, text: surfaceLabel }),
-    createElementNode("span", { className: "surface-meta-chip", text: `Focus ${focusLabel}` }),
-    createElementNode("span", { className: "surface-meta-chip", text: `${primaryCount} primary · ${contextCount} context` }),
-  );
-
-  elements.workbenchMeta.textContent = !activeTab
-    ? "Sidebar navigation opens one primary surface at a time. Context tabs stay bounded until you need them."
-    : isPrimarySurfaceTab(activeTab)
-      ? `Primary surface active. ${contextCount} context tab${contextCount === 1 ? "" : "s"} remain available without displacing the workbench.`
-      : `Context tab active. The current primary surface stays preserved behind this review path.`;
-}
-
 function renderTabs() {
   if (!state.tabs.length) {
     clearElement(elements.tabsBar);
@@ -981,13 +915,13 @@ function renderTabs() {
         "div",
         {
           className: "tab-placeholder",
-          text: "No context tab is open yet.\n\nUse quick commands, assistant, or the workflow panel to launch work, open runs, compare candidates, or inspect artifacts.",
+          text: SHELL_COPY.emptyWorksurface,
         },
       ),
     );
-    elements.topbarTitle.textContent = "Chat";
-    renderActiveSurfaceMeta(null);
-    syncNav("chat");
+    elements.topbarTitle.textContent = SHELL_COPY.defaultTopbarTitle;
+    syncTopbarChrome();
+    syncNav("assistant");
     return;
   }
   appendChildren(
@@ -996,15 +930,12 @@ function renderTabs() {
       createElementNode(
         "button",
         {
-          className: `tab-pill ${tab.id === state.activeTabId ? "is-active" : ""} ${isPrimarySurfaceTab(tab) ? "is-primary" : "is-context"}`,
+          className: `tab-pill ${tab.id === state.activeTabId ? "is-active" : ""}`,
           dataset: { tabId: tab.id },
           type: "button",
         },
         [
-          createElementNode("span", { className: "tab-pill-label" }, [
-            createElementNode("span", { text: tab.title }),
-            createElementNode("span", { className: "tab-pill-meta", text: isPrimarySurfaceTab(tab) ? "Primary" : "Context" }),
-          ]),
+          createElementNode("span", { text: tab.title }),
           createElementNode("span", { className: "tab-close", text: "×", dataset: { closeTab: tab.id } }),
         ],
       ),
@@ -1013,10 +944,39 @@ function renderTabs() {
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) || state.tabs[0];
   state.activeTabId = activeTab.id;
   elements.topbarTitle.textContent = activeTab.title;
-  renderActiveSurfaceMeta(activeTab);
+  syncTopbarChrome(activeTab);
   syncNav(activeTab.navKind || activeTab.kind);
-  const renderTab = TAB_RENDERERS[activeTab.kind] || renderTabFallback;
-  renderTab(activeTab);
+  if (activeTab.kind === "iframe") {
+    appendChildren(
+      elements.tabContent,
+      createElementNode("iframe", {
+        className: "tab-frame",
+        attrs: { src: activeTab.url, title: activeTab.title },
+      }),
+    );
+  } else if (activeTab.kind === "experiments") {
+    renderMarkupInto(elements.tabContent, renderExperimentsTab(activeTab));
+  } else if (activeTab.kind === "sweep-decision") {
+    renderMarkupInto(elements.tabContent, renderSweepDecisionTab(activeTab));
+  } else if (activeTab.kind === "runs") {
+    renderMarkupInto(elements.tabContent, renderRunsTab(activeTab));
+  } else if (activeTab.kind === "run") {
+    renderMarkupInto(elements.tabContent, renderRunTab(activeTab));
+  } else if (activeTab.kind === "compare") {
+    renderMarkupInto(elements.tabContent, renderCompareTab(activeTab));
+  } else if (activeTab.kind === "artifacts") {
+    renderMarkupInto(elements.tabContent, renderArtifactsTab(activeTab));
+  } else if (activeTab.kind === "candidates") {
+    renderMarkupInto(elements.tabContent, renderCandidatesTab(activeTab));
+  } else if (activeTab.kind === "paper") {
+    renderMarkupInto(elements.tabContent, renderPaperOpsTab(activeTab));
+  } else if (activeTab.kind === "system") {
+    renderMarkupInto(elements.tabContent, renderSystemTab(activeTab));
+  } else if (activeTab.kind === "job") {
+    renderMarkupInto(elements.tabContent, renderJobTab(activeTab));
+  } else {
+    appendChildren(elements.tabContent, createElementNode("div", { className: "tab-placeholder", text: activeTab.content || "" }));
+  }
   bindTabChromeEvents();
   bindTabContentEvents(activeTab);
 }
@@ -1033,7 +993,7 @@ function renderPalette() {
     return `${action.label} ${action.description}`.toLowerCase().includes(query);
   });
   if (!visibleActions.length) {
-    appendChildren(elements.paletteResults, createEmptyStateNode("No matching action. Try shortlist, baseline, compare, or paper."));
+    appendChildren(elements.paletteResults, createEmptyStateNode(SHELL_COPY.paletteEmptyState));
   } else {
     appendChildren(
       elements.paletteResults,
@@ -1182,15 +1142,73 @@ function renderJobList(jobs) {
     return;
   }
   appendChildren(elements.workflowJobsList, jobs.slice(0, CONFIG.maxRecentJobs).map((job) => createJobCardNode(job)));
-  elements.workflowJobsList.querySelectorAll("[data-open-job]").forEach((button) => {
-    button.addEventListener("click", () => openJobTab(button.dataset.openJob));
-  });
-  elements.workflowJobsList.querySelectorAll("[data-open-run]").forEach((button) => {
-    button.addEventListener("click", () => openRunDetailTab(button.dataset.openRun));
-  });
-  elements.workflowJobsList.querySelectorAll("[data-open-job-artifacts]").forEach((button) => {
-    button.addEventListener("click", () => openArtifactsForJob(button.dataset.openJobArtifacts));
-  });
+  bindDataAction(elements.workflowJobsList, "open-job", (value) => openJobTab(value));
+  bindDataAction(elements.workflowJobsList, "open-run", (value) => openRunDetailTab(value));
+  bindDataAction(elements.workflowJobsList, "open-job-artifacts", (value) => openArtifactsForJob(value));
+}
+
+function setTopbarChip(element, text, tone = "muted") {
+  if (!element) return;
+  element.textContent = text;
+  element.className = `topbar-status-chip ${tone}`.trim();
+}
+
+function summarizeServerChip() {
+  const { status, serverUrl, source } = state.workspace;
+  if (!serverUrl && state.snapshotStatus.source === "local") {
+    return {
+      text: "Local fallback",
+      tone: "warn",
+    };
+  }
+  if (!serverUrl) {
+    return {
+      text: status === "starting" ? "Bootstrap booting" : SHELL_COPY.defaultTopbarServer,
+      tone: status === "error" || status === "stopped" ? "down" : "muted",
+    };
+  }
+  const label = serverUrl.replace(/^https?:\/\//i, "");
+  return {
+    text: `${source === "external" ? "External" : "Managed"} · ${label}`,
+    tone: source === "external" ? "warn" : "muted",
+  };
+}
+
+function summarizeRuntimeChip() {
+  if (state.snapshotStatus.source === "local") {
+    return { text: "Runtime fallback", tone: "warn" };
+  }
+  if (state.workspace.status === "ready") {
+    return { text: "Runtime live", tone: "up" };
+  }
+  if (state.workspace.status === "starting") {
+    return { text: "Runtime booting", tone: "warn" };
+  }
+  if (state.workspace.status === "error" || state.workspace.status === "stopped") {
+    return { text: "Runtime review", tone: "down" };
+  }
+  return { text: SHELL_COPY.defaultTopbarRuntime, tone: "muted" };
+}
+
+function summarizeSurfaceChip(activeTab) {
+  if (!activeTab) return { text: SHELL_COPY.defaultTopbarSurface, tone: "muted" };
+  const navKind = activeTab.navKind || activeTab.kind || "surface";
+  return {
+    text: `${titleCase(navKind)} surface`,
+    tone: "muted",
+  };
+}
+
+function syncTopbarChrome(activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) || null) {
+  if (elements.topbarEyebrow) {
+    elements.topbarEyebrow.textContent = SHELL_COPY.topbarEyebrow;
+  }
+  const runtimeChip = summarizeRuntimeChip();
+  const serverChip = summarizeServerChip();
+  const surfaceChip = summarizeSurfaceChip(activeTab);
+  setTopbarChip(elements.topbarRuntimeChip, runtimeChip.text, runtimeChip.tone);
+  setTopbarChip(elements.topbarServerChip, serverChip.text, serverChip.tone);
+  setTopbarChip(elements.topbarSurfaceChip, surfaceChip.text, surfaceChip.tone);
 }
 
 function renderRunsWorklist(runs) {
@@ -1199,18 +1217,10 @@ function renderRunsWorklist(runs) {
     return;
   }
   appendChildren(elements.workflowRunsList, runs.map((run) => createRunWorklistNode(run)));
-  elements.workflowRunsList.querySelectorAll("[data-select-run]").forEach((input) => {
-    input.addEventListener("change", () => toggleRunSelection(input.dataset.selectRun, input.checked));
-  });
-  elements.workflowRunsList.querySelectorAll("[data-open-run]").forEach((button) => {
-    button.addEventListener("click", () => openRunDetailTab(button.dataset.openRun));
-  });
-  elements.workflowRunsList.querySelectorAll("[data-toggle-candidate]").forEach((button) => {
-    button.addEventListener("click", () => toggleCandidate(button.dataset.toggleCandidate));
-  });
-  elements.workflowRunsList.querySelectorAll("[data-open-artifacts]").forEach((button) => {
-    button.addEventListener("click", () => openArtifactsTabForRun(button.dataset.openArtifacts));
-  });
+  bindDataAction(elements.workflowRunsList, "select-run", (value, input) => toggleRunSelection(value, input.checked), "change");
+  bindDataAction(elements.workflowRunsList, "open-run", (value) => openRunDetailTab(value));
+  bindDataAction(elements.workflowRunsList, "toggle-candidate", (value) => toggleCandidate(value));
+  bindDataAction(elements.workflowRunsList, "open-artifacts", (value) => openArtifactsTabForRun(value));
 }
 
 function bindTabChromeEvents() {
@@ -1229,266 +1239,133 @@ function bindTabChromeEvents() {
   });
 }
 
-const TAB_RENDERERS = {
-  iframe(activeTab) {
-    appendChildren(
-      elements.tabContent,
-      createElementNode("iframe", {
-        className: "tab-frame",
-        attrs: { src: activeTab.url, title: activeTab.title },
-      }),
-    );
-  },
-  experiments(activeTab) {
-    renderMarkupInto(elements.tabContent, renderExperimentsTab(activeTab));
-  },
-  "sweep-decision"(activeTab) {
-    renderMarkupInto(elements.tabContent, renderSweepDecisionTab(activeTab));
-  },
-  runs(activeTab) {
-    renderMarkupInto(elements.tabContent, renderRunsTab(activeTab));
-  },
-  run(activeTab) {
-    renderMarkupInto(elements.tabContent, renderRunTab(activeTab));
-  },
-  compare(activeTab) {
-    renderMarkupInto(elements.tabContent, renderCompareTab(activeTab));
-  },
-  artifacts(activeTab) {
-    renderMarkupInto(elements.tabContent, renderArtifactsTab(activeTab));
-  },
-  candidates(activeTab) {
-    renderMarkupInto(elements.tabContent, renderCandidatesTab(activeTab));
-  },
-  paper(activeTab) {
-    renderMarkupInto(elements.tabContent, renderPaperOpsTab(activeTab));
-  },
-  job(activeTab) {
-    renderMarkupInto(elements.tabContent, renderJobTab(activeTab));
-  },
-};
-
-function renderTabFallback(activeTab) {
-  appendChildren(elements.tabContent, createElementNode("div", { className: "tab-placeholder", text: activeTab.content || "" }));
-}
-
-function bindTabContentEvents(tab) {
-  if (tab.kind === "experiments") {
-    elements.tabContent.querySelectorAll("[data-experiments-refresh]").forEach((button) => {
-      button.addEventListener("click", () => refreshExperimentsWorkspace({ focusTab: true, silent: false }));
-    });
-    elements.tabContent.querySelectorAll("[data-experiment-config]").forEach((button) => {
-      button.addEventListener("click", () => upsertTab({ id: tab.id, selectedConfigPath: button.dataset.experimentConfig }));
-    });
-    elements.tabContent.querySelectorAll("[data-experiment-launch-config]").forEach((button) => {
-      button.addEventListener("click", async () => {
-        const configPath = button.dataset.experimentLaunchConfig;
+const TAB_CONTENT_EVENT_BINDERS = {
+  experiments(tab) {
+    bindDataActions(elements.tabContent, [
+      ["experiments-refresh", () => refreshExperimentsWorkspace({ focusTab: true, silent: false })],
+      ["experiment-config", (value) => upsertTab({ id: tab.id, selectedConfigPath: value })],
+      ["experiment-launch-config", async (configPath) => {
         if (!configPath) return;
         await submitLaunchRequest({ command: "sweep", params: { config_path: configPath } }, "experiments");
         await refreshExperimentsWorkspace({ focusTab: true, silent: true });
         upsertTab({ id: tab.id, selectedConfigPath: configPath });
-      });
-    });
-    elements.tabContent.querySelectorAll("[data-experiment-open-path]").forEach((button) => {
-      button.addEventListener("click", () => {
-        if (button.dataset.experimentOpenPath) window.quantlabDesktop.openPath(button.dataset.experimentOpenPath);
-      });
-    });
-    elements.tabContent.querySelectorAll("[data-experiment-open-file]").forEach((button) => {
-      button.addEventListener("click", () => {
-        if (button.dataset.experimentOpenFile) window.quantlabDesktop.openPath(button.dataset.experimentOpenFile);
-      });
-    });
-    elements.tabContent.querySelectorAll("[data-open-path]").forEach((button) => {
-      button.addEventListener("click", () => {
-        if (button.dataset.openPath) window.quantlabDesktop.openPath(button.dataset.openPath);
-      });
-    });
-    elements.tabContent.querySelectorAll("[data-experiment-sweep]").forEach((button) => {
-      button.addEventListener("click", () => upsertTab({ id: tab.id, selectedSweepId: button.dataset.experimentSweep }));
-    });
-    elements.tabContent.querySelectorAll("[data-experiment-relaunch]").forEach((button) => {
-      button.addEventListener("click", async () => {
-        const configPath = button.dataset.experimentRelaunch;
+      }],
+      ["experiment-sweep", (value) => upsertTab({ id: tab.id, selectedSweepId: value })],
+      ["experiment-relaunch", async (configPath) => {
         if (!configPath) return;
         await submitLaunchRequest({ command: "sweep", params: { config_path: configPath } }, "experiments");
         await refreshExperimentsWorkspace({ focusTab: true, silent: true });
-      });
-    });
-    elements.tabContent.querySelectorAll("[data-sweep-track-entry]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const row = findSweepDecisionRow(button.dataset.sweepTrackEntry);
+      }],
+      ["sweep-track-entry", (value) => {
+        const row = findSweepDecisionRow(value);
         if (row) toggleSweepDecisionEntry(row);
-      });
-    });
-    elements.tabContent.querySelectorAll("[data-sweep-shortlist-entry]").forEach((button) => {
-      button.addEventListener("click", () => toggleSweepDecisionShortlist(button.dataset.sweepShortlistEntry));
-    });
-    elements.tabContent.querySelectorAll("[data-sweep-baseline-entry]").forEach((button) => {
-      button.addEventListener("click", () => setSweepDecisionBaseline(button.dataset.sweepBaselineEntry));
-    });
-    elements.tabContent.querySelectorAll("[data-sweep-note-entry]").forEach((button) => {
-      button.addEventListener("click", () => editSweepDecisionNote(button.dataset.sweepNoteEntry));
-    });
-    elements.tabContent.querySelectorAll("[data-open-sweep-handoff]").forEach((button) => {
-      button.addEventListener("click", () => openSweepDecisionTab(button.dataset.openSweepHandoff || "tracked"));
-    });
-  }
-  if (tab.kind === "run") {
+      }],
+      ["sweep-shortlist-entry", (value) => toggleSweepDecisionShortlist(value)],
+      ["sweep-baseline-entry", (value) => setSweepDecisionBaseline(value)],
+      ["sweep-note-entry", (value) => editSweepDecisionNote(value)],
+      ["open-sweep-handoff", (value) => openSweepDecisionTab(value || "tracked")],
+    ]);
+    bindPathActions(elements.tabContent, ["experiment-open-path", "experiment-open-file", "open-path"]);
+  },
+
+  run(tab) {
     bindRunContextActions(elements.tabContent, tab.runId);
-  }
-  if (tab.kind === "runs") {
-    elements.tabContent.querySelectorAll("[data-open-run]").forEach((button) => {
-      button.addEventListener("click", () => openRunDetailTab(button.dataset.openRun));
-    });
-    elements.tabContent.querySelectorAll("[data-open-artifacts]").forEach((button) => {
-      button.addEventListener("click", () => openArtifactsTabForRun(button.dataset.openArtifacts));
-    });
-    elements.tabContent.querySelectorAll("[data-mark-candidate]").forEach((button) => {
-      button.addEventListener("click", () => toggleCandidate(button.dataset.markCandidate));
-    });
-    elements.tabContent.querySelectorAll("[data-open-runs-legacy]").forEach((button) => {
-      button.addEventListener("click", () => openResearchTab("runs", "Runs (legacy)", "#/"));
-    });
-    elements.tabContent.querySelectorAll("[data-open-candidates]").forEach((button) => {
-      button.addEventListener("click", () => openCandidatesTab());
-    });
-    elements.tabContent.querySelectorAll("[data-open-shortlist-compare]").forEach((button) => {
-      button.addEventListener("click", () => openShortlistCompareTab());
-    });
-  }
-  if (tab.kind === "compare") {
-    elements.tabContent.querySelectorAll("[data-open-run]").forEach((button) => {
-      button.addEventListener("click", () => openRunDetailTab(button.dataset.openRun));
-    });
-    elements.tabContent.querySelectorAll("[data-open-artifacts]").forEach((button) => {
-      button.addEventListener("click", () => openArtifactsTabForRun(button.dataset.openArtifacts));
-    });
-    elements.tabContent.querySelectorAll("[data-compare-rank]").forEach((button) => {
-      button.addEventListener("click", () => {
-        upsertTab({ id: tab.id, rankMetric: button.dataset.compareRank });
-      });
-    });
-    elements.tabContent.querySelectorAll("[data-mark-candidate]").forEach((button) => {
-      button.addEventListener("click", () => toggleCandidate(button.dataset.markCandidate));
-    });
-    elements.tabContent.querySelectorAll("[data-shortlist-run]").forEach((button) => {
-      button.addEventListener("click", () => toggleShortlist(button.dataset.shortlistRun));
-    });
-    elements.tabContent.querySelectorAll("[data-set-baseline]").forEach((button) => {
-      button.addEventListener("click", () => setBaseline(button.dataset.setBaseline));
-    });
-  }
-  if (tab.kind === "artifacts") {
-    elements.tabContent.querySelectorAll("[data-open-external]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const url = absoluteUrl(button.dataset.openExternal);
-        if (url) window.quantlabDesktop.openExternal(url);
-      });
-    });
-    elements.tabContent.querySelectorAll("[data-open-path]").forEach((button) => {
-      button.addEventListener("click", () => {
-        if (button.dataset.openPath) window.quantlabDesktop.openPath(button.dataset.openPath);
-      });
-    });
-    elements.tabContent.querySelectorAll("[data-open-run]").forEach((button) => {
-      button.addEventListener("click", () => openRunDetailTab(button.dataset.openRun));
-    });
+  },
+
+  runs() {
+    bindDataActions(elements.tabContent, [
+      ["open-run", (value) => openRunDetailTab(value)],
+      ["open-artifacts", (value) => openArtifactsTabForRun(value)],
+      ["mark-candidate", (value) => toggleCandidate(value)],
+      ["open-runs-legacy", () => openResearchTab("runs", "Runs (legacy)", "#/")],
+      ["open-job", (value) => openJobTab(value)],
+      ["open-candidates", () => openCandidatesTab()],
+      ["open-ops", () => openPaperOpsTab()],
+      ["open-shortlist-compare", () => openShortlistCompareTab()],
+      ["open-system-tab", () => openSystemTab()],
+    ]);
+  },
+
+  compare(tab) {
+    bindDataActions(elements.tabContent, [
+      ["open-run", (value) => openRunDetailTab(value)],
+      ["open-artifacts", (value) => openArtifactsTabForRun(value)],
+      ["compare-rank", (value) => upsertTab({ id: tab.id, rankMetric: value })],
+      ["mark-candidate", (value) => toggleCandidate(value)],
+      ["shortlist-run", (value) => toggleShortlist(value)],
+      ["set-baseline", (value) => setBaseline(value)],
+    ]);
+  },
+
+  artifacts(tab) {
+    bindExternalActions(elements.tabContent, ["open-external"]);
+    bindPathActions(elements.tabContent, ["open-path"]);
+    bindDataActions(elements.tabContent, [["open-run", (value) => openRunDetailTab(value)]]);
     bindRunContextActions(elements.tabContent, tab.runId);
-  }
-  if (tab.kind === "candidates") {
-    elements.tabContent.querySelectorAll("[data-candidates-filter]").forEach((button) => {
-      button.addEventListener("click", () => upsertTab({ id: tab.id, filter: button.dataset.candidatesFilter }));
-    });
-    elements.tabContent.querySelectorAll("[data-open-run]").forEach((button) => {
-      button.addEventListener("click", () => openRunDetailTab(button.dataset.openRun));
-    });
-    elements.tabContent.querySelectorAll("[data-open-artifacts]").forEach((button) => {
-      button.addEventListener("click", () => openArtifactsTabForRun(button.dataset.openArtifacts));
-    });
-    elements.tabContent.querySelectorAll("[data-mark-candidate]").forEach((button) => {
-      button.addEventListener("click", () => toggleCandidate(button.dataset.markCandidate));
-    });
-    elements.tabContent.querySelectorAll("[data-shortlist-run]").forEach((button) => {
-      button.addEventListener("click", () => toggleShortlist(button.dataset.shortlistRun));
-    });
-    elements.tabContent.querySelectorAll("[data-set-baseline]").forEach((button) => {
-      button.addEventListener("click", () => setBaseline(button.dataset.setBaseline));
-    });
-    elements.tabContent.querySelectorAll("[data-edit-note]").forEach((button) => {
-      button.addEventListener("click", () => editCandidateNote(button.dataset.editNote));
-    });
-    elements.tabContent.querySelectorAll("[data-open-shortlist-compare]").forEach((button) => {
-      button.addEventListener("click", () => openShortlistCompareTab());
-    });
-  }
-  if (tab.kind === "paper") {
-    elements.tabContent.querySelectorAll("[data-open-job]").forEach((button) => {
-      button.addEventListener("click", () => openJobTab(button.dataset.openJob));
-    });
-    elements.tabContent.querySelectorAll("[data-open-run]").forEach((button) => {
-      button.addEventListener("click", () => openRunDetailTab(button.dataset.openRun));
-    });
-    elements.tabContent.querySelectorAll("[data-open-artifacts]").forEach((button) => {
-      button.addEventListener("click", () => openArtifactsTabForRun(button.dataset.openArtifacts));
-    });
-    elements.tabContent.querySelectorAll("[data-open-shortlist-compare]").forEach((button) => {
-      button.addEventListener("click", () => openShortlistCompareTab());
-    });
-    elements.tabContent.querySelectorAll("[data-open-browser-ops]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const url = absoluteUrl(button.dataset.openBrowserOps);
-        if (url) window.quantlabDesktop.openExternal(url);
-      });
-    });
-  }
-  if (tab.kind === "job") {
-    elements.tabContent.querySelectorAll("[data-open-run]").forEach((button) => {
-      button.addEventListener("click", () => openRunDetailTab(button.dataset.openRun));
-    });
-    elements.tabContent.querySelectorAll("[data-open-job-artifacts]").forEach((button) => {
-      button.addEventListener("click", () => openArtifactsForJob(button.dataset.openJobArtifacts));
-    });
-    elements.tabContent.querySelectorAll("[data-open-job-link]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const url = absoluteUrl(button.dataset.openJobLink);
-        if (url) window.quantlabDesktop.openExternal(url);
-      });
-    });
-  }
-  if (tab.kind === "sweep-decision") {
-    elements.tabContent.querySelectorAll("[data-sweep-rank]").forEach((button) => {
-      button.addEventListener("click", () => upsertTab({ id: tab.id, rankMetric: button.dataset.sweepRank }));
-    });
-    elements.tabContent.querySelectorAll("[data-sweep-track-entry]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const row = findSweepDecisionRow(button.dataset.sweepTrackEntry) || getSweepDecisionResolvedEntry(button.dataset.sweepTrackEntry)?.row;
+  },
+
+  candidates(tab) {
+    bindDataActions(elements.tabContent, [
+      ["candidates-filter", (value) => upsertTab({ id: tab.id, filter: value })],
+      ["open-run", (value) => openRunDetailTab(value)],
+      ["open-artifacts", (value) => openArtifactsTabForRun(value)],
+      ["mark-candidate", (value) => toggleCandidate(value)],
+      ["shortlist-run", (value) => toggleShortlist(value)],
+      ["set-baseline", (value) => setBaseline(value)],
+      ["edit-note", (value) => editCandidateNote(value)],
+      ["open-shortlist-compare", () => openShortlistCompareTab()],
+    ]);
+  },
+
+  paper() {
+    bindDataActions(elements.tabContent, [
+      ["open-job", (value) => openJobTab(value)],
+      ["open-run", (value) => openRunDetailTab(value)],
+      ["open-artifacts", (value) => openArtifactsTabForRun(value)],
+      ["open-shortlist-compare", () => openShortlistCompareTab()],
+    ]);
+    bindExternalActions(elements.tabContent, ["open-browser-ops"]);
+  },
+
+  system() {
+    bindDataActions(elements.tabContent, [
+      ["system-retry", () => retryWorkspaceRuntime()],
+      ["open-job", (value) => openJobTab(value)],
+      ["open-run", (value) => openRunDetailTab(value)],
+    ]);
+    bindExternalActions(elements.tabContent, ["open-system-url"]);
+  },
+
+  job() {
+    bindDataActions(elements.tabContent, [
+      ["open-run", (value) => openRunDetailTab(value)],
+      ["open-job-artifacts", (value) => openArtifactsForJob(value)],
+    ]);
+    bindExternalActions(elements.tabContent, ["open-job-link"]);
+  },
+
+  "sweep-decision"(tab) {
+    bindDataActions(elements.tabContent, [
+      ["sweep-rank", (value) => upsertTab({ id: tab.id, rankMetric: value })],
+      ["sweep-track-entry", (value) => {
+        const row = findSweepDecisionRow(value) || getSweepDecisionResolvedEntry(value)?.row;
         if (row) toggleSweepDecisionEntry(row);
-      });
-    });
-    elements.tabContent.querySelectorAll("[data-sweep-shortlist-entry]").forEach((button) => {
-      button.addEventListener("click", () => toggleSweepDecisionShortlist(button.dataset.sweepShortlistEntry));
-    });
-    elements.tabContent.querySelectorAll("[data-sweep-baseline-entry]").forEach((button) => {
-      button.addEventListener("click", () => setSweepDecisionBaseline(button.dataset.sweepBaselineEntry));
-    });
-    elements.tabContent.querySelectorAll("[data-sweep-note-entry]").forEach((button) => {
-      button.addEventListener("click", () => editSweepDecisionNote(button.dataset.sweepNoteEntry));
-    });
-    elements.tabContent.querySelectorAll("[data-experiment-open-path]").forEach((button) => {
-      button.addEventListener("click", () => {
-        if (button.dataset.experimentOpenPath) window.quantlabDesktop.openPath(button.dataset.experimentOpenPath);
-      });
-    });
-    elements.tabContent.querySelectorAll("[data-experiment-launch-config]").forEach((button) => {
-      button.addEventListener("click", async () => {
-        const configPath = button.dataset.experimentLaunchConfig;
+      }],
+      ["sweep-shortlist-entry", (value) => toggleSweepDecisionShortlist(value)],
+      ["sweep-baseline-entry", (value) => setSweepDecisionBaseline(value)],
+      ["sweep-note-entry", (value) => editSweepDecisionNote(value)],
+      ["experiment-launch-config", async (configPath) => {
         if (!configPath) return;
         await submitLaunchRequest({ command: "sweep", params: { config_path: configPath } }, "sweep-handoff");
         await refreshExperimentsWorkspace({ focusTab: false, silent: true });
-      });
-    });
-  }
+      }],
+    ]);
+    bindPathActions(elements.tabContent, ["experiment-open-path"]);
+  },
+};
+
+function bindTabContentEvents(tab) {
+  TAB_CONTENT_EVENT_BINDERS[tab.kind]?.(tab);
 }
 
 function extractStepbitPrompt(prompt) {
@@ -1594,7 +1471,6 @@ function handleStepbitPrompt(prompt) {
   const trimmedPrompt = String(prompt || "").trim();
   if (!trimmedPrompt) return;
   pushMessage("user", trimmedPrompt);
-  setQuickCommandFeedback("Stepbit routing is active in Assistant history below.", "neutral");
   void submitStepbitPrompt(trimmedPrompt, "chat");
 }
 
@@ -1609,187 +1485,116 @@ function askStepbitAboutLatestFailure() {
   void submitStepbitPrompt(prompt, "palette");
 }
 
-function setQuickCommandFeedback(text, tone = "neutral") {
-  state.quickCommandFeedback = {
-    tone,
-    text,
-  };
-  renderCommandFeedback();
-}
-
-function handleSupportShortcut(prompt) {
+async function handleChatPrompt(prompt) {
   const trimmedPrompt = String(prompt || "").trim();
   if (!trimmedPrompt) return;
-  if (trimmedPrompt.toLowerCase().startsWith("ask stepbit")) {
-    const stepbitPrompt = trimmedPrompt.replace(/^ask stepbit\s*/i, "").trim();
-    elements.chatInput.value = stepbitPrompt || trimmedPrompt;
-    focusChat();
-    setQuickCommandFeedback("Stepbit requests belong in Assistant. The prompt draft was moved below.", "warning");
-    return;
-  }
-  elements.paletteInput.value = trimmedPrompt;
-  handleQuickCommand(trimmedPrompt);
-}
-
-function handleQuickCommand(prompt) {
-  const trimmedPrompt = String(prompt || "").trim();
-  if (!trimmedPrompt) return;
-  elements.paletteInput.value = "";
-  void handleChatPrompt(trimmedPrompt, { source: "quick-command", echoUser: false });
-}
-
-async function handleChatPrompt(prompt, options = {}) {
-  const trimmedPrompt = String(prompt || "").trim();
-  if (!trimmedPrompt) return;
-  const { source = "assistant", echoUser = true } = options;
-  const isQuickCommand = source === "quick-command";
-  if (echoUser) pushMessage("user", trimmedPrompt);
+  pushMessage("user", trimmedPrompt);
   const stepbitPrompt = extractStepbitPrompt(trimmedPrompt);
   if (stepbitPrompt) {
-    if (isQuickCommand) {
-      elements.chatInput.value = stepbitPrompt;
-      focusChat();
-      setQuickCommandFeedback("Stepbit prompts belong in Assistant. The prompt draft was moved below.", "warning");
-      return;
-    }
     await submitStepbitPrompt(stepbitPrompt, "chat");
     return;
   }
   const normalized = trimmedPrompt.toLowerCase();
+  if (normalized.includes("open system") || normalized.includes("open runtime") || normalized === "system") {
+    openSystemTab();
+    pushMessage("assistant", "Opened the runtime diagnostics surface.");
+    return;
+  }
   if (normalized.includes("open experiments") || normalized.includes("open sweeps") || normalized === "experiments") {
     openExperimentsTab();
-    if (isQuickCommand) {
-      setQuickCommandFeedback("Opened Experiments in the primary workbench.", "success");
-    } else {
-      pushMessage("assistant", "Opened the native experiments workspace.");
-    }
+    pushMessage("assistant", "Opened the native experiments workspace.");
     return;
   }
   if (normalized.includes("open sweep handoff") || normalized.includes("open sweep decision")) {
     openSweepDecisionTab();
-    if (isQuickCommand) setQuickCommandFeedback("Opened Sweep Handoff in the workbench.", "success");
     return;
   }
   if (normalized.includes("refresh experiments") || normalized.includes("refresh sweeps")) {
     refreshExperimentsWorkspace({ focusTab: true, silent: false });
-    if (isQuickCommand) setQuickCommandFeedback("Refreshing experiments workspace.", "success");
     return;
   }
   if (normalized.includes("open launch") || normalized === "launch") {
-    openResearchTab("launch", "Launch", "#/launch", { replacePrimary: true });
-    if (isQuickCommand) {
-      setQuickCommandFeedback("Opened Launch in the primary workbench.", "success");
-    } else {
-      pushMessage("assistant", "Opened the Launch surface inside a desktop tab.");
-    }
+    openResearchTab("launch", "Launch", "#/launch");
+    pushMessage("assistant", "Opened the Launch surface inside a desktop tab.");
     return;
   }
   if (normalized.includes("open compare") || normalized === "compare" || normalized.includes("compare selected")) {
-    openCompareSelectionTab(state.selectedRunIds, "selected runs", { replacePrimary: true });
-    if (isQuickCommand) setQuickCommandFeedback("Opened Compare in the primary workbench.", "success");
+    openCompareSelectionTab();
     return;
   }
   if (normalized.includes("open shortlist compare")) {
     openShortlistCompareTab();
-    if (isQuickCommand) setQuickCommandFeedback("Opened shortlist compare in the workbench.", "success");
     return;
   }
   if (normalized.includes("open candidates") || normalized.includes("open shortlist")) {
     openCandidatesTab();
-    if (isQuickCommand) {
-      setQuickCommandFeedback("Opened Candidates in the primary workbench.", "success");
-    } else {
-      pushMessage("assistant", "Opened the candidates and shortlist surface.");
-    }
+    pushMessage("assistant", "Opened the candidates and shortlist surface.");
     return;
   }
   if (normalized.includes("open ops") || normalized.includes("paper ops")) {
     openPaperOpsTab();
-    if (isQuickCommand) {
-      setQuickCommandFeedback("Opened Paper Ops in the primary workbench.", "success");
-    } else {
-      pushMessage("assistant", "Opened the native Paper Ops surface.");
-    }
+    pushMessage("assistant", "Opened the native Paper Ops surface.");
     return;
   }
   if (normalized.includes("open runs") || normalized === "runs") {
     openRunsNativeTab();
-    if (isQuickCommand) {
-      setQuickCommandFeedback("Opened Runs in the primary workbench.", "success");
-    } else {
-      pushMessage("assistant", "Opened the native run explorer.");
-    }
+    pushMessage("assistant", "Opened the native run explorer.");
     return;
   }
   if (normalized.includes("open baseline")) {
     openBaselineRunTab();
-    if (isQuickCommand) setQuickCommandFeedback("Opened the current baseline run.", "success");
     return;
   }
   if (normalized.includes("latest run")) {
     openLatestRunTab();
-    if (isQuickCommand) setQuickCommandFeedback("Opened the latest indexed run.", "success");
     return;
   }
   if (normalized.includes("latest failed launch") || normalized.includes("latest failed job")) {
     openLatestFailedLaunchTab();
-    if (isQuickCommand) setQuickCommandFeedback("Opened the latest failed launch for review.", "success");
     return;
   }
   if (normalized.includes("explain latest failure") || normalized.includes("explain failure")) {
     explainLatestFailureInChat();
-    if (isQuickCommand) setQuickCommandFeedback("Failure explanation recorded in Assistant history below.", "success");
     return;
   }
   if (normalized.startsWith("show artifacts")) {
     const explicitRunId = extractRunIdAfterPrefix(prompt, "show artifacts for");
     explicitRunId ? openArtifactsTabForRun(explicitRunId) : openArtifactsForPreferredRun();
-    if (isQuickCommand) setQuickCommandFeedback("Opened artifacts in the workbench.", "success");
     return;
   }
   if (normalized.includes("show runtime status") || normalized === "status") {
     summarizeRuntimeInChat();
-    if (isQuickCommand) setQuickCommandFeedback("Runtime summary recorded in Assistant history below.", "success");
     return;
   }
   if (normalized.startsWith("mark candidate")) {
     const runId = extractRunIdAfterPrefix(trimmedPrompt, "mark candidate").trim();
     if (!runId) {
       pushMessage("assistant", "Use `mark candidate <run_id>` to promote a run into the shortlist workflow.");
-      if (isQuickCommand) setQuickCommandFeedback("Quick commands need a run id: `mark candidate <run_id>`.", "warning");
       return;
     }
     toggleCandidate(runId, true);
-    if (isQuickCommand) setQuickCommandFeedback(`Marked ${runId} as candidate. Confirmation appears in Assistant history.`, "success");
     return;
   }
   if (normalized.startsWith("mark baseline")) {
     const runId = extractRunIdAfterPrefix(trimmedPrompt, "mark baseline").trim();
     if (!runId) {
       pushMessage("assistant", "Use `mark baseline <run_id>` to pin the reference run.");
-      if (isQuickCommand) setQuickCommandFeedback("Quick commands need a run id: `mark baseline <run_id>`.", "warning");
       return;
     }
     setBaseline(runId);
-    if (isQuickCommand) setQuickCommandFeedback(`Updated baseline for ${runId}. Confirmation appears in Assistant history.`, "success");
     return;
   }
   const launchRunPayload = parseLaunchRunPrompt(trimmedPrompt);
   if (launchRunPayload) {
     submitLaunchRequest(launchRunPayload, "chat");
-    if (isQuickCommand) setQuickCommandFeedback("Submitted launch request. Progress appears in Assistant history and Launch.", "success");
     return;
   }
   const launchSweepPayload = parseLaunchSweepPrompt(trimmedPrompt);
   if (launchSweepPayload) {
     submitLaunchRequest(launchSweepPayload, "chat");
-    if (isQuickCommand) setQuickCommandFeedback("Submitted sweep request. Progress appears in Assistant history and Launch.", "success");
     return;
   }
-  pushMessage("assistant", "This shell now supports real backend-backed actions. Try:\n- open experiments\n- open sweep handoff\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/experiments/eth_2023_grid.yaml\n- open candidates\n- mark candidate <run_id>\n- mark baseline <run_id>\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure\n- ask stepbit explain the latest failed launch");
-  if (isQuickCommand) {
-    setQuickCommandFeedback("Command not recognized. Use deterministic verbs like open, show, compare, launch, or mark.", "warning");
-  }
+  pushMessage("assistant", SHELL_COPY.assistantHelp);
 }
 
 async function submitLaunchRequest(payload, source) {
@@ -1800,7 +1605,7 @@ async function submitLaunchRequest(payload, source) {
     const result = await window.quantlabDesktop.postJson(CONFIG.launchControlPath, payload);
     state.launchFeedback = result.message || "Launch accepted.";
     await refreshSnapshot();
-    openResearchTab("launch", "Launch", "#/launch", { replacePrimary: true });
+    openResearchTab("launch", "Launch", "#/launch");
     pushMessage("assistant", `${result.message || "Launch accepted."}\n${summarizeLaunchPayload(payload)}`);
   } catch (error) {
     const message = error.message || "Launch failed.";
@@ -1830,9 +1635,18 @@ function summarizeRuntimeInChat() {
   ].join("\n"));
 }
 
-function focusChat() {
+function focusAssistant() {
   elements.chatInput.focus();
-  elements.chatInput.select();
+  elements.chatInput.scrollIntoView({ block: "nearest" });
+}
+
+function openSystemTab() {
+  upsertTab({
+    id: "system",
+    kind: "system",
+    navKind: "system",
+    title: "System",
+  });
 }
 
 async function openExperimentsTab() {
@@ -1844,7 +1658,7 @@ async function openExperimentsTab() {
     title: "Experiments",
     selectedConfigPath: current?.selectedConfigPath || state.experimentsWorkspace.configs[0]?.path || null,
     selectedSweepId: current?.selectedSweepId || state.experimentsWorkspace.sweeps[0]?.run_id || null,
-  }, { replacePrimary: true });
+  });
   await refreshExperimentsWorkspace({ focusTab: true, silent: true });
 }
 
@@ -1871,22 +1685,42 @@ function openRunsNativeTab() {
     kind: "runs",
     navKind: "runs",
     title: "Runs",
-  }, { replacePrimary: true });
+  });
 }
 
-function openResearchTab(navKind, title, hash, options = {}) {
+function maybeOpenDefaultSurface() {
+  if (state.initialSurfaceResolved) return;
+  if (state.tabs.length) {
+    state.initialSurfaceResolved = true;
+    return;
+  }
+  const runs = getRuns();
+  if (runs.length) {
+    state.initialSurfaceResolved = true;
+    openRunsNativeTab();
+    return;
+  }
+  if (state.workspace.serverUrl || state.workspace.status === "ready") {
+    state.initialSurfaceResolved = true;
+    openSystemTab();
+  }
+}
+
+function openResearchTab(navKind, title, hash) {
   if (!state.workspace.serverUrl) {
-    pushMessage("assistant", "research_ui is unavailable. Browser-based tabs are disabled, but native/local surfaces remain usable.");
+    pushMessage("assistant", "The local research surface is still starting. Wait a moment and retry.");
     return;
   }
   const id = `iframe:${hash}`;
-  upsertTab({
-    id,
-    kind: "iframe",
-    navKind,
-    title,
-    url: `${state.workspace.serverUrl}/research_ui/index.html${hash}`,
-  }, { replacePrimary: Boolean(options.replacePrimary) });
+  const existing = state.tabs.find((tab) => tab.id === id);
+  if (existing) {
+    state.activeTabId = existing.id;
+    renderTabs();
+    return;
+  }
+  state.tabs.push({ id, kind: "iframe", navKind, title, url: `${state.workspace.serverUrl}/research_ui/index.html${hash}` });
+  state.activeTabId = id;
+  renderTabs();
 }
 
 function openLatestRunTab() {
@@ -1916,15 +1750,14 @@ async function openRunDetailTab(runId) {
   }
 }
 
-async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabel = "selected runs", options = {}) {
+async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabel = "selected runs") {
   const selectedRuns = uniqueRunIds(runIds).map(findRun).filter(Boolean);
   if (selectedRuns.length < 2) {
-    setDecisionFeedback("Compare needs 2 to 4 indexed runs. Select more runs or build the shortlist and baseline queue first.", "warning", runIds);
     pushMessage("assistant", "Select 2 to 4 runs in the worklist before opening compare.");
     return;
   }
   const compareSet = selectedRuns.slice(0, CONFIG.maxCandidateCompare);
-  const tabId = options.replacePrimary ? "compare:selected" : `compare:${compareSet.map((run) => run.run_id).join("|")}`;
+  const tabId = `compare:${compareSet.map((run) => run.run_id).join("|")}`;
   upsertTab({
     id: tabId,
     kind: "compare",
@@ -1934,7 +1767,7 @@ async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabe
     rankMetric: "sharpe_simple",
     status: "loading",
     detailMap: {},
-  }, { replacePrimary: Boolean(options.replacePrimary) });
+  });
   try {
     const details = await Promise.all(compareSet.map(async (run) => {
       try {
@@ -1953,7 +1786,7 @@ async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabe
       rankMetric: "sharpe_simple",
       status: "ready",
       detailMap: Object.fromEntries(details),
-    }, { replacePrimary: Boolean(options.replacePrimary) });
+    });
   } catch (_error) {
     upsertTab({
       id: tabId,
@@ -1964,7 +1797,7 @@ async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabe
       rankMetric: "sharpe_simple",
       status: "ready",
       detailMap: {},
-    }, { replacePrimary: Boolean(options.replacePrimary) });
+    });
   }
   pushMessage("assistant", `Opened a compare tab for ${compareSet.length} ${sourceLabel}.`);
 }
@@ -1976,7 +1809,7 @@ function openCandidatesTab(filter = "all") {
     navKind: "candidates",
     title: "Candidates",
     filter,
-  }, { replacePrimary: true });
+  });
 }
 
 function openPaperOpsTab() {
@@ -1985,7 +1818,7 @@ function openPaperOpsTab() {
     kind: "paper",
     navKind: "ops",
     title: "Paper Ops",
-  }, { replacePrimary: true });
+  });
 }
 
 function openBaselineRunTab() {
@@ -2001,7 +1834,6 @@ function openBaselineRunTab() {
 function openShortlistCompareTab() {
   const runIds = getDecisionCompareRunIds();
   if (runIds.length < 2) {
-    setDecisionFeedback("Decision compare is not ready yet. Pin a baseline and shortlist at least one more run.", "warning", runIds);
     pushMessage("assistant", "Shortlist compare needs at least two decision runs across shortlist and baseline.");
     return;
   }
@@ -2361,19 +2193,47 @@ function buildSweepDecisionRows(sweepRunId, configPath, rows) {
 
 function closeTab(tabId) {
   state.tabs = state.tabs.filter((tab) => tab.id !== tabId);
-  if (state.activeTabId === tabId) {
-    const nextPrimaryTab = getPrimarySurfaceTabs(state.tabs)[0] || null;
-    state.activeTabId = nextPrimaryTab?.id || state.tabs[0]?.id || null;
-  }
+  if (state.activeTabId === tabId) state.activeTabId = state.tabs[0]?.id || null;
   renderTabs();
   scheduleShellWorkspacePersist();
 }
 
 function syncNav(kind) {
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.remove("is-active"));
-  const mapping = { chat: "open-chat", experiments: "open-experiments", launch: "open-launch", runs: "open-runs", candidates: "open-candidates", compare: "open-compare", ops: "open-ops" };
-  const target = document.querySelector(`.nav-item[data-action="${mapping[kind] || "open-chat"}"]`);
+  const target = document.querySelector(`.nav-item[data-action="${NAV_ACTION_BY_KIND[kind] || NAV_ACTION_BY_KIND.assistant}"]`);
   if (target) target.classList.add("is-active");
+}
+
+function buildPaletteActionHandler(handlerName) {
+  const handlers = {
+    askStepbitAboutLatestFailure,
+    explainLatestFailureInChat,
+    focusAssistant,
+    openArtifactsForPreferredRun,
+    openBaselineRunTab,
+    openCandidatesTab,
+    openCompareSelectionTab,
+    openExperimentsTab,
+    openLatestFailedLaunchTab,
+    openLatestRunTab,
+    openLegacyRunsTab,
+    openLaunchTab,
+    openPaperOpsTab,
+    openRunsNativeTab,
+    openShortlistCompareTab,
+    openSweepDecisionTab,
+    openSystemTab,
+    summarizeRuntimeInChat,
+  };
+  return handlers[handlerName] || (() => {});
+}
+
+function openLaunchTab() {
+  openResearchTab("launch", "Launch", "#/launch");
+}
+
+function openLegacyRunsTab() {
+  openResearchTab("runs", "Runs (legacy)", "#/");
 }
 
 function pushMessage(role, content, label = role) {
@@ -2485,22 +2345,20 @@ function renderPaperOpsTab() {
   return renderPaperOpsTabView(getRendererContext());
 }
 
+function renderSystemTab() {
+  return renderSystemTabView(getRendererContext());
+}
+
 function renderJobTab(tab) {
   return renderJobTabView(tab, getRendererContext());
-}
-
-function renderSummaryCard(label, value, tone = "") {
-  return renderSummaryCardView(label, value, tone);
-}
-
-function compareMetric(label, value, extraClass) {
-  return renderMetricRow(label, value, extraClass);
 }
 
 function getRendererContext() {
   return {
     store: state.candidatesStore,
     snapshot: state.snapshot,
+    workspace: state.workspace,
+    snapshotStatus: state.snapshotStatus,
     experimentsWorkspace: state.experimentsWorkspace,
     sweepDecisionStore: state.sweepDecisionStore,
     maxLogPreviewChars: CONFIG.maxLogPreviewChars,
@@ -2521,14 +2379,14 @@ function getRendererContext() {
     getRuns,
     getJobs,
     getLatestRun,
+    selectedRunIds: state.selectedRunIds,
+    getSelectedRuns,
     getLatestFailedJob,
     getDecisionCompareRunIds,
     getRunRelatedJobs,
     getSweepDecisionEntriesResolved,
     getSweepDecisionEntriesForRun,
     getSweepDecisionCompareEntries,
-    decisionFeedback: state.decisionFeedback,
-    selectedRunIds: state.selectedRunIds,
     sweepDecision: {
       getEntry: (store, entryId) => sweepDecisionStore.getSweepDecisionEntry(store, entryId),
       getEntriesResolved: (store, findRowFn) => sweepDecisionStore.getSweepDecisionEntriesResolved(store, findRowFn),
@@ -2541,28 +2399,17 @@ function getRendererContext() {
   };
 }
 
-function upsertTab(nextTab, options = {}) {
-  const replacePrimary = Boolean(options.replacePrimary) || isPrimarySurfaceTab(nextTab);
-  if (replacePrimary) {
-    const contextTabs = getContextTabs(state.tabs);
-    const existingPrimaryTab = state.tabs.find((tab) => tab.id === nextTab.id) || null;
-    state.tabs = [...contextTabs, existingPrimaryTab ? { ...existingPrimaryTab, ...nextTab } : nextTab];
-  } else {
-    const index = state.tabs.findIndex((tab) => tab.id === nextTab.id);
-    if (index >= 0) {
-      state.tabs[index] = { ...state.tabs[index], ...nextTab };
-    } else {
-      state.tabs.push(nextTab);
-    }
-    state.tabs = pruneContextTabs(state.tabs, nextTab.id);
-  }
+function upsertTab(nextTab) {
+  const index = state.tabs.findIndex((tab) => tab.id === nextTab.id);
+  if (index >= 0) state.tabs[index] = { ...state.tabs[index], ...nextTab };
+  else state.tabs.push(nextTab);
   state.activeTabId = nextTab.id;
   renderTabs();
   scheduleShellWorkspacePersist();
 }
 
 function rerenderContextualTabs() {
-  if (state.tabs.some((tab) => ["experiments", "sweep-decision", "run", "runs", "compare", "artifacts", "candidates", "paper", "job"].includes(tab.kind))) renderTabs();
+  if (state.tabs.some((tab) => ["system", "experiments", "sweep-decision", "run", "runs", "compare", "artifacts", "candidates", "paper", "job"].includes(tab.kind))) renderTabs();
 }
 
 function refreshLiveJobTabs() {
@@ -2630,6 +2477,7 @@ function getBrowserUrlForActiveContext() {
   if (!state.workspace.serverUrl) return "";
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
   if (activeTab?.kind === "iframe") return activeTab.url;
+  if (activeTab?.kind === "system") return `${state.workspace.serverUrl}/research_ui/index.html`;
   if (activeTab?.kind === "experiments") return `${state.workspace.serverUrl}/research_ui/index.html#/launch`;
   if (activeTab?.kind === "sweep-decision") return `${state.workspace.serverUrl}/research_ui/index.html#/launch`;
   if (activeTab?.kind === "run") return getBrowserUrlForRun(activeTab.runId);
@@ -2797,12 +2645,11 @@ function findSweepDecisionRow(entryId) {
   return null;
 }
 
-async function saveCandidatesStore(nextStore, message = "", feedback = null) {
+async function saveCandidatesStore(nextStore, message = "") {
   try {
     state.candidatesStore = normalizeCandidatesStore(await window.quantlabDesktop.saveCandidatesStore(nextStore));
     renderWorkflow();
     rerenderContextualTabs();
-    if (feedback?.text) setDecisionFeedback(feedback.text, feedback.tone || "success", feedback.runIds || []);
     if (message) pushMessage("assistant", message);
   } catch (error) {
     pushMessage("assistant", error.message || "Could not persist the candidates store.");
@@ -2842,17 +2689,7 @@ async function toggleCandidate(runId, forceValue = null) {
     entries,
     baseline_run_id: shouldExist || state.candidatesStore.baseline_run_id !== runId ? state.candidatesStore.baseline_run_id : null,
   };
-  await saveCandidatesStore(
-    nextStore,
-    shouldExist ? `Marked ${runId} as a candidate.` : `Removed ${runId} from candidates.`,
-    {
-      text: shouldExist
-        ? `${runId} is now tracked as candidate. Review evidence and decide whether to shortlist it or clear it.`
-        : `${runId} was removed from the candidate queue.`,
-      tone: shouldExist ? "success" : "warning",
-      runIds: [runId],
-    },
-  );
+  await saveCandidatesStore(nextStore, shouldExist ? `Marked ${runId} as a candidate.` : `Removed ${runId} from candidates.`);
 }
 
 async function toggleShortlist(runId) {
@@ -2877,13 +2714,6 @@ async function toggleShortlist(runId) {
       entries,
     },
     nextEntry.shortlisted ? `Added ${runId} to the shortlist.` : `Removed ${runId} from the shortlist.`,
-    {
-      text: nextEntry.shortlisted
-        ? `${runId} is now shortlisted. Compare it against the current baseline or promote it to baseline if warranted.`
-        : `${runId} was removed from the shortlist.`,
-      tone: nextEntry.shortlisted ? "success" : "warning",
-      runIds: [runId],
-    },
   );
 }
 
@@ -2914,13 +2744,6 @@ async function setBaseline(runId) {
       entries,
     },
     nextBaseline ? `Pinned ${runId} as the current baseline.` : `Cleared the baseline reference.`,
-    {
-      text: nextBaseline
-        ? `${runId} is now the baseline. Use decision compare to test shortlisted peers against it.`
-        : "The baseline reference was cleared. Pin a new baseline before relying on decision compare.",
-      tone: nextBaseline ? "success" : "warning",
-      runIds: nextBaseline ? [runId] : [],
-    },
   );
 }
 
@@ -2947,13 +2770,6 @@ async function editCandidateNote(runId) {
       entries,
     },
     nextNote.trim() ? `Updated the note for ${runId}.` : `Cleared the note for ${runId}.`,
-    {
-      text: nextNote.trim()
-        ? `Decision note updated for ${runId}.`
-        : `Decision note cleared for ${runId}.`,
-      tone: "success",
-      runIds: [runId],
-    },
   );
 }
 
@@ -3100,7 +2916,6 @@ function summarizeCandidateState(runId) {
 function openRunDecisionCompare(runId) {
   const relatedRunIds = uniqueRunIds([runId, ...getDecisionCompareRunIds().filter((candidateId) => candidateId !== runId)]);
   if (relatedRunIds.length < 2) {
-    setDecisionFeedback(`${runId} cannot enter compare yet. Add a baseline or shortlist one more peer first.`, "warning", [runId]);
     pushMessage("assistant", "Run compare needs this run plus at least one baseline or shortlisted peer.");
     return;
   }
@@ -3117,45 +2932,20 @@ function openLatestRelatedLaunchJobForRun(runId) {
 }
 
 function bindRunContextActions(container, runId) {
-  container.querySelectorAll("[data-open-artifacts]").forEach((button) => {
-    button.addEventListener("click", () => openArtifactsTabForRun(button.dataset.openArtifacts || runId));
+  bindDataAction(container, "open-artifacts", (value) => openArtifactsTabForRun(value || runId));
+  bindDataAction(container, "mark-candidate", (value) => toggleCandidate(value));
+  bindDataAction(container, "shortlist-run", (value) => toggleShortlist(value));
+  bindDataAction(container, "set-baseline", (value) => setBaseline(value));
+  bindDataAction(container, "edit-note", (value) => editCandidateNote(value));
+  bindDataAction(container, "open-browser-run", (value) => {
+    const url = getBrowserUrlForRun(value || runId);
+    if (url) window.quantlabDesktop.openExternal(url);
   });
-  container.querySelectorAll("[data-mark-candidate]").forEach((button) => {
-    button.addEventListener("click", () => toggleCandidate(button.dataset.markCandidate));
-  });
-  container.querySelectorAll("[data-shortlist-run]").forEach((button) => {
-    button.addEventListener("click", () => toggleShortlist(button.dataset.shortlistRun));
-  });
-  container.querySelectorAll("[data-set-baseline]").forEach((button) => {
-    button.addEventListener("click", () => setBaseline(button.dataset.setBaseline));
-  });
-  container.querySelectorAll("[data-edit-note]").forEach((button) => {
-    button.addEventListener("click", () => editCandidateNote(button.dataset.editNote));
-  });
-  container.querySelectorAll("[data-open-browser-run]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const url = getBrowserUrlForRun(button.dataset.openBrowserRun || runId);
-      if (url) window.quantlabDesktop.openExternal(url);
-    });
-  });
-  container.querySelectorAll("[data-open-decision-compare]").forEach((button) => {
-    button.addEventListener("click", () => openRunDecisionCompare(button.dataset.openDecisionCompare || runId));
-  });
-  container.querySelectorAll("[data-open-related-job]").forEach((button) => {
-    button.addEventListener("click", () => openLatestRelatedLaunchJobForRun(button.dataset.openRelatedJob || runId));
-  });
-  container.querySelectorAll("[data-open-sweep-handoff]").forEach((button) => {
-    button.addEventListener("click", () => openSweepDecisionTab(button.dataset.openSweepHandoff || "tracked"));
-  });
-  container.querySelectorAll("[data-open-candidates]").forEach((button) => {
-    button.addEventListener("click", () => openCandidatesTab());
-  });
-  container.querySelectorAll("[data-open-job-link]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const url = absoluteUrl(button.dataset.openJobLink);
-      if (url) window.quantlabDesktop.openExternal(url);
-    });
-  });
+  bindDataAction(container, "open-decision-compare", (value) => openRunDecisionCompare(value || runId));
+  bindDataAction(container, "open-related-job", (value) => openLatestRelatedLaunchJobForRun(value || runId));
+  bindDataAction(container, "open-sweep-handoff", (value) => openSweepDecisionTab(value || "tracked"));
+  bindDataAction(container, "open-candidates", () => openCandidatesTab());
+  bindOpenExternalAction(container, "open-job-link");
 }
 
 function uniqueRunIds(runIds) {
@@ -3195,7 +2985,7 @@ async function loadOptionalText(relativePath) {
 }
 
 function joinProjectPath(basePath, leafName) {
-  return `${String(basePath || "").replace(/[\\/]+$/, "")}\\${leafName}`;
+  return `${String(basePath || "").replace(/[\\/]+$/, "")}/${leafName}`;
 }
 
 function projectPathFromHref(relativeOrUrl) {

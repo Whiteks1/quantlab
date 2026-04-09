@@ -13,21 +13,32 @@
     <div class="app-shell">
         <aside class="sidebar">
             <div class="brand">
-                <div class="brand-mark">QL</div>
+                <div class="brand-mark" aria-hidden="true">
+                    <span class="brand-mark-ring"></span>
+                    <span class="brand-mark-tail"></span>
+                    <span class="brand-mark-grid">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </span>
+                    <span class="brand-mark-core"></span>
+                </div>
                 <div>
                     <div class="brand-title">QuantLab Desktop</div>
-                    <div class="brand-subtitle">Single research workspace</div>
+                    <div class="brand-subtitle">Research workstation</div>
                 </div>
             </div>
 
             <nav class="nav-list" aria-label="Primary">
-                <button class="nav-item is-active" data-action="open-chat">Assistant</button>
+                <button class="nav-item" data-action="open-system">System</button>
                 <button class="nav-item" data-action="open-experiments">Experiments</button>
                 <button class="nav-item" data-action="open-launch">Launch</button>
                 <button class="nav-item" data-action="open-runs">Runs</button>
                 <button class="nav-item" data-action="open-candidates">Candidates</button>
                 <button class="nav-item" data-action="open-compare">Compare</button>
                 <button class="nav-item" data-action="open-ops">Paper Ops</button>
+                <button class="nav-item is-active" data-action="open-assistant">Assistant</button>
             </nav>
 
             <section class="sidebar-panel">
@@ -48,18 +59,16 @@
             <section class="sidebar-panel">
                 <div class="panel-label">Suggested actions</div>
                 <div class="chip-list">
+                    <button class="chip" data-prompt="Open system">Open system</button>
                     <button class="chip" data-prompt="Open experiments">Open experiments</button>
-                    <button class="chip" data-prompt="Open sweep handoff">Open sweep handoff</button>
                     <button class="chip" data-prompt="Open runs">Open runs</button>
                     <button class="chip" data-prompt="Open candidates">Open candidates</button>
-                    <button class="chip" data-prompt="Open compare">Open compare</button>
                     <button class="chip" data-prompt="Compare selected">Compare selected</button>
-                    <button class="chip" data-prompt="Show artifacts">Show artifacts</button>
                     <button class="chip" data-prompt="Open shortlist compare">Shortlist compare</button>
+                    <button class="chip" data-prompt="Open latest run">Open latest run</button>
                     <button class="chip" data-prompt="Open latest failed launch">Latest failed launch</button>
                     <button class="chip" data-prompt="Explain latest failure">Explain latest failure</button>
                     <button class="chip" data-prompt="Show runtime status">Show runtime status</button>
-                    <button class="chip" data-prompt="Open latest run">Open latest run</button>
                     <button class="chip" data-prompt="Ask Stepbit explain the latest failed launch and suggest the next debugging step">Ask Stepbit</button>
                 </div>
             </section>
@@ -67,68 +76,35 @@
 
         <main class="main-content">
             <header class="topbar">
-                <div>
-                    <div class="eyebrow">QuantLab Desktop v0</div>
-                    <h1 id="topbar-title">Chat</h1>
-                    <div id="topbar-surface-meta" class="topbar-surface-meta"></div>
+                <div class="topbar-lead">
+                    <div class="eyebrow" id="topbar-eyebrow">QuantLab Research workstation</div>
+                    <h1 id="topbar-title">Workstation</h1>
+                    <div class="topbar-status-row">
+                        <span id="topbar-surface-chip" class="topbar-status-chip muted">No active surface</span>
+                        <span id="topbar-runtime-chip" class="topbar-status-chip warn">Runtime waiting</span>
+                        <span id="topbar-server-chip" class="topbar-status-chip muted">Bootstrap pending</span>
+                    </div>
                 </div>
-                <div class="topbar-actions">
-                    <button class="ghost-btn" id="command-palette-trigger" type="button">Command Palette</button>
-                    <button class="primary-btn" id="open-browser-runs" type="button">Open In Browser</button>
+                <div class="topbar-actions-panel">
+                    <div class="topbar-actions-copy">
+                        <div class="section-label">Global actions</div>
+                        <div class="topbar-actions-caption">Open surfaces, inspect browser views, or route support without leaving the workstation.</div>
+                    </div>
+                    <div class="topbar-actions">
+                        <button class="ghost-btn" id="command-palette-trigger" type="button">Command Palette</button>
+                        <button class="ghost-btn" id="open-browser-runs" type="button">Open In Browser</button>
+                    </div>
                 </div>
             </header>
 
-            <section class="command-bar">
-                <div class="command-bar-copy">
-                    <div>
-                        <div class="section-label">Quick commands</div>
-                        <h2>Deterministic shortcuts</h2>
-                    </div>
-                    <p class="command-bar-meta">Open surfaces and run deterministic desktop actions here. Explanations and routed prompts appear in Assistant history below.</p>
-                </div>
-                <div class="command-entry-row">
-                    <label class="command-input-wrap" for="palette-input">
-                        <span>Command</span>
-                        <input id="palette-input" type="text" placeholder="Type a command like 'open runs' or 'open latest run'">
-                    </label>
-                    <button class="ghost-btn" id="run-command" type="button">Run command</button>
-                </div>
-                <div id="command-feedback" class="command-feedback">Use quick commands for open runs, compare selected, show artifacts, or show runtime status.</div>
-            </section>
-
             <section class="workspace-grid">
-                <div class="left-column">
-                    <section class="chat-panel card">
-                        <div class="section-head">
-                            <div>
-                                <div class="section-label">Assistant</div>
-                                <h2>History and routing</h2>
-                            </div>
-                            <div id="chat-adapter-status" class="assistant-status">Stepbit adapter offline.</div>
-                        </div>
-
-                        <p class="assistant-meta">Use Assistant for explanations, summaries, and any prompt you want to route through Stepbit.</p>
-
-                        <div id="chat-log" class="chat-log"></div>
-
-                        <form id="chat-form" class="chat-form">
-                            <textarea id="chat-input" rows="3" placeholder="Ask for an explanation, summary, or route a prompt via Stepbit."></textarea>
-                            <div class="chat-actions">
-                                <button id="chat-stepbit" class="ghost-btn" type="button">Route via Stepbit</button>
-                                <button class="primary-btn" type="submit">Send</button>
-                            </div>
-                        </form>
-                    </section>
-                </div>
-
-                <div class="right-column">
+                <div class="workbench-column">
                     <section class="card tabs-shell">
                         <div class="section-head">
                             <div>
-                                <div class="section-label">Workbench</div>
-                                <h2>Focused work surface</h2>
+                                <div class="section-label">Context tabs</div>
+                                <h2>Focused work surfaces</h2>
                             </div>
-                            <div id="workbench-meta" class="workbench-meta">Primary surfaces replace each other. Context tabs stay bounded.</div>
                         </div>
 
                         <div id="tabs-bar" class="tabs-bar"></div>
@@ -212,7 +188,7 @@
 
                                     <div class="workflow-actions">
                                         <button id="workflow-launch-submit" class="primary-btn" type="submit">Launch in QuantLab</button>
-                                        <span id="workflow-launch-feedback" class="workflow-feedback">Use deterministic inputs or ask from chat.</span>
+                                        <span id="workflow-launch-feedback" class="workflow-feedback">Use deterministic inputs or the assistant when needed.</span>
                                     </div>
                                 </form>
 
@@ -239,6 +215,40 @@
                                 <div id="workflow-runs-list" class="run-worklist"></div>
                             </section>
                         </div>
+                    </section>
+                </div>
+
+                <div class="support-column">
+                    <section class="command-bar card support-command">
+                        <div>
+                            <div class="section-label">Support command</div>
+                            <h2>Quick assistant entry</h2>
+                        </div>
+                        <label class="command-input-wrap" for="palette-input">
+                            <span>Optional support shortcut</span>
+                            <input id="palette-input" type="text" placeholder="Examples: open latest failed launch, explain latest failure">
+                        </label>
+                        <button class="ghost-btn" id="run-command" type="button">Run support command</button>
+                    </section>
+
+                    <section class="chat-panel card">
+                        <div class="section-head">
+                            <div>
+                                <div class="section-label">Assistant support</div>
+                                <h2>Deterministic assistant</h2>
+                            </div>
+                            <div id="chat-adapter-status" class="assistant-status">Stepbit adapter offline.</div>
+                        </div>
+
+                        <div id="chat-log" class="chat-log"></div>
+
+                        <form id="chat-form" class="chat-form">
+                            <textarea id="chat-input" rows="3" placeholder="Use support prompts when the workstation needs help: open compare, explain latest failure, show runtime status..."></textarea>
+                            <div class="chat-actions">
+                                <button id="chat-stepbit" class="ghost-btn" type="button">Route to Stepbit</button>
+                                <button class="primary-btn" type="submit">Send</button>
+                            </div>
+                        </form>
                     </section>
                 </div>
             </section>

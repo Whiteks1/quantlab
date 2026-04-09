@@ -17,13 +17,95 @@ import {
   titleCase,
   toneClass,
 } from "./utils.js";
+import {
+  renderActionButton,
+  renderActionRow,
+  renderEmptyState,
+  renderMetricList,
+} from "./view-primitives.js";
+
+const TONE_ALIAS = {
+  up: "tone-positive",
+  down: "tone-negative",
+  warn: "tone-warning",
+  muted: "tone-neutral",
+  positive: "tone-positive",
+  negative: "tone-negative",
+  warning: "tone-warning",
+  neutral: "tone-neutral",
+};
+
+function normalizeTone(tone = "") {
+  const normalized = String(tone || "").trim();
+  return TONE_ALIAS[normalized] || normalized;
+}
 
 export function renderSummaryCard(label, value, tone = "") {
-  return `<article class="summary-card"><div class="label">${escapeHtml(label)}</div><div class="value ${escapeHtml(tone)}">${escapeHtml(value)}</div></article>`;
+  const toneClass = normalizeTone(tone);
+  return `<article class="summary-card ${escapeHtml(toneClass)}"><div class="label">${escapeHtml(label)}</div><div class="value ${escapeHtml(toneClass)}">${escapeHtml(value)}</div></article>`;
 }
 
 export function compareMetric(label, value, extraClass) {
-  return `<div class="${escapeHtml(extraClass)}"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+  return `<div class="${escapeHtml(normalizeTone(extraClass))}"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+}
+
+function renderStateChip(label, value, tone = "") {
+  const toneClass = normalizeTone(tone);
+  return `<span class="run-state-chip ${escapeHtml(toneClass)}">${escapeHtml(label)} <strong>${escapeHtml(value)}</strong></span>`;
+}
+
+function resolveDecisionSignal(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized.includes("baseline")) return { label: "Pinned baseline", tone: "tone-positive" };
+  if (normalized.includes("shortlist")) return { label: "Shortlisted", tone: "tone-positive" };
+  if (normalized.includes("candidate")) return { label: "Candidate review", tone: "tone-warning" };
+  return { label: "Untracked", tone: "tone-neutral" };
+}
+
+function resolveLaunchSignal(value, options = {}) {
+  const normalized = String(value || "").toLowerCase();
+  const emptyLabel = options.emptyLabel || "Launch pending";
+  if (!normalized || normalized === "none" || normalized.includes("no linked")) {
+    return { label: emptyLabel, tone: "tone-warning" };
+  }
+  if (normalized.includes("succeeded")) return { label: "Completed", tone: "tone-positive" };
+  if (normalized.includes("failed")) return { label: "Failed", tone: "tone-negative" };
+  if (normalized.includes("running") || normalized.includes("queued") || normalized.includes("pending")) {
+    return { label: "In flight", tone: "tone-warning" };
+  }
+  if (normalized.includes("unknown")) return { label: "Review state", tone: "tone-warning" };
+  return { label: titleCase(String(value)), tone: "tone-warning" };
+}
+
+function resolveEvidenceSignal(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized.includes("ready") || normalized.includes("available") || normalized.includes("present")) {
+    return { label: "Ready", tone: "tone-positive" };
+  }
+  if (normalized.includes("missing")) {
+    return { label: "Missing", tone: "tone-warning" };
+  }
+  return { label: "Pending", tone: "tone-warning" };
+}
+
+function resolveBinarySignal(isReady, readyLabel, waitingLabel, options = {}) {
+  return {
+    label: isReady ? readyLabel : waitingLabel,
+    tone: isReady ? (options.readyTone || "tone-positive") : (options.waitingTone || "tone-warning"),
+  };
+}
+
+function resolveSnapshotSourceSignal(source) {
+  if (source === "api") return { label: "API live", tone: "tone-positive" };
+  if (source === "local") return { label: "Local fallback", tone: "tone-warning" };
+  return { label: "Detached", tone: "tone-warning" };
+}
+
+function resolveWorkspaceBootstrapSignal(workspace) {
+  if (workspace?.status === "ready") return { label: "Attached", tone: "tone-positive" };
+  if (workspace?.status === "starting") return { label: "Booting", tone: "tone-warning" };
+  if (workspace?.status === "error" || workspace?.status === "stopped") return { label: "Review required", tone: "tone-negative" };
+  return { label: "Pending", tone: "tone-warning" };
 }
 
 export function renderCandidateFlags(store, runId, decision) {
@@ -36,13 +118,13 @@ export function renderCandidateFlags(store, runId, decision) {
 
 export function renderCompactEntryList(entries) {
   return entries.length
-    ? `<dl class="metric-list compact">${entries.map(([label, value]) => compareMetric(label, value, "")).join("")}</dl>`
-    : `<div class="empty-state">No structured config entries were available.</div>`;
+    ? renderMetricList(entries.map(([label, value]) => ({ label, value })), { compact: true })
+    : renderEmptyState("No structured config entries were available.");
 }
 
 export function renderLocalFilesList(entries, truncated = false) {
   if (!entries.length) {
-    return `<div class="empty-state">No local files were discoverable in the run directory.</div>`;
+    return renderEmptyState("No local files were discoverable in the run directory.");
   }
   return `
     <div class="artifact-list">
@@ -64,16 +146,20 @@ export function renderCandidateCard(entry, forceShow, ctx) {
   const title = run?.run_id || entry.run_id;
   const metrics = run
     ? `
-      <div class="run-row-metrics">
-        <span class="metric-chip ${toneClass(run.total_return, true)}">Return ${formatPercent(run.total_return)}</span>
-        <span class="metric-chip">Sharpe ${formatNumber(run.sharpe_simple)}</span>
-        <span class="metric-chip ${toneClass(run.max_drawdown, false)}">Drawdown ${formatPercent(run.max_drawdown)}</span>
-      </div>
+      <dl class="metric-list candidate-metric-list">
+        ${compareMetric("Return", formatPercent(run.total_return), toneClass(run.total_return, true))}
+        ${compareMetric("Sharpe", formatNumber(run.sharpe_simple), "")}
+        ${compareMetric("Drawdown", formatPercent(run.max_drawdown), toneClass(run.max_drawdown, false))}
+        ${compareMetric("Trades", formatCount(run.trades), "")}
+        ${compareMetric("Commit", shortCommit(run.git_commit) || "-", "")}
+        ${compareMetric("Window", `${run.start || "-"} -> ${run.end || "-"}`, "")}
+      </dl>
     `
     : `<div class="empty-state">This run is no longer indexed, but the decision record is still preserved locally.</div>`;
   const noteText = entry.note ? escapeHtml(entry.note) : "No note yet.";
   return `
     <article class="candidate-card ${forceShow ? "baseline-card" : ""}">
+      <div class="section-label">${forceShow ? "Pinned baseline" : entry.shortlisted ? "Shortlisted candidate" : "Tracked candidate"}</div>
       <div class="run-row-top">
         <div class="run-row-title">
           <strong>${escapeHtml(title)}</strong>
@@ -87,232 +173,162 @@ export function renderCandidateCard(entry, forceShow, ctx) {
       </div>
       ${metrics}
       <div class="candidate-note">${noteText}</div>
-      <div class="workflow-actions">
-        ${run ? `<button class="ghost-btn" type="button" data-open-run="${escapeHtml(entry.run_id)}">Open run</button>` : ""}
-        ${run ? `<button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(entry.run_id)}">Artifacts</button>` : ""}
-        <button class="ghost-btn" type="button" data-edit-note="${escapeHtml(entry.run_id)}">${entry.note ? "Edit note" : "Add note"}</button>
-        <button class="ghost-btn" type="button" data-shortlist-run="${escapeHtml(entry.run_id)}">${entry.shortlisted ? "Remove shortlist" : "Add shortlist"}</button>
-        <button class="ghost-btn" type="button" data-set-baseline="${escapeHtml(entry.run_id)}">${decision.isBaselineRun(ctx.store, entry.run_id) ? "Clear baseline" : "Set baseline"}</button>
-        <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(entry.run_id)}">Remove candidate</button>
-      </div>
+      ${renderActionRow([
+        run ? renderActionButton({ label: "Open run", dataset: { openRun: entry.run_id } }) : "",
+        run ? renderActionButton({ label: "Artifacts", dataset: { openArtifacts: entry.run_id } }) : "",
+        renderActionButton({ label: entry.note ? "Edit note" : "Add note", dataset: { editNote: entry.run_id } }),
+        renderActionButton({ label: entry.shortlisted ? "Remove shortlist" : "Add shortlist", dataset: { shortlistRun: entry.run_id } }),
+        renderActionButton({ label: decision.isBaselineRun(ctx.store, entry.run_id) ? "Clear baseline" : "Set baseline", dataset: { setBaseline: entry.run_id } }),
+        renderActionButton({ label: "Remove candidate", dataset: { markCandidate: entry.run_id } }),
+      ])}
     </article>
-  `;
-}
-
-function resolveDecisionFeedback(ctx, runIds = []) {
-  const feedback = ctx.decisionFeedback;
-  if (!feedback?.text) return null;
-  if (!feedback.runIds?.length || !runIds.length) return feedback;
-  const match = runIds.some((runId) => feedback.runIds.includes(runId));
-  return match ? feedback : null;
-}
-
-function renderDecisionFeedbackBanner(ctx, runIds = []) {
-  const feedback = resolveDecisionFeedback(ctx, runIds);
-  if (!feedback) return "";
-  return `
-    <section class="decision-banner tone-${escapeHtml(feedback.tone || "neutral")}">
-      <div class="section-label">Decision feedback</div>
-      <strong>${escapeHtml(feedback.text)}</strong>
-    </section>
-  `;
-}
-
-function buildRunDecisionSnapshot(run, detail, ctx) {
-  const primaryResult = detail ? selectPrimaryResult(run, detail.report) : null;
-  const artifactCount = Array.isArray(detail?.report?.artifacts) ? detail.report.artifacts.length : 0;
-  const workspaceFileCount = Array.isArray(detail?.directoryEntries) ? detail.directoryEntries.length : 0;
-  const latestRelatedJob = ctx.getRunRelatedJobs(run.run_id)[0] || null;
-  const isCandidate = ctx.decision.isCandidateRun(ctx.store, run.run_id);
-  const isShortlisted = ctx.decision.isShortlistedRun(ctx.store, run.run_id);
-  const isBaseline = ctx.decision.isBaselineRun(ctx.store, run.run_id);
-  const compareReadyIds = ctx.getDecisionCompareRunIds?.() || [];
-  const compareReady = compareReadyIds.length >= 2;
-
-  let evidence = {
-    tone: "warning",
-    label: "Needs inspection",
-    meta: "Open run detail or artifacts to confirm canonical report coverage and local outputs.",
-  };
-
-  if (detail) {
-    if (detail.report && primaryResult && (artifactCount || workspaceFileCount)) {
-      evidence = {
-        tone: "positive",
-        label: "Evidence ready",
-        meta: `Primary result visible · ${artifactCount || workspaceFileCount} output file${artifactCount + workspaceFileCount === 1 ? "" : "s"} discoverable.`,
-      };
-    } else if (detail.report && primaryResult) {
-      evidence = {
-        tone: "warning",
-        label: "Evidence partial",
-        meta: "Primary result exists, but artifact continuity is still thin.",
-      };
-    } else if (detail.report) {
-      evidence = {
-        tone: "warning",
-        label: "Report only",
-        meta: "Canonical report exists, but the primary decision result is not clearly structured.",
-      };
-    } else if (latestRelatedJob?.status === "succeeded") {
-      evidence = {
-        tone: "negative",
-        label: "Canonical report missing",
-        meta: "A launch succeeded, but this surface still cannot read report.json or run_report.json.",
-      };
-    } else {
-      evidence = {
-        tone: "warning",
-        label: "Artifacts pending",
-        meta: "Evidence continuity is not fully visible yet from the local workspace.",
-      };
-    }
-  }
-
-  let decision = {
-    tone: "neutral",
-    label: "Untracked",
-    meta: "This run is not in the decision queue yet.",
-  };
-
-  if (isBaseline) {
-    decision = {
-      tone: "positive",
-      label: "Baseline",
-      meta: "This run is the current reference for decision compare.",
-    };
-  } else if (isShortlisted) {
-    decision = {
-      tone: compareReady ? "positive" : "warning",
-      label: "Shortlisted",
-      meta: compareReady
-        ? "This run is ready to compare against the current baseline or shortlist peers."
-        : "This run is shortlisted, but compare still needs a pinned baseline or one more peer.",
-    };
-  } else if (isCandidate) {
-    decision = {
-      tone: "warning",
-      label: "Candidate",
-      meta: "Tracked locally, but not promoted into the shortlist yet.",
-    };
-  }
-
-  let next = {
-    tone: "warning",
-    label: "Inspect artifacts",
-    meta: "Confirm canonical evidence before promoting this run.",
-  };
-
-  if (detail && !detail.report) {
-    next = {
-      tone: "warning",
-      label: "Inspect artifacts",
-      meta: "Open artifacts and verify canonical outputs before treating this run as decision-ready.",
-    };
-  } else if (!isCandidate && !isShortlisted && !isBaseline) {
-    next = {
-      tone: "warning",
-      label: "Promote or discard",
-      meta: "Evidence is visible, but the run is not yet tracked in the local decision queue.",
-    };
-  } else if (isCandidate && !isShortlisted && !isBaseline) {
-    next = {
-      tone: "warning",
-      label: "Shortlist or clear",
-      meta: "Candidate memory exists. Promote it to shortlist when it deserves compare, or remove it.",
-    };
-  } else if (!compareReady && isBaseline) {
-    next = {
-      tone: "warning",
-      label: "Shortlist one more peer",
-      meta: "Decision compare needs another shortlisted run against this baseline.",
-    };
-  } else if (!compareReady && isShortlisted) {
-    next = {
-      tone: "warning",
-      label: "Set a baseline",
-      meta: "Shortlisted runs exist, but compare still needs a pinned baseline reference.",
-    };
-  } else if (compareReady) {
-    next = {
-      tone: "positive",
-      label: "Open decision compare",
-      meta: `${compareReadyIds.length} decision-linked runs are ready for compare now.`,
-    };
-  }
-
-  return { evidence, decision, next };
-}
-
-function renderDecisionStateCards(snapshot) {
-  return `
-    <div class="decision-state-grid">
-      ${[
-        ["Evidence", snapshot.evidence],
-        ["Decision", snapshot.decision],
-        ["Next", snapshot.next],
-      ].map(([label, item]) => `
-        <article class="decision-state-card tone-${escapeHtml(item.tone || "neutral")}">
-          <div class="section-label">${escapeHtml(label)}</div>
-          <strong>${escapeHtml(item.label)}</strong>
-          <p>${escapeHtml(item.meta)}</p>
-        </article>
-      `).join("")}
-    </div>
-  `;
-}
-
-function renderRunsDecisionReadiness(ctx) {
-  const candidateEntries = ctx.decision.getCandidateEntriesResolved(ctx.store, ctx.findRun);
-  const shortlistCount = candidateEntries.filter((entry) => entry.shortlisted && entry.run).length;
-  const baselineRunId = ctx.store?.baseline_run_id || "";
-  const compareReadyIds = ctx.getDecisionCompareRunIds?.() || [];
-  const selectedCount = ctx.selectedRunIds?.length || 0;
-  const readinessMessage = compareReadyIds.length >= 2
-    ? `${compareReadyIds.length} runs are ready for decision compare now.`
-    : baselineRunId
-      ? "Baseline is pinned, but compare still needs one more shortlisted peer."
-      : candidateEntries.length
-        ? "Decision memory exists, but no baseline is pinned yet."
-        : "No decision queue is built yet.";
-
-  return `
-    <section class="artifact-panel runs-readiness-panel">
-      <div class="section-label">Decision readiness</div>
-      <h3>What is ready before compare</h3>
-      <div class="artifact-meta">${escapeHtml(readinessMessage)}</div>
-      <div class="tab-summary-grid">
-        ${renderSummaryCard("Selected", String(selectedCount), selectedCount >= 2 ? "tone-positive" : "tone-warning")}
-        ${renderSummaryCard("Candidates", String(candidateEntries.length), candidateEntries.length ? "tone-positive" : "tone-warning")}
-        ${renderSummaryCard("Shortlisted", String(shortlistCount), shortlistCount ? "tone-positive" : "tone-warning")}
-        ${renderSummaryCard("Baseline", baselineRunId || "None", baselineRunId ? "tone-positive" : "tone-warning")}
-      </div>
-      <div class="workflow-actions">
-        <button class="ghost-btn" type="button" data-open-candidates="true">Open candidates</button>
-        <button class="ghost-btn" type="button" data-open-shortlist-compare="true" ${compareReadyIds.length >= 2 ? "" : "disabled"}>Open decision compare</button>
-      </div>
-    </section>
   `;
 }
 
 export function renderRunsTab(_tab, ctx) {
   const runs = ctx.getRuns();
+  const latestRun = ctx.getLatestRun?.() || null;
+  const latestJob = ctx.getJobs?.()[0] || null;
+  const latestFailedJob = ctx.getLatestFailedJob?.() || null;
+  const paper = ctx.snapshot?.paperHealth || null;
+  const broker = ctx.snapshot?.brokerHealth || null;
+  const candidateEntries = ctx.decision.getCandidateEntriesResolved(ctx.store, ctx.findRun);
+  const shortlistCount = candidateEntries.filter((entry) => entry.shortlisted && entry.run).length;
+  const selectedRuns = ctx.getSelectedRuns?.() || [];
+  const compareReady = shortlistCount + (ctx.store?.baseline_run_id ? 1 : 0) >= 2;
+  const baselineRun = ctx.store?.baseline_run_id ? ctx.findRun(ctx.store.baseline_run_id) : null;
+  const spotlightRun = selectedRuns[0] || baselineRun || latestRun || null;
+  const spotlightJob = spotlightRun ? ctx.getRunRelatedJobs?.(spotlightRun.run_id)?.[0] || null : null;
+  const spotlightSweepEntries = spotlightRun ? ctx.getSweepDecisionEntriesForRun(spotlightRun.run_id) : [];
   return `
     <div class="tab-shell runs-tab">
-      ${renderDecisionFeedbackBanner(ctx)}
       <div class="artifact-top">
         <div>
           <div class="section-label">Run explorer</div>
           <h3>Runs</h3>
-          <div class="artifact-meta">Native execution log and traceability surface for indexed runs inside QuantLab Desktop.</div>
+          <div class="artifact-meta">Primary workstation for indexed runs, local evidence, shortlist state, and operational continuity.</div>
         </div>
-        <div class="workflow-actions">
-          <button class="ghost-btn" type="button" data-open-runs-legacy="true">Open legacy view</button>
-        </div>
+        ${renderActionRow([
+          renderActionButton({ label: "Open legacy view", dataset: { openRunsLegacy: true } }),
+          renderActionButton({ label: "Open candidates", dataset: { openCandidates: true } }),
+          renderActionButton({ label: "Open paper ops", dataset: { openOps: true } }),
+        ])}
       </div>
-      ${renderRunsDecisionReadiness(ctx)}
-      ${renderRunsTable(runs, ctx.store, ctx.decision)}
+      <div class="tab-summary-grid">
+        ${renderSummaryCard("Indexed runs", formatCount(runs.length), runs.length ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Candidates", formatCount(candidateEntries.length), candidateEntries.length ? "tone-warning" : "")}
+        ${renderSummaryCard("Shortlisted", formatCount(shortlistCount), shortlistCount ? "tone-positive" : "")}
+        ${renderSummaryCard("Baseline", ctx.store?.baseline_run_id || "Unset", ctx.store?.baseline_run_id ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Launch state", resolveLaunchSignal(latestJob?.status, { emptyLabel: "Launch pending" }).label, resolveLaunchSignal(latestJob?.status, { emptyLabel: "Launch pending" }).tone)}
+        ${renderSummaryCard("Paper state", paper?.available ? "Ready" : "Pending", paper?.available ? "tone-positive" : "tone-warning")}
+      </div>
+      <div class="runs-workbench">
+        <div class="runs-workbench-main">
+          ${renderRunsTable(runs, ctx)}
+        </div>
+        <aside class="runs-workbench-side">
+          ${renderRunsSpotlightCard(ctx, spotlightRun, spotlightJob, spotlightSweepEntries, selectedRuns.length)}
+          ${renderRunsDecisionQueueCard(ctx, candidateEntries, shortlistCount, compareReady, selectedRuns.length)}
+          ${renderRunsOperationalCard(ctx, latestJob, latestFailedJob, paper, broker)}
+        </aside>
+      </div>
     </div>
+  `;
+}
+
+function renderRunsSpotlightCard(ctx, spotlightRun, spotlightJob, spotlightSweepEntries, selectedCount) {
+  const railLabel = selectedCount
+    ? `Selected context · ${formatCount(selectedCount)} pinned`
+    : ctx.store?.baseline_run_id
+      ? "Pinned baseline"
+      : "Latest indexed run";
+  if (!spotlightRun) {
+    return `
+      <section class="artifact-panel run-spotlight-card run-rail-card evidence-rail-card">
+        <div class="section-label">${escapeHtml(railLabel)}</div>
+        <h3>No run indexed yet</h3>
+        <div class="empty-state">Launch a run or wait for canonical artifacts to populate the registry.</div>
+      </section>
+    `;
+  }
+  const decisionSignal = resolveDecisionSignal(ctx.decision.summarizeCandidateState(ctx.store, spotlightRun.run_id));
+  const launchSignal = resolveLaunchSignal(spotlightJob?.status, { emptyLabel: "Launch pending" });
+  const evidenceSignal = resolveEvidenceSignal(spotlightRun.path ? "ready" : "missing");
+  const sweepLabel = spotlightSweepEntries.length ? `${formatCount(spotlightSweepEntries.length)} tracked rows` : "None";
+  return `
+    <section class="artifact-panel run-spotlight-card run-rail-card evidence-rail-card">
+      <div class="section-label">${escapeHtml(railLabel)}</div>
+      <h3>${escapeHtml(spotlightRun.run_id)}</h3>
+      <div class="artifact-meta">${escapeHtml(spotlightRun.ticker || "-")} · ${escapeHtml(titleCase(spotlightRun.mode || "unknown"))} · ${escapeHtml(formatDateTime(spotlightRun.created_at))}</div>
+      <div class="run-row-flags">${renderCandidateFlags(ctx.store, spotlightRun.run_id, ctx.decision)}</div>
+      <div class="run-row-metrics">
+        <span class="metric-chip ${toneClass(spotlightRun.total_return, true)}">Return ${formatPercent(spotlightRun.total_return)}</span>
+        <span class="metric-chip">Sharpe ${formatNumber(spotlightRun.sharpe_simple)}</span>
+        <span class="metric-chip ${toneClass(spotlightRun.max_drawdown, false)}">Drawdown ${formatPercent(spotlightRun.max_drawdown)}</span>
+        <span class="metric-chip">Trades ${formatCount(spotlightRun.trades)}</span>
+      </div>
+      ${renderRailPostureList([
+        { label: "Decision state", value: decisionSignal.label, tone: decisionSignal.tone },
+        { label: "Evidence state", value: evidenceSignal.label, tone: evidenceSignal.tone },
+        { label: "Launch state", value: launchSignal.label, tone: launchSignal.tone },
+        { label: "Sweep linkage", value: sweepLabel, tone: spotlightSweepEntries.length ? "tone-positive" : "tone-warning" },
+        { label: "Window", value: `${spotlightRun.start || "-"} -> ${spotlightRun.end || "-"}` },
+      ])}
+      ${renderActionRow([
+        renderActionButton({ label: "Open run", dataset: { openRun: spotlightRun.run_id } }),
+        renderActionButton({ label: "Artifacts", dataset: { openArtifacts: spotlightRun.run_id } }),
+        spotlightJob ? renderActionButton({ label: "Launch review", dataset: { openRelatedJob: spotlightRun.run_id } }) : "",
+      ])}
+    </section>
+  `;
+}
+
+function renderRunsDecisionQueueCard(ctx, candidateEntries, shortlistCount, compareReady, selectedCount) {
+  const baselineSignal = resolveBinarySignal(Boolean(ctx.store?.baseline_run_id), ctx.store?.baseline_run_id || "Pinned", "Unset");
+  const compareSignal = resolveBinarySignal(compareReady, "Ready", "Incomplete");
+  return `
+    <section class="artifact-panel run-spotlight-card run-rail-card evidence-rail-card">
+      <div class="section-label">Decision queue</div>
+      <h3>Selection memory</h3>
+      <div class="artifact-meta">Keep shortlist, baseline, and selected runs aligned before opening compare.</div>
+      ${renderRailPostureList([
+        { label: "Candidates", value: formatCount(candidateEntries.length), tone: candidateEntries.length ? "tone-warning" : "" },
+        { label: "Shortlisted", value: formatCount(shortlistCount), tone: shortlistCount ? "tone-positive" : "" },
+        { label: "Baseline", value: baselineSignal.label, tone: baselineSignal.tone },
+        { label: "Selected set", value: formatCount(selectedCount), tone: selectedCount ? "tone-positive" : "" },
+        { label: "Compare state", value: compareSignal.label, tone: compareSignal.tone },
+      ], { compact: true })}
+      ${renderActionRow([
+        renderActionButton({ label: "Open queue", dataset: { openCandidates: true } }),
+        renderActionButton({ label: "Shortlist compare", dataset: { openShortlistCompare: true }, disabled: !compareReady }),
+      ])}
+    </section>
+  `;
+}
+
+function renderRunsOperationalCard(ctx, latestJob, latestFailedJob, paper, broker) {
+  const launchSignal = resolveLaunchSignal(latestJob?.status, { emptyLabel: "Launch pending" });
+  const sourceSignal = resolveSnapshotSourceSignal(ctx.snapshotStatus?.source);
+  const brokerAlertCount = broker?.has_alerts ? (broker?.alerts || []).length : 0;
+  return `
+    <section class="artifact-panel run-spotlight-card run-rail-card evidence-rail-card">
+      <div class="section-label">Operational context</div>
+      <h3>Launch and runtime continuity</h3>
+      <div class="artifact-meta">This rail stays useful even when the shell is running from local fallback data.</div>
+      ${renderRailPostureList([
+        { label: "Snapshot source", value: sourceSignal.label, tone: sourceSignal.tone },
+        { label: "Latest launch", value: latestJob?.request_id || "none", tone: latestJob?.request_id ? "" : "tone-warning" },
+        { label: "Launch state", value: launchSignal.label, tone: launchSignal.tone },
+        { label: "Latest failed launch", value: latestFailedJob?.request_id || "none", tone: latestFailedJob ? "tone-warning" : "" },
+        { label: "Paper state", value: paper?.available ? "Ready" : "Pending", tone: paper?.available ? "tone-positive" : "tone-warning" },
+        { label: "Broker alerts", value: formatCount(brokerAlertCount), tone: brokerAlertCount ? "tone-negative" : "tone-positive" },
+      ], { compact: true })}
+      ${renderActionRow([
+        latestJob?.request_id ? renderActionButton({ label: "Review latest launch", dataset: { openJob: latestJob.request_id } }) : "",
+        renderActionButton({ label: "Paper ops", dataset: { openOps: true } }),
+        renderActionButton({ label: "System", dataset: { openSystemTab: true } }),
+      ])}
+    </section>
   `;
 }
 
@@ -337,49 +353,54 @@ export function renderRunTab(tab, ctx) {
     ? ctx.decision.getCandidateEntriesResolved(ctx.store, ctx.findRun).length > 1
     : Boolean(ctx.store.baseline_run_id || ctx.decision.isShortlistedRun(ctx.store, run.run_id));
   const decisionNote = candidateEntry?.note ? escapeHtml(candidateEntry.note) : "No local decision note yet.";
+  const relatedJobSignal = resolveLaunchSignal(latestRelatedJob?.status, { emptyLabel: "Launch pending" });
   const continuityState = latestRelatedJob
-    ? `${titleCase(latestRelatedJob.status || "unknown")} · ${formatDateTime(latestRelatedJob.created_at)}`
-    : "No linked launch job";
-  const relatedJobTone = latestRelatedJob?.status === "failed" ? "tone-down" : latestRelatedJob?.status === "succeeded" ? "tone-up" : "";
-  const snapshot = buildRunDecisionSnapshot(run, detail, ctx);
+    ? `${relatedJobSignal.label} · ${formatDateTime(latestRelatedJob.created_at)}`
+    : relatedJobSignal.label;
+  const relatedJobTone = relatedJobSignal.tone;
   return `
     <div class="tab-shell run-detail-shell">
-      ${renderDecisionFeedbackBanner(ctx, [run.run_id])}
       ${renderRunIdentityHeader(run, ctx, latestRelatedJob, decisionState, continuityState)}
       ${renderRunMetricsSummary(run)}
       <div class="run-detail-grid">
         <div class="run-detail-main">
-          ${renderRunDecisionBlock(run, ctx, candidateEntry, decisionNote, hasDecisionPeers, snapshot)}
-          ${renderRunConfigProvenanceBlock(run, report)}
+          <section class="artifact-panel">
+            <div class="section-label">Result evidence</div>
+            <h3>Decision metric snapshot</h3>
+            <div class="run-evidence-stack">
+              ${renderRunPrimaryResultBlock(primaryResult)}
+              ${renderRunTopResultsBlock(topResults)}
+            </div>
+          </section>
+          <section class="artifact-panel">
+            <div class="section-label">Config and provenance</div>
+            <h3>How this run was produced</h3>
+            <div class="run-evidence-stack">
+              ${renderRunConfigProvenanceBlock(run, report)}
+              ${renderRunResolvedConfigBlock(configEntries)}
+            </div>
+          </section>
+          <section class="artifact-panel">
+            <div class="section-label">Linked evidence</div>
+            <h3>Sweep and launch continuity</h3>
+            <div class="run-evidence-stack">
+              ${renderRunLaunchReviewBlock(run, latestRelatedJob, relatedJobTone)}
+              ${renderRunSweepLinkageBlock(ctx, sweepEntries)}
+            </div>
+          </section>
         </div>
-        <div class="run-detail-side">
+        <aside class="run-detail-side run-evidence-rail">
+          ${renderRunDecisionBlock(run, ctx, candidateEntry, decisionNote, hasDecisionPeers)}
           ${renderRunArtifactsContinuityBlock(run, fileEntries, detail, latestRelatedJob, continuityState, sweepEntries)}
-        </div>
-      </div>
-      <div class="run-detail-evidence-grid">
-        <section class="artifact-panel">
-          <div class="section-label">Result evidence</div>
-          <h3>Decision metric snapshot</h3>
-          <div class="run-evidence-stack">
-            ${renderRunPrimaryResultBlock(primaryResult)}
-            ${renderRunTopResultsBlock(topResults)}
-          </div>
-        </section>
-        <section class="artifact-panel">
-          <div class="section-label">Operational evidence</div>
-          <h3>Provenance and linked continuity</h3>
-          <div class="run-evidence-stack">
-            ${renderRunResolvedConfigBlock(configEntries)}
-            ${renderRunLaunchReviewBlock(run, latestRelatedJob, relatedJobTone)}
-            ${renderRunSweepLinkageBlock(ctx, sweepEntries)}
-          </div>
-        </section>
+        </aside>
       </div>
     </div>
   `;
 }
 
 function renderRunIdentityHeader(run, ctx, latestRelatedJob, decisionState, continuityState) {
+  const decisionSignal = resolveDecisionSignal(decisionState);
+  const continuitySignal = resolveLaunchSignal(latestRelatedJob?.status, { emptyLabel: "Launch pending" });
   return `
     <div class="run-identity-header">
       <div class="run-identity-copy">
@@ -392,8 +413,8 @@ function renderRunIdentityHeader(run, ctx, latestRelatedJob, decisionState, cont
           <span class="mono-cell">${escapeHtml(shortCommit(run.git_commit) || "-")}</span>
         </div>
         <div class="run-identity-state">
-          <span class="run-state-chip">Decision <strong>${escapeHtml(decisionState)}</strong></span>
-          <span class="run-state-chip">Continuity <strong>${escapeHtml(continuityState)}</strong></span>
+          ${renderStateChip("Decision", decisionSignal.label, decisionSignal.tone)}
+          ${renderStateChip("Launch", continuityState, continuitySignal.tone)}
         </div>
       </div>
       <div class="run-identity-side">
@@ -420,24 +441,25 @@ function renderRunMetricsSummary(run) {
   `;
 }
 
-function renderRunDecisionBlock(run, ctx, candidateEntry, decisionNote, hasDecisionPeers, snapshot) {
+function renderRunDecisionBlock(run, ctx, candidateEntry, decisionNote, hasDecisionPeers) {
+  const decisionSignal = resolveDecisionSignal(ctx.decision.summarizeCandidateState(ctx.store, run.run_id));
   return `
-    <section class="artifact-panel">
+    <section class="artifact-panel run-rail-card">
       <div class="section-label">Decision / validation</div>
-      <h3>What is ready and what should happen next</h3>
+      <h3>What should happen next</h3>
       <div class="run-row-flags">${renderCandidateFlags(ctx.store, run.run_id, ctx.decision)}</div>
-      ${renderDecisionStateCards(snapshot)}
+      <div class="artifact-meta">Decision state: <span class="${escapeHtml(decisionSignal.tone)}">${escapeHtml(decisionSignal.label)}</span></div>
       <div class="candidate-note">${decisionNote}</div>
-      <div class="workflow-actions">
-        <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(run.run_id)}">${ctx.decision.isCandidateRun(ctx.store, run.run_id) ? "Unmark candidate" : "Mark candidate"}</button>
-        <button class="ghost-btn" type="button" data-shortlist-run="${escapeHtml(run.run_id)}">${ctx.decision.isShortlistedRun(ctx.store, run.run_id) ? "Remove shortlist" : "Add shortlist"}</button>
-        <button class="ghost-btn" type="button" data-set-baseline="${escapeHtml(run.run_id)}">${ctx.decision.isBaselineRun(ctx.store, run.run_id) ? "Clear baseline" : "Set baseline"}</button>
-        <button class="ghost-btn" type="button" data-edit-note="${escapeHtml(run.run_id)}">${candidateEntry?.note ? "Edit note" : "Add note"}</button>
-      </div>
-      <div class="workflow-actions">
-        <button class="ghost-btn" type="button" data-open-decision-compare="${escapeHtml(run.run_id)}" ${hasDecisionPeers ? "" : "disabled"}>Compare with decision set</button>
-        <button class="ghost-btn" type="button" data-open-candidates="true">Open candidates</button>
-      </div>
+      ${renderActionRow([
+        renderActionButton({ label: ctx.decision.isCandidateRun(ctx.store, run.run_id) ? "Unmark candidate" : "Mark candidate", dataset: { markCandidate: run.run_id } }),
+        renderActionButton({ label: ctx.decision.isShortlistedRun(ctx.store, run.run_id) ? "Remove shortlist" : "Add shortlist", dataset: { shortlistRun: run.run_id } }),
+        renderActionButton({ label: ctx.decision.isBaselineRun(ctx.store, run.run_id) ? "Clear baseline" : "Set baseline", dataset: { setBaseline: run.run_id } }),
+        renderActionButton({ label: candidateEntry?.note ? "Edit note" : "Add note", dataset: { editNote: run.run_id } }),
+      ])}
+      ${renderActionRow([
+        renderActionButton({ label: "Compare with decision set", dataset: { openDecisionCompare: run.run_id }, disabled: !hasDecisionPeers }),
+        renderActionButton({ label: "Open candidates", dataset: { openCandidates: true } }),
+      ])}
       ${hasDecisionPeers ? `<div class="artifact-meta">This run can be compared directly against the current shortlist or baseline.</div>` : `<div class="artifact-meta">Pin a baseline or shortlist another run to enable decision compare from here.</div>`}
     </section>
   `;
@@ -445,9 +467,9 @@ function renderRunDecisionBlock(run, ctx, candidateEntry, decisionNote, hasDecis
 
 function renderRunConfigProvenanceBlock(run, report) {
   return `
-    <section class="artifact-panel">
-      <div class="section-label">Config + provenance</div>
-      <h3>How this run was produced</h3>
+    <div class="nested-panel">
+      <div class="section-label">Run provenance</div>
+      <h3>Source and reproduction</h3>
       <dl class="metric-list compact">
         ${compareMetric("Mode", titleCase(run.mode || "unknown"), "")}
         ${compareMetric("Ticker", run.ticker || "-", "")}
@@ -459,30 +481,74 @@ function renderRunConfigProvenanceBlock(run, report) {
         ${compareMetric("Python", report?.header?.python_version || "-", "")}
         ${compareMetric("Reproduce", report?.reproduce?.command || "-", "")}
       </dl>
-    </section>
+    </div>
   `;
 }
 
 function renderRunArtifactsContinuityBlock(run, fileEntries, detail, latestRelatedJob, continuityState, sweepEntries) {
+  const hasCanonicalReport = Boolean(detail.report);
+  const launchSignal = resolveLaunchSignal(latestRelatedJob?.status, { emptyLabel: "Launch pending" });
+  const keyFileEntries = fileEntries.slice(0, 4);
   return `
-    <section class="artifact-panel">
-      <div class="section-label">Artifacts + continuity</div>
-      <h3>Evidence and operational links</h3>
-      <dl class="metric-list compact">
-        ${compareMetric("Artifacts", fileEntries.length ? `${fileEntries.length} files` : "Pending", "")}
-        ${compareMetric("Launch continuity", continuityState, "")}
-        ${compareMetric("Sweep linkage", sweepEntries.length ? `${sweepEntries.length} tracked rows` : "None", "")}
-      </dl>
-      <div class="workflow-actions">
-        <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(run.run_id)}">Inspect artifacts</button>
-        <button class="ghost-btn" type="button" data-open-browser-run="${escapeHtml(run.run_id)}">Browser view</button>
-        ${latestRelatedJob ? `<button class="ghost-btn" type="button" data-open-related-job="${escapeHtml(run.run_id)}">Latest launch review</button>` : ""}
-        ${latestRelatedJob?.stderr_href ? `<button class="ghost-btn" type="button" data-open-job-link="${escapeHtml(latestRelatedJob.stderr_href)}">Open stderr in browser</button>` : ""}
-      </div>
+    <section class="artifact-panel run-rail-card evidence-rail-card">
+      <div class="section-label">Evidence rail</div>
+      <h3>Artifacts and operational links</h3>
+      <div class="artifact-meta">Validate report availability, local files, launch continuity, and sweep linkage without leaving the run.</div>
+      ${renderRailPostureList([
+        { label: "Report state", value: hasCanonicalReport ? "Ready" : "Missing", tone: hasCanonicalReport ? "tone-positive" : "tone-warning" },
+        { label: "Workspace files", value: fileEntries.length ? `${formatCount(fileEntries.length)} files` : "Pending", tone: fileEntries.length ? "tone-positive" : "tone-warning" },
+        { label: "Launch continuity", value: continuityState, tone: launchSignal.tone },
+        { label: "Launch state", value: launchSignal.label, tone: launchSignal.tone },
+        { label: "Sweep linkage", value: sweepEntries.length ? `${formatCount(sweepEntries.length)} tracked rows` : "None", tone: sweepEntries.length ? "tone-positive" : "tone-warning" },
+        { label: "Workspace path", value: run.path || "-" },
+      ], { compact: true })}
+      ${keyFileEntries.length ? `
+        <div class="run-rail-section">
+          <div class="section-label">Key files</div>
+          <div class="run-rail-file-strip">
+            ${keyFileEntries.map((entry) => `
+              <button class="run-rail-file-chip" type="button" data-open-path="${escapeHtml(entry.path)}">
+                <span>${escapeHtml(entry.relative_path || entry.name)}</span>
+                <span>${escapeHtml(entry.kind === "directory" ? "dir" : formatBytes(entry.size_bytes))}</span>
+              </button>
+            `).join("")}
+          </div>
+        </div>
+      ` : ""}
+      ${renderActionRow([
+        renderActionButton({ label: "Inspect artifacts", dataset: { openArtifacts: run.run_id } }),
+        renderActionButton({ label: "Browser view", dataset: { openBrowserRun: run.run_id } }),
+        latestRelatedJob ? renderActionButton({ label: "Latest launch review", dataset: { openRelatedJob: run.run_id } }) : "",
+        latestRelatedJob?.stderr_href ? renderActionButton({ label: "Open stderr in browser", dataset: { openJobLink: latestRelatedJob.stderr_href } }) : "",
+      ])}
+      <div class="run-rail-section">
       <div class="section-label">Workspace files</div>
       <h3>Local artifact directory</h3>
-      ${renderLocalFilesList(fileEntries.slice(0, 10), detail.directoryTruncated)}
+      ${renderLocalFilesList(fileEntries.slice(0, 8), detail.directoryTruncated)}
+      </div>
     </section>
+  `;
+}
+
+function renderRailPostureList(entries, options = {}) {
+  const items = entries.filter((entry) => entry && entry.label);
+  if (!items.length) return "";
+  return `
+    <div class="rail-posture-list ${options.compact ? "compact" : ""}">
+      ${items.map((entry) => renderRailPostureRow(entry.label, entry.value, entry.tone || "")).join("")}
+    </div>
+  `;
+}
+
+function renderRailPostureRow(label, value, tone = "") {
+  return `
+    <div class="rail-posture-row">
+      <div class="rail-posture-copy">
+        <div class="rail-posture-label">${escapeHtml(label)}</div>
+        <div class="rail-posture-value ${escapeHtml(tone)}">${escapeHtml(value)}</div>
+      </div>
+      <span class="rail-tone-dot ${escapeHtml(tone)}" aria-hidden="true"></span>
+    </div>
   `;
 }
 
@@ -531,11 +597,11 @@ function renderRunLaunchReviewBlock(run, latestRelatedJob, relatedJobTone) {
           ${compareMetric("Command", latestRelatedJob.command || "-", "")}
           ${compareMetric("Request", latestRelatedJob.request_id || "-", "")}
         </dl>
-        <div class="workflow-actions">
-          <button class="ghost-btn" type="button" data-open-related-job="${escapeHtml(run.run_id)}">Open launch review</button>
-          ${latestRelatedJob.stderr_href ? `<button class="ghost-btn" type="button" data-open-job-link="${escapeHtml(latestRelatedJob.stderr_href)}">Open stderr in browser</button>` : ""}
-        </div>
-      ` : `<div class="empty-state">This run does not currently expose a launch job in the local launch registry.</div>`}
+        ${renderActionRow([
+          renderActionButton({ label: "Open launch review", dataset: { openRelatedJob: run.run_id } }),
+          latestRelatedJob.stderr_href ? renderActionButton({ label: "Open stderr in browser", dataset: { openJobLink: latestRelatedJob.stderr_href } }) : "",
+        ])}
+      ` : renderEmptyState("This run does not currently expose a launch job in the local launch registry.")}
     </div>
   `;
 }
@@ -599,12 +665,7 @@ function renderRunSweepLinkageBlock(ctx, sweepEntries) {
 export function renderCompareTab(tab, ctx) {
   const runs = (tab.runIds || []).map(ctx.findRun).filter(Boolean);
   if (runs.length < 2) {
-    return `
-      <div class="tab-shell">
-        ${renderDecisionFeedbackBanner(ctx, tab.runIds || [])}
-        <div class="tab-placeholder">The selected compare set is no longer available in the registry. Rebuild the compare set from selected runs or from the shortlist and baseline queue.</div>
-      </div>
-    `;
+    return `<div class="tab-placeholder">The selected compare set is no longer available in the registry.</div>`;
   }
   if (tab.status === "loading") {
     return `<div class="tab-placeholder">Preparing decision-oriented compare for ${runs.length} runs...</div>`;
@@ -616,89 +677,90 @@ export function renderCompareTab(tab, ctx) {
   const detailMap = tab.detailMap || {};
   const configDeltaEntries = collectConfigDeltas(runs, detailMap);
   const includedBaseline = runs.find((run) => ctx.decision.isBaselineRun(ctx.store, run.run_id)) || null;
+  const shortlistedRuns = runs.filter((run) => ctx.decision.isShortlistedRun(ctx.store, run.run_id));
+  const candidateRuns = runs.filter((run) => ctx.decision.isCandidateRun(ctx.store, run.run_id));
   return `
-    <div class="compare-shell">
-      ${renderDecisionFeedbackBanner(ctx, tab.runIds || [])}
+    <div class="compare-shell compare-tab">
       <div class="tab-summary-grid">
         ${renderSummaryCard("Compared runs", String(runs.length))}
         ${renderSummaryCard("Ranking metric", titleCase(rankMetric.replace("_", " ")))}
         ${renderSummaryCard("Winner", `${winner.run_id} · ${formatMetricForDisplay(winner[rankMetric], rankMetric)}`, rankMetric === "max_drawdown" ? toneClass(winner.max_drawdown, false) : toneClass(winner[rankMetric], true))}
         ${renderSummaryCard("Runner-up", runnerUp ? `${runnerUp.run_id} · ${formatMetricForDisplay(runnerUp[rankMetric], rankMetric)}` : "-")}
         ${renderSummaryCard("Baseline in set", includedBaseline ? includedBaseline.run_id : "No")}
-        ${renderSummaryCard("Shortlisted in set", String(runs.filter((run) => ctx.decision.isShortlistedRun(ctx.store, run.run_id)).length))}
+        ${renderSummaryCard("Shortlisted in set", String(shortlistedRuns.length))}
       </div>
-      <section class="artifact-panel">
-        <div class="section-label">Decision actions</div>
-        <h3>Promote, shortlist, or baseline the winner</h3>
-        <div class="workflow-actions">
-          <button class="ghost-btn" type="button" data-open-run="${escapeHtml(winner.run_id)}">Open winner</button>
-          <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(winner.run_id)}">Winner artifacts</button>
-          <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(winner.run_id)}">${ctx.decision.isCandidateRun(ctx.store, winner.run_id) ? "Unmark candidate" : "Mark candidate"}</button>
-          <button class="ghost-btn" type="button" data-shortlist-run="${escapeHtml(winner.run_id)}">${ctx.decision.isShortlistedRun(ctx.store, winner.run_id) ? "Remove shortlist" : "Add shortlist"}</button>
-          <button class="ghost-btn" type="button" data-set-baseline="${escapeHtml(winner.run_id)}">${ctx.decision.isBaselineRun(ctx.store, winner.run_id) ? "Clear baseline" : "Set baseline"}</button>
+      <div class="compare-workbench">
+        <div class="compare-workbench-main">
+          <section class="artifact-panel">
+            <div class="section-label">Ranking matrix</div>
+            <h3>Decision-ready compare set</h3>
+            <div class="artifact-meta">Rank, inspect, and promote runs without leaving the compare surface.</div>
+            ${renderCompareRankingTable(rankedRuns, rankMetric, ctx)}
+          </section>
+          <section class="artifact-panel">
+            <div class="section-label">Config deltas</div>
+            <h3>What changes across this compare set</h3>
+            ${configDeltaEntries.length ? `
+              <div class="mini-table">
+                <div class="mini-table-row head">
+                  <span>Key</span>
+                  <span>Values</span>
+                </div>
+                ${configDeltaEntries.map(([key, values]) => `
+                  <div class="mini-table-row">
+                    <span>${escapeHtml(key)}</span>
+                    <span>${escapeHtml(values.join(" | "))}</span>
+                  </div>
+                `).join("")}
+              </div>
+            ` : `<div class="empty-state">No resolved config deltas were available yet for this compare set.</div>`}
+          </section>
         </div>
-        <div class="workflow-actions compare-rank-actions">
-          ${["sharpe_simple", "total_return", "max_drawdown", "trades"].map((metric) => `
-            <button class="ghost-btn ${rankMetric === metric ? "is-selected" : ""}" type="button" data-compare-rank="${escapeHtml(metric)}">${escapeHtml(titleCase(metric.replace("_", " ")))}</button>
-          `).join("")}
-        </div>
-      </section>
-      <section class="artifact-panel">
-        <div class="section-label">Config deltas</div>
-        <h3>What changes across this compare set</h3>
-        ${configDeltaEntries.length ? `
-          <div class="mini-table">
-            <div class="mini-table-row head">
-              <span>Key</span>
-              <span>Values</span>
-            </div>
-            ${configDeltaEntries.map(([key, values]) => `
-              <div class="mini-table-row">
-                <span>${escapeHtml(key)}</span>
-                <span>${escapeHtml(values.join(" | "))}</span>
-              </div>
-            `).join("")}
-          </div>
-        ` : `<div class="empty-state">No resolved config deltas were available yet for this compare set.</div>`}
-      </section>
-      <div class="compare-grid">
-        ${rankedRuns.map((run, index) => `
-          <article class="compare-card">
-            <div class="artifact-top">
-              <div>
-                <div class="section-label">${escapeHtml(titleCase(run.mode || "unknown"))}</div>
-                <h3>${escapeHtml(run.run_id)}</h3>
-              </div>
-              <div class="workflow-actions">
-                <button class="ghost-btn" type="button" data-open-run="${escapeHtml(run.run_id)}">Open run</button>
-                <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(run.run_id)}">Artifacts</button>
-              </div>
-            </div>
-            <div class="compare-meta">${escapeHtml(run.ticker || "-")} · ${escapeHtml(formatDateTime(run.created_at))} · rank #${index + 1}</div>
-            <div class="run-row-flags">${renderCandidateFlags(ctx.store, run.run_id, ctx.decision)}</div>
-            <dl class="metric-list">
-              ${compareMetric("Return", formatPercent(run.total_return), toneClass(run.total_return, true))}
-              ${compareMetric("Sharpe", formatNumber(run.sharpe_simple), "")}
-              ${compareMetric("Drawdown", formatPercent(run.max_drawdown), toneClass(run.max_drawdown, false))}
-              ${compareMetric("Trades", formatCount(run.trades), "")}
-              ${compareMetric("Window", `${run.start || "-"} -> ${run.end || "-"}`, "")}
-              ${compareMetric("Commit", shortCommit(run.git_commit) || "-", "")}
+        <aside class="compare-workbench-side">
+          <section class="artifact-panel run-spotlight-card compare-winner-card">
+            <div class="section-label">Current leader</div>
+            <h3>${escapeHtml(winner.run_id)}</h3>
+            <div class="artifact-meta">${escapeHtml(winner.ticker || "-")} · ${escapeHtml(titleCase(winner.mode || "unknown"))} · ranked by ${escapeHtml(titleCase(rankMetric.replace("_", " ")))}</div>
+            <dl class="metric-list compact">
+              ${compareMetric("Rank metric", formatMetricForDisplay(winner[rankMetric], rankMetric), rankMetric === "max_drawdown" ? toneClass(winner.max_drawdown, false) : toneClass(winner[rankMetric], true))}
+              ${compareMetric("Return", formatPercent(winner.total_return), toneClass(winner.total_return, true))}
+              ${compareMetric("Sharpe", formatNumber(winner.sharpe_simple), "")}
+              ${compareMetric("Drawdown", formatPercent(winner.max_drawdown), toneClass(winner.max_drawdown, false))}
+              ${compareMetric("Trades", formatCount(winner.trades), "")}
             </dl>
+            <div class="run-row-flags">${renderCandidateFlags(ctx.store, winner.run_id, ctx.decision)}</div>
             <div class="workflow-actions">
-              <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(run.run_id)}">${ctx.decision.isCandidateRun(ctx.store, run.run_id) ? "Unmark candidate" : "Mark candidate"}</button>
-              <button class="ghost-btn" type="button" data-shortlist-run="${escapeHtml(run.run_id)}">${ctx.decision.isShortlistedRun(ctx.store, run.run_id) ? "Remove shortlist" : "Add shortlist"}</button>
-              <button class="ghost-btn" type="button" data-set-baseline="${escapeHtml(run.run_id)}">${ctx.decision.isBaselineRun(ctx.store, run.run_id) ? "Clear baseline" : "Set baseline"}</button>
+              <button class="ghost-btn" type="button" data-open-run="${escapeHtml(winner.run_id)}">Open winner</button>
+              <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(winner.run_id)}">Winner artifacts</button>
+              <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(winner.run_id)}">${ctx.decision.isCandidateRun(ctx.store, winner.run_id) ? "Unmark candidate" : "Mark candidate"}</button>
+              <button class="ghost-btn" type="button" data-shortlist-run="${escapeHtml(winner.run_id)}">${ctx.decision.isShortlistedRun(ctx.store, winner.run_id) ? "Remove shortlist" : "Add shortlist"}</button>
+              <button class="ghost-btn" type="button" data-set-baseline="${escapeHtml(winner.run_id)}">${ctx.decision.isBaselineRun(ctx.store, winner.run_id) ? "Clear baseline" : "Set baseline"}</button>
             </div>
-          </article>
-        `).join("")}
+          </section>
+          <section class="artifact-panel run-spotlight-card">
+            <div class="section-label">Ranking controls</div>
+            <h3>Re-rank compare set</h3>
+            <div class="workflow-actions compare-rank-actions">
+              ${["sharpe_simple", "total_return", "max_drawdown", "trades"].map((metric) => `
+                <button class="ghost-btn ${rankMetric === metric ? "is-selected" : ""}" type="button" data-compare-rank="${escapeHtml(metric)}">${escapeHtml(titleCase(metric.replace("_", " ")))}</button>
+              `).join("")}
+            </div>
+            <dl class="metric-list compact">
+              ${compareMetric("Candidates in set", formatCount(candidateRuns.length), candidateRuns.length ? "tone-warning" : "")}
+              ${compareMetric("Shortlisted in set", formatCount(shortlistedRuns.length), shortlistedRuns.length ? "tone-positive" : "")}
+              ${compareMetric("Baseline present", includedBaseline ? "yes" : "no", includedBaseline ? "tone-positive" : "tone-warning")}
+              ${compareMetric("Runner-up", runnerUp?.run_id || "none", "")}
+            </dl>
+          </section>
+        </aside>
       </div>
     </div>
   `;
 }
 
-function renderRunsTable(runs, store, decision) {
+function renderRunsTable(runs, ctx) {
   if (!Array.isArray(runs) || !runs.length) {
-    return `<div class="empty-state">No runs are indexed yet. Launch a run or wait for canonical artifacts to appear.</div>`;
+    return renderEmptyState("No runs are indexed yet. Launch a run or wait for canonical artifacts to appear.");
   }
   return `
     <div class="runs-table-wrap">
@@ -706,84 +768,89 @@ function renderRunsTable(runs, store, decision) {
         <thead>
           <tr>
             <th>Run</th>
-            <th>Mode</th>
-            <th>Ticker</th>
-            <th>Created</th>
-            <th>Commit</th>
+            <th>Window</th>
             <th>Return</th>
             <th>Sharpe</th>
             <th>Drawdown</th>
             <th>Trades</th>
-            <th>Evidence</th>
-            <th>Decision</th>
-            <th>Next</th>
+            <th>State</th>
+            <th>Flags</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          ${runs.map((run) => renderRunsRow(run, store, decision)).join("")}
+          ${runs.map((run) => renderRunsRow(run, ctx)).join("")}
         </tbody>
       </table>
     </div>
   `;
 }
 
-function renderRunsRow(run, store, decision) {
+function renderRunsRow(run, ctx) {
   const runId = run?.run_id || "";
   const commitLabel = shortCommit(run?.git_commit) || "-";
+  const decision = ctx.decision;
+  const store = ctx.store;
   const candidateLabel = decision.isCandidateRun(store, runId) ? "Unmark candidate" : "Mark candidate";
-  const decisionState = decision.isBaselineRun(store, runId)
-    ? { label: "Baseline", meta: "Reference run is pinned.", tone: "positive" }
-    : decision.isShortlistedRun(store, runId)
-      ? { label: "Shortlisted", meta: "Ready for compare once baseline/peer exists.", tone: "positive" }
-      : decision.isCandidateRun(store, runId)
-        ? { label: "Candidate", meta: "Tracked locally but not shortlisted.", tone: "warning" }
-        : { label: "Untracked", meta: "Not in the decision queue yet.", tone: "neutral" };
-  const nextAction = decision.isBaselineRun(store, runId)
-    ? { label: "Shortlist a peer", meta: "Decision compare needs another run against this baseline.", tone: "warning" }
-    : decision.isShortlistedRun(store, runId)
-      ? { label: "Open compare", meta: "Use shortlist compare or set baseline if missing.", tone: "positive" }
-      : decision.isCandidateRun(store, runId)
-        ? { label: "Shortlist or clear", meta: "Promote only after checking evidence.", tone: "warning" }
-        : { label: "Inspect detail", meta: "Open run or artifacts before promoting.", tone: "warning" };
+  const latestJob = ctx.getRunRelatedJobs?.(runId)?.[0] || null;
+  const decisionSignal = resolveDecisionSignal(decision.summarizeCandidateState(store, runId));
+  const launchSignal = resolveLaunchSignal(latestJob?.status, { emptyLabel: "Launch pending" });
+  const evidenceSignal = resolveEvidenceSignal(run?.path ? "available" : "missing");
   return `
     <tr class="runs-row">
-      <td class="mono-cell">${escapeHtml(runId)}</td>
-      <td>${escapeHtml(titleCase(run?.mode || "unknown"))}</td>
-      <td>${escapeHtml(run?.ticker || "-")}</td>
-      <td>${escapeHtml(formatDateTime(run?.created_at))}</td>
-      <td class="mono-cell">${escapeHtml(commitLabel)}</td>
+      <td>
+        <div class="run-primary-cell">
+          <div class="run-primary-title-row">
+            <span class="mono-cell run-primary-id">${escapeHtml(runId)}</span>
+            <span class="run-inline-chip">${escapeHtml(titleCase(run?.mode || "unknown"))}</span>
+          </div>
+          <div class="run-primary-meta">
+            <span>${escapeHtml(run?.ticker || "-")}</span>
+            <span>${escapeHtml(formatDateTime(run?.created_at))}</span>
+            <span class="mono-cell">${escapeHtml(commitLabel)}</span>
+          </div>
+        </div>
+      </td>
+      <td class="mono-cell">${escapeHtml(`${run?.start || "-"} -> ${run?.end || "-"}`)}</td>
       <td class="${escapeHtml(toneClass(run?.total_return, true))}">${escapeHtml(formatPercent(run?.total_return))}</td>
       <td>${escapeHtml(formatNumber(run?.sharpe_simple))}</td>
       <td class="${escapeHtml(toneClass(run?.max_drawdown, false))}">${escapeHtml(formatPercent(run?.max_drawdown))}</td>
       <td>${escapeHtml(formatCount(run?.trades))}</td>
       <td>
-        <div class="table-state tone-warning">
-          <strong>Needs inspection</strong>
-          <span>Open detail or artifacts to confirm canonical evidence.</span>
+        <div class="run-state-stack">
+          ${renderRunsStateRow("Decision", decisionSignal.label, decisionSignal.tone)}
+          ${renderRunsStateRow("Launch", launchSignal.label, launchSignal.tone)}
+          ${renderRunsStateRow("Evidence", evidenceSignal.label, evidenceSignal.tone)}
         </div>
       </td>
-      <td>
-        <div class="table-state tone-${escapeHtml(decisionState.tone)}">
-          <strong>${escapeHtml(decisionState.label)}</strong>
-          <span>${escapeHtml(decisionState.meta)}</span>
-        </div>
-      </td>
-      <td>
-        <div class="table-state tone-${escapeHtml(nextAction.tone)}">
-          <strong>${escapeHtml(nextAction.label)}</strong>
-          <span>${escapeHtml(nextAction.meta)}</span>
-        </div>
-      </td>
+      <td><div class="run-flags-cell">${renderCandidateFlags(store, runId, decision)}</div></td>
       <td>
         <div class="runs-row-actions">
-          <button class="ghost-btn" type="button" data-open-run="${escapeHtml(runId)}">Open run</button>
-          <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(runId)}">Artifacts</button>
-          <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(runId)}">${escapeHtml(candidateLabel)}</button>
+          ${renderActionButton({ label: "Open run", dataset: { openRun: runId } })}
+          ${renderActionButton({ label: "Artifacts", dataset: { openArtifacts: runId } })}
+          ${renderActionButton({ label: candidateLabel, dataset: { markCandidate: runId } })}
         </div>
       </td>
     </tr>
   `;
+}
+
+function renderRunsStateRow(label, value, tone) {
+  const toneClass = normalizeTone(tone);
+  return `
+    <div class="run-state-row">
+      <span class="run-state-dot ${escapeHtml(toneClass)}" aria-hidden="true"></span>
+      <span class="run-state-label">${escapeHtml(label)}</span>
+      <span class="run-state-value">${escapeHtml(value)}</span>
+    </div>
+  `;
+}
+
+function resolveRunsStateTone(value, kind) {
+  if (kind === "decision") return resolveDecisionSignal(value).tone;
+  if (kind === "launch") return resolveLaunchSignal(value, { emptyLabel: "Launch pending" }).tone;
+  if (kind === "evidence") return resolveEvidenceSignal(value).tone;
+  return "tone-neutral";
 }
 
 export function renderArtifactsTab(tab, ctx) {
@@ -797,24 +864,21 @@ export function renderArtifactsTab(tab, ctx) {
   const primaryResult = selectPrimaryResult(run, report);
   const latestRelatedJob = ctx.getRunRelatedJobs(run.run_id)[0] || null;
   const configEntries = summarizeObjectEntries(report?.config_resolved);
-  const snapshot = buildRunDecisionSnapshot(run, detail, ctx);
-  const compareReady = (ctx.getDecisionCompareRunIds?.() || []).length >= 2;
   return `
     <div class="artifact-shell evidence-shell">
-      ${renderDecisionFeedbackBanner(ctx, [run.run_id])}
       <div class="artifact-top">
         <div>
           <div class="section-label">Artifacts</div>
           <h3>${escapeHtml(run.run_id)}</h3>
           <div class="artifact-meta">${escapeHtml(run.ticker || "-")} · ${escapeHtml(titleCase(run.mode || "unknown"))} · ${escapeHtml(formatDateTime(run.created_at))}</div>
         </div>
-        <div class="workflow-actions">
-          <button class="ghost-btn" type="button" data-open-run="${escapeHtml(run.run_id)}">Open run</button>
-          <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(run.run_id)}">${ctx.decision.isCandidateRun(ctx.store, run.run_id) ? "Unmark candidate" : "Mark candidate"}</button>
-          <button class="ghost-btn" type="button" data-shortlist-run="${escapeHtml(run.run_id)}">${ctx.decision.isShortlistedRun(ctx.store, run.run_id) ? "Remove shortlist" : "Add shortlist"}</button>
-          <button class="ghost-btn" type="button" data-set-baseline="${escapeHtml(run.run_id)}">${ctx.decision.isBaselineRun(ctx.store, run.run_id) ? "Clear baseline" : "Set baseline"}</button>
-          ${detail.reportUrl ? `<button class="ghost-btn" type="button" data-open-external="${escapeHtml(detail.reportUrl)}">Raw report</button>` : ""}
-        </div>
+        ${renderActionRow([
+          renderActionButton({ label: "Open run", dataset: { openRun: run.run_id } }),
+          renderActionButton({ label: ctx.decision.isCandidateRun(ctx.store, run.run_id) ? "Unmark candidate" : "Mark candidate", dataset: { markCandidate: run.run_id } }),
+          renderActionButton({ label: ctx.decision.isShortlistedRun(ctx.store, run.run_id) ? "Remove shortlist" : "Add shortlist", dataset: { shortlistRun: run.run_id } }),
+          renderActionButton({ label: ctx.decision.isBaselineRun(ctx.store, run.run_id) ? "Clear baseline" : "Set baseline", dataset: { setBaseline: run.run_id } }),
+          detail.reportUrl ? renderActionButton({ label: "Raw report", dataset: { openExternal: detail.reportUrl } }) : "",
+        ])}
       </div>
       <div class="tab-summary-grid">
         ${renderSummaryCard("Manifest files", String(artifacts.length))}
@@ -824,17 +888,6 @@ export function renderArtifactsTab(tab, ctx) {
       </div>
       <div class="evidence-grid">
         <div class="evidence-main">
-          <section class="artifact-panel">
-            <div class="section-label">Decision clarity</div>
-            <h3>What is ready and what should happen next</h3>
-            ${renderDecisionStateCards(snapshot)}
-            <div class="workflow-actions">
-              <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(run.run_id)}">${ctx.decision.isCandidateRun(ctx.store, run.run_id) ? "Unmark candidate" : "Mark candidate"}</button>
-              <button class="ghost-btn" type="button" data-shortlist-run="${escapeHtml(run.run_id)}">${ctx.decision.isShortlistedRun(ctx.store, run.run_id) ? "Remove shortlist" : "Add shortlist"}</button>
-              <button class="ghost-btn" type="button" data-set-baseline="${escapeHtml(run.run_id)}">${ctx.decision.isBaselineRun(ctx.store, run.run_id) ? "Clear baseline" : "Set baseline"}</button>
-              <button class="ghost-btn" type="button" data-open-decision-compare="${escapeHtml(run.run_id)}" ${compareReady ? "" : "disabled"}>Open decision compare</button>
-            </div>
-          </section>
           <section class="artifact-panel">
             <div class="section-label">Canonical outputs</div>
             <h3>Artifact manifest</h3>
@@ -899,59 +952,160 @@ export function renderArtifactsTab(tab, ctx) {
 export function renderCandidatesTab(tab, ctx) {
   const filter = tab.filter || "all";
   const allEntries = ctx.decision.getCandidateEntriesResolved(ctx.store, ctx.findRun);
-  const shortlistEntries = allEntries.filter((entry) => entry.shortlisted);
+  const sortedEntries = [...allEntries].sort((left, right) => {
+    const leftBaseline = ctx.decision.isBaselineRun(ctx.store, left.run_id) ? 1 : 0;
+    const rightBaseline = ctx.decision.isBaselineRun(ctx.store, right.run_id) ? 1 : 0;
+    if (leftBaseline !== rightBaseline) return rightBaseline - leftBaseline;
+    const leftShortlist = left.shortlisted ? 1 : 0;
+    const rightShortlist = right.shortlisted ? 1 : 0;
+    if (leftShortlist !== rightShortlist) return rightShortlist - leftShortlist;
+    const leftCreated = new Date(left.run?.created_at || 0).getTime();
+    const rightCreated = new Date(right.run?.created_at || 0).getTime();
+    return rightCreated - leftCreated;
+  });
+  const shortlistEntries = sortedEntries.filter((entry) => entry.shortlisted);
   const visibleEntries = filter === "shortlist"
     ? shortlistEntries
     : filter === "baseline"
-    ? allEntries.filter((entry) => entry.run_id === ctx.store.baseline_run_id)
-    : allEntries;
+    ? sortedEntries.filter((entry) => entry.run_id === ctx.store.baseline_run_id)
+    : sortedEntries;
+  const compareReady = shortlistEntries.length + (ctx.store.baseline_run_id ? 1 : 0) >= 2;
+  const visibleLabels = visibleEntries.slice(0, 4).map((entry) => entry.run_id);
 
   return `
-    <div class="tab-shell">
-      ${renderDecisionFeedbackBanner(ctx)}
+    <div class="tab-shell candidates-tab">
       <div class="artifact-top">
         <div>
           <div class="section-label">Decision layer</div>
           <h3>Candidates and shortlist</h3>
           <div class="artifact-meta">Persisted locally in QuantLab Desktop. This is the minimum layer that turns observation into choice.</div>
         </div>
-        <div class="workflow-actions">
-          <button class="ghost-btn" type="button" data-open-shortlist-compare="true">Open shortlist compare</button>
-          ${ctx.store.baseline_run_id ? `<button class="ghost-btn" type="button" data-open-run="${escapeHtml(ctx.store.baseline_run_id)}">Open baseline</button>` : ""}
-        </div>
+        ${renderActionRow([
+          renderActionButton({ label: "Open shortlist compare", dataset: { openShortlistCompare: true } }),
+          ctx.store.baseline_run_id ? renderActionButton({ label: "Open baseline", dataset: { openRun: ctx.store.baseline_run_id } }) : "",
+        ])}
       </div>
       <div class="tab-summary-grid">
-        ${renderSummaryCard("Candidates", String(allEntries.length))}
+        ${renderSummaryCard("Candidates", String(sortedEntries.length))}
         ${renderSummaryCard("Shortlisted", String(shortlistEntries.length))}
         ${renderSummaryCard("Baseline", ctx.store.baseline_run_id || "None")}
         ${renderSummaryCard("Indexed runs", String(ctx.getRuns().length))}
       </div>
-      <section class="artifact-panel">
-        <div class="section-label">Filters</div>
-        <h3>Focus the decision queue</h3>
-        <div class="workflow-actions compare-rank-actions">
-          ${["all", "shortlist", "baseline"].map((option) => `
-            <button class="ghost-btn ${filter === option ? "is-selected" : ""}" type="button" data-candidates-filter="${escapeHtml(option)}">${escapeHtml(titleCase(option))}</button>
-          `).join("")}
+      <div class="candidates-workbench">
+        <div class="candidates-workbench-main">
+          <section class="artifact-panel">
+            <div class="section-label">${escapeHtml(titleCase(filter))}</div>
+            <h3>Decision queue</h3>
+            <div class="artifact-meta">Sorted by baseline, shortlist, and recency so the queue behaves like a real operator surface.</div>
+            ${visibleEntries.length ? `<div class="candidate-list">${visibleEntries.map((entry) => renderCandidateCard(entry, false, ctx)).join("")}</div>` : `<div class="empty-state">No runs match this candidate filter yet.</div>`}
+          </section>
         </div>
-      </section>
-      ${ctx.store.baseline_run_id ? `
-        <section class="artifact-panel">
-          <div class="section-label">Pinned reference</div>
-          <h3>Baseline</h3>
-          ${renderCandidateCard(
-            ctx.decision.getCandidateEntryResolved(ctx.store, ctx.store.baseline_run_id, ctx.findRun) ||
-              ctx.decision.buildMissingCandidateEntry(ctx.store.baseline_run_id, ctx.findRun),
-            true,
-            ctx,
-          )}
-        </section>
-      ` : ""}
-      <section class="artifact-panel">
-        <div class="section-label">${escapeHtml(titleCase(filter))}</div>
-        <h3>Candidate list</h3>
-        ${visibleEntries.length ? `<div class="candidate-list">${visibleEntries.map((entry) => renderCandidateCard(entry, false, ctx)).join("")}</div>` : `<div class="empty-state">No runs match this candidate filter yet.</div>`}
-      </section>
+        <aside class="candidates-workbench-side">
+          <section class="artifact-panel run-spotlight-card">
+            <div class="section-label">Queue controls</div>
+            <h3>Focus the decision queue</h3>
+            <div class="workflow-actions compare-rank-actions">
+              ${["all", "shortlist", "baseline"].map((option) =>
+                renderActionButton({
+                  label: titleCase(option),
+                  dataset: { candidatesFilter: option },
+                  className: `ghost-btn ${filter === option ? "is-selected" : ""}`.trim(),
+                }),
+              ).join("")}
+            </div>
+            ${renderMetricList([
+              { label: "Visible entries", value: formatCount(visibleEntries.length) },
+              { label: "Compare ready", value: compareReady ? "yes" : "no", tone: compareReady ? "tone-positive" : "tone-warning" },
+              { label: "Visible run ids", value: visibleLabels.length ? visibleLabels.join(", ") : "none" },
+            ], { compact: true })}
+            ${renderActionRow([
+              renderActionButton({ label: "Open shortlist compare", dataset: { openShortlistCompare: true }, disabled: !compareReady }),
+            ])}
+          </section>
+          ${ctx.store.baseline_run_id ? `
+            <section class="artifact-panel run-spotlight-card">
+              <div class="section-label">Pinned reference</div>
+              <h3>Baseline</h3>
+              ${renderCandidateCard(
+                ctx.decision.getCandidateEntryResolved(ctx.store, ctx.store.baseline_run_id, ctx.findRun) ||
+                  ctx.decision.buildMissingCandidateEntry(ctx.store.baseline_run_id, ctx.findRun),
+                true,
+                ctx,
+              )}
+            </section>
+          ` : `
+            <section class="artifact-panel run-spotlight-card">
+              <div class="section-label">Pinned reference</div>
+              <h3>No baseline yet</h3>
+              <div class="empty-state">Pin one run as baseline so compare stays anchored while the shortlist evolves.</div>
+            </section>
+          `}
+          <section class="artifact-panel run-spotlight-card">
+            <div class="section-label">Shortlist state</div>
+            <h3>Comparison readiness</h3>
+            ${shortlistEntries.length ? `
+              <div class="artifact-list compact-artifact-list">
+                ${shortlistEntries.slice(0, 4).map((entry) => `
+                  <button class="artifact-link compact-link" type="button" data-open-run="${escapeHtml(entry.run_id)}">
+                    <span>${escapeHtml(entry.run_id)}</span>
+                    <span>${escapeHtml(entry.run?.ticker || "-")}</span>
+                  </button>
+                `).join("")}
+              </div>
+            ` : `<div class="empty-state">No shortlisted runs yet. Promote candidates here before opening compare.</div>`}
+          </section>
+        </aside>
+      </div>
+    </div>
+  `;
+}
+
+function renderCompareRankingTable(runs, rankMetric, ctx) {
+  return `
+    <div class="runs-table-wrap compare-table-wrap">
+      <table class="runs-table compare-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Run</th>
+            <th>Mode</th>
+            <th>Ticker</th>
+            <th>Created</th>
+            <th>Rank metric</th>
+            <th>Return</th>
+            <th>Sharpe</th>
+            <th>Drawdown</th>
+            <th>Trades</th>
+            <th>Flags</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${runs.map((run, index) => `
+            <tr class="runs-row compare-row ${index === 0 ? "compare-row-leader" : ""}">
+              <td class="mono-cell">#${index + 1}</td>
+              <td class="mono-cell">${escapeHtml(run.run_id)}</td>
+              <td>${escapeHtml(titleCase(run.mode || "unknown"))}</td>
+              <td>${escapeHtml(run.ticker || "-")}</td>
+              <td>${escapeHtml(formatDateTime(run.created_at))}</td>
+              <td class="${escapeHtml(rankMetric === "max_drawdown" ? toneClass(run.max_drawdown, false) : toneClass(run[rankMetric], true))}">${escapeHtml(formatMetricForDisplay(run[rankMetric], rankMetric))}</td>
+              <td class="${escapeHtml(toneClass(run.total_return, true))}">${escapeHtml(formatPercent(run.total_return))}</td>
+              <td>${escapeHtml(formatNumber(run.sharpe_simple))}</td>
+              <td class="${escapeHtml(toneClass(run.max_drawdown, false))}">${escapeHtml(formatPercent(run.max_drawdown))}</td>
+              <td>${escapeHtml(formatCount(run.trades))}</td>
+              <td><div class="run-flags-cell">${renderCandidateFlags(ctx.store, run.run_id, ctx.decision)}</div></td>
+              <td>
+                <div class="runs-row-actions">
+                  <button class="ghost-btn" type="button" data-open-run="${escapeHtml(run.run_id)}">Open</button>
+                  <button class="ghost-btn" type="button" data-open-artifacts="${escapeHtml(run.run_id)}">Artifacts</button>
+                  <button class="ghost-btn" type="button" data-shortlist-run="${escapeHtml(run.run_id)}">${ctx.decision.isShortlistedRun(ctx.store, run.run_id) ? "Unshortlist" : "Shortlist"}</button>
+                  <button class="ghost-btn" type="button" data-set-baseline="${escapeHtml(run.run_id)}">${ctx.decision.isBaselineRun(ctx.store, run.run_id) ? "Clear baseline" : "Baseline"}</button>
+                </div>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
     </div>
   `;
 }
@@ -1257,15 +1411,152 @@ function renderSweepDecisionCard(entry, ctx) {
         <span class="metric-chip">Trades ${formatCount(Number(row.trades ?? row.n_test_runs))}</span>
       </div>
       ${note ? `<div class="candidate-note">${escapeHtml(note)}</div>` : ""}
-      <div class="workflow-actions">
-        <button class="ghost-btn" type="button" data-sweep-track-entry="${escapeHtml(entry.entry_id)}">${ctx.sweepDecision.isTracked(ctx.sweepDecisionStore, entry.entry_id) ? "Untrack" : "Track"}</button>
-        <button class="ghost-btn" type="button" data-sweep-shortlist-entry="${escapeHtml(entry.entry_id)}">${ctx.sweepDecision.isShortlisted(ctx.sweepDecisionStore, entry.entry_id) ? "Remove shortlist" : "Add shortlist"}</button>
-        <button class="ghost-btn" type="button" data-sweep-baseline-entry="${escapeHtml(entry.entry_id)}">${ctx.sweepDecision.isBaseline(ctx.sweepDecisionStore, entry.entry_id) ? "Clear baseline" : "Set baseline"}</button>
-        <button class="ghost-btn" type="button" data-sweep-note-entry="${escapeHtml(entry.entry_id)}">${note ? "Edit note" : "Add note"}</button>
-        ${configPath ? `<button class="ghost-btn" type="button" data-experiment-launch-config="${escapeHtml(configPath)}">Launch sweep</button>` : ""}
-        ${sweep?.path ? `<button class="ghost-btn" type="button" data-experiment-open-path="${escapeHtml(sweep.path)}">Open folder</button>` : ""}
-      </div>
+      ${renderActionRow([
+        renderActionButton({ label: ctx.sweepDecision.isTracked(ctx.sweepDecisionStore, entry.entry_id) ? "Untrack" : "Track", dataset: { sweepTrackEntry: entry.entry_id } }),
+        renderActionButton({ label: ctx.sweepDecision.isShortlisted(ctx.sweepDecisionStore, entry.entry_id) ? "Remove shortlist" : "Add shortlist", dataset: { sweepShortlistEntry: entry.entry_id } }),
+        renderActionButton({ label: ctx.sweepDecision.isBaseline(ctx.sweepDecisionStore, entry.entry_id) ? "Clear baseline" : "Set baseline", dataset: { sweepBaselineEntry: entry.entry_id } }),
+        renderActionButton({ label: note ? "Edit note" : "Add note", dataset: { sweepNoteEntry: entry.entry_id } }),
+        configPath ? renderActionButton({ label: "Launch sweep", dataset: { experimentLaunchConfig: configPath } }) : "",
+        sweep?.path ? renderActionButton({ label: "Open folder", dataset: { experimentOpenPath: sweep.path } }) : "",
+      ])}
     </article>
+  `;
+}
+
+export function renderSystemTab(ctx) {
+  const workspace = ctx.workspace || {};
+  const snapshotStatus = ctx.snapshotStatus || {};
+  const snapshot = ctx.snapshot || {};
+  const launchControl = snapshot.launchControl || null;
+  const paper = snapshot.paperHealth || null;
+  const broker = snapshot.brokerHealth || null;
+  const stepbit = snapshot.stepbitWorkspace || null;
+  const liveUrls = stepbit?.live_urls || {};
+  const runs = ctx.getRuns?.() || [];
+  const jobs = Array.isArray(launchControl?.jobs) ? launchControl.jobs.slice(0, 5) : [];
+  const latestRun = ctx.getLatestRun?.() || null;
+  const latestFailedJob = ctx.getLatestFailedJob?.() || null;
+  const candidateEntries = ctx.decision.getCandidateEntriesResolved(ctx.store, ctx.findRun);
+  const shortlistCount = candidateEntries.filter((entry) => entry.shortlisted && entry.run).length;
+  const brokerAlerts = Array.isArray(broker?.alerts) ? broker.alerts : [];
+  const systemUrls = collectSystemUrls(workspace, liveUrls);
+  const logPreview = collectSystemLogPreview(workspace.logs, ctx.maxLogPreviewChars);
+  const refreshState = describeSnapshotRefresh(snapshotStatus);
+  const watchItems = buildSystemWatchItems({
+    workspace,
+    snapshotStatus,
+    brokerAlerts,
+    latestFailedJob,
+    launchJobs: jobs,
+    liveUrls,
+    latestRun,
+  });
+
+  return `
+    <div class="tab-shell">
+      <div class="artifact-top">
+        <div>
+          <div class="section-label">Runtime diagnostics</div>
+          <h3>System</h3>
+          <div class="artifact-meta">Native runtime inventory for bootstrap state, API refresh, launch visibility, and workspace continuity.</div>
+        </div>
+        ${renderActionRow([
+          renderActionButton({ label: "Retry runtime", dataset: { systemRetry: true } }),
+          workspace.serverUrl ? renderActionButton({ label: "Open research_ui", dataset: { openSystemUrl: "/research_ui/index.html" } }) : "",
+          latestRun?.run_id ? renderActionButton({ label: "Latest run", dataset: { openRun: latestRun.run_id } }) : "",
+          jobs[0]?.request_id ? renderActionButton({ label: "Latest launch review", dataset: { openJob: jobs[0].request_id } }) : "",
+        ])}
+      </div>
+      <div class="tab-summary-grid">
+        ${renderSummaryCard("QuantLab", resolveWorkspaceBootstrapSignal(workspace).label, resolveWorkspaceBootstrapSignal(workspace).tone)}
+        ${renderSummaryCard("Snapshot", refreshState.label, refreshState.tone)}
+        ${renderSummaryCard("Indexed runs", formatCount(runs.length), runs.length ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Launch jobs", formatCount(Array.isArray(launchControl?.jobs) ? launchControl.jobs.length : 0), jobs.length ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Paper state", paper?.available ? "Ready" : "Pending", paper?.available ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Broker alerts", formatCount(brokerAlerts.length), brokerAlerts.length ? "tone-negative" : broker?.available ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Stepbit frontend", liveUrls.frontend_reachable ? "Attached" : "Detached", liveUrls.frontend_reachable ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Stepbit core", liveUrls.core_ready ? "Ready" : liveUrls.core_reachable ? "Partial" : "Detached", liveUrls.core_ready ? "tone-positive" : liveUrls.core_reachable ? "tone-warning" : "tone-negative")}
+      </div>
+      <div class="artifact-grid system-grid">
+        <section class="artifact-panel system-stack">
+          <div class="section-label">Workspace</div>
+          <h3>Bootstrap and refresh state</h3>
+          <dl class="metric-list compact">
+            ${compareMetric("Workspace state", resolveWorkspaceBootstrapSignal(workspace).label, resolveWorkspaceBootstrapSignal(workspace).tone)}
+            ${compareMetric("Server URL", workspace.serverUrl || "pending", "")}
+            ${compareMetric("Server source", titleCase(workspace.source || "unknown"), "")}
+            ${compareMetric("Refresh state", refreshState.label, refreshState.tone)}
+            ${compareMetric("Last refresh", refreshState.lastSuccessAt, "")}
+            ${compareMetric("Consecutive refresh errors", formatCount(Number(snapshotStatus.consecutiveErrors || 0)), "")}
+            ${compareMetric("Refresh mode", snapshotStatus.refreshPaused ? "Paused" : "Active", snapshotStatus.refreshPaused ? "tone-warning" : "tone-positive")}
+            ${compareMetric("Workspace logs", formatCount(Array.isArray(workspace.logs) ? workspace.logs.length : 0), "")}
+          </dl>
+          ${workspace.error ? `<div class="ops-callout tone-negative">${escapeHtml(workspace.error)}</div>` : ""}
+        </section>
+        <section class="artifact-panel system-stack">
+          <div class="section-label">Surfaces</div>
+          <h3>Reachable local interfaces</h3>
+          ${systemUrls.length ? `
+            <div class="system-link-list">
+              ${systemUrls.map((entry) => `
+                <button class="system-link-item" type="button" data-open-system-url="${escapeHtml(entry.url)}">
+                  <strong>${escapeHtml(entry.label)}</strong>
+                  <span>${escapeHtml(entry.url)}</span>
+                </button>
+              `).join("")}
+            </div>
+          ` : `<div class="empty-state">No addressable local surfaces are visible yet. Wait for bootstrap or retry the runtime.</div>`}
+        </section>
+        <section class="artifact-panel system-stack">
+          <div class="section-label">Launch queue</div>
+          <h3>Recent tracked jobs</h3>
+          ${jobs.length ? `
+            <div class="system-job-list">
+              ${jobs.map((job) => `
+                <button class="system-job-item" type="button" data-open-job="${escapeHtml(job.request_id || "")}">
+                  <div class="system-job-top">
+                    <strong>${escapeHtml(titleCase(job.command || "unknown"))}</strong>
+                    <span class="${escapeHtml(resolveLaunchSignal(job.status, { emptyLabel: "Launch pending" }).tone)}">${escapeHtml(resolveLaunchSignal(job.status, { emptyLabel: "Launch pending" }).label)}</span>
+                  </div>
+                  <div class="artifact-meta">${escapeHtml(job.request_id || "-")}${job.run_id ? ` · ${escapeHtml(job.run_id)}` : ""}</div>
+                  <div class="artifact-meta">${escapeHtml(job.summary || "No summary")} · ${escapeHtml(formatDateTime(job.created_at || job.started_at))}</div>
+                </button>
+              `).join("")}
+            </div>
+          ` : `<div class="empty-state">No launch jobs are available yet.</div>`}
+        </section>
+        <section class="artifact-panel system-stack">
+          <div class="section-label">Decision memory</div>
+          <h3>Local selection state</h3>
+          <dl class="metric-list compact">
+            ${compareMetric("Candidates", formatCount(candidateEntries.length), "")}
+            ${compareMetric("Shortlisted", formatCount(shortlistCount), "")}
+            ${compareMetric("Baseline", ctx.store?.baseline_run_id || "none", "")}
+            ${compareMetric("Latest run", latestRun?.run_id || "none", "")}
+            ${compareMetric("Latest failed launch", latestFailedJob?.request_id || "none", "")}
+          </dl>
+        </section>
+      </div>
+      <div class="artifact-grid system-grid">
+        <section class="artifact-panel system-stack">
+          <div class="section-label">Attention</div>
+          <h3>What needs operator review</h3>
+          <div class="system-watch-list">
+            ${watchItems.map((item) => `
+              <article class="system-watch-item tone-${escapeHtml(item.tone || "neutral")}">
+                <strong>${escapeHtml(item.label)}</strong>
+                <p>${escapeHtml(item.body)}</p>
+              </article>
+            `).join("")}
+          </div>
+        </section>
+        <section class="artifact-panel system-stack">
+          <div class="section-label">Workspace logs</div>
+          <h3>Latest bootstrap output</h3>
+          ${logPreview ? `<pre class="system-log">${escapeHtml(logPreview)}</pre>` : `<div class="empty-state">No workspace log lines have been captured yet.</div>`}
+        </section>
+      </div>
+    </div>
   `;
 }
 
@@ -1383,14 +1674,14 @@ export function renderPaperOpsTab(ctx) {
         </div>
       </div>
       <div class="tab-summary-grid">
-        ${renderSummaryCard("Paper sessions", String(paper?.total_sessions ?? 0), paperReady ? "tone-positive" : "")}
-        ${renderSummaryCard("Latest paper status", titleCase(paper?.latest_session_status || "none"), paper?.latest_issue_session_id ? "tone-negative" : paperReady ? "tone-positive" : "")}
+        ${renderSummaryCard("Paper state", paperReady ? "Ready" : "Pending", paperReady ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Latest paper state", titleCase(paper?.latest_session_status || "none"), paper?.latest_issue_session_id ? "tone-negative" : paperReady ? "tone-positive" : "tone-warning")}
         ${renderSummaryCard("Broker boundary", brokerReady ? "Visible" : "Missing", brokerHasAlerts ? "tone-negative" : brokerReady ? "tone-positive" : "tone-warning")}
-        ${renderSummaryCard("Broker alerts", broker?.has_alerts ? "Present" : "None", broker?.has_alerts ? "tone-negative" : "tone-positive")}
-        ${renderSummaryCard("Decision compare", decisionCompareRunIds.length ? String(decisionCompareRunIds.length) : "0", decisionCompareRunIds.length >= 2 ? "tone-positive" : "")}
-        ${renderSummaryCard("Latest failed launch", latestFailedJob ? titleCase(latestFailedJob.command || "failed") : "None", latestFailedJob ? "tone-warning" : "tone-positive")}
-        ${renderSummaryCard("Stepbit frontend", stepbit?.live_urls?.frontend_reachable ? "Up" : "Down", stepbit?.live_urls?.frontend_reachable ? "tone-positive" : "tone-negative")}
-        ${renderSummaryCard("Stepbit core", stepbit?.live_urls?.core_ready ? "Ready" : stepbit?.live_urls?.core_reachable ? "Up" : "Down", stepbit?.live_urls?.core_ready ? "tone-positive" : stepbit?.live_urls?.core_reachable ? "" : "tone-negative")}
+        ${renderSummaryCard("Broker alerts", broker?.has_alerts ? "Review required" : "Clear", broker?.has_alerts ? "tone-negative" : "tone-positive")}
+        ${renderSummaryCard("Decision compare", decisionCompareRunIds.length >= 2 ? "Ready" : "Incomplete", decisionCompareRunIds.length >= 2 ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Latest failed launch", latestFailedJob ? "Review required" : "Clear", latestFailedJob ? "tone-warning" : "tone-positive")}
+        ${renderSummaryCard("Stepbit frontend", stepbit?.live_urls?.frontend_reachable ? "Attached" : "Detached", stepbit?.live_urls?.frontend_reachable ? "tone-positive" : "tone-negative")}
+        ${renderSummaryCard("Stepbit core", stepbit?.live_urls?.core_ready ? "Ready" : stepbit?.live_urls?.core_reachable ? "Partial" : "Detached", stepbit?.live_urls?.core_ready ? "tone-positive" : stepbit?.live_urls?.core_reachable ? "tone-warning" : "tone-negative")}
       </div>
       <div class="artifact-grid">
         <section class="artifact-panel">
@@ -1465,7 +1756,7 @@ export function renderPaperOpsTab(ctx) {
             <dl class="metric-list compact">
               ${compareMetric("Request", latestJob.request_id || "-", "")}
               ${compareMetric("Command", titleCase(latestJob.command || "unknown"), "")}
-              ${compareMetric("Status", titleCase(latestJob.status || "unknown"), latestJob.status === "failed" ? "tone-negative" : latestJob.status === "succeeded" ? "tone-positive" : "")}
+              ${compareMetric("Launch state", resolveLaunchSignal(latestJob.status, { emptyLabel: "Launch pending" }).label, resolveLaunchSignal(latestJob.status, { emptyLabel: "Launch pending" }).tone)}
               ${compareMetric("Run id", latestJob.run_id || "-", "")}
             </dl>
           ` : `<div class="empty-state">No launch jobs are available yet.</div>`}
@@ -1496,6 +1787,125 @@ function renderOpsChipRow(label, counts) {
       </div>
     </div>
   `;
+}
+
+function describeSnapshotRefresh(snapshotStatus) {
+  if (snapshotStatus?.status === "ready") {
+    return {
+      label: snapshotStatus.refreshPaused ? "Paused" : "Live",
+      tone: snapshotStatus.refreshPaused ? "tone-warning" : "tone-positive",
+      lastSuccessAt: snapshotStatus.lastSuccessAt ? formatDateTime(snapshotStatus.lastSuccessAt) : "Never",
+    };
+  }
+  if (snapshotStatus?.status === "error") {
+    return {
+      label: snapshotStatus.refreshPaused ? "Review required" : "Degraded",
+      tone: "tone-negative",
+      lastSuccessAt: snapshotStatus.lastSuccessAt ? formatDateTime(snapshotStatus.lastSuccessAt) : "Never",
+    };
+  }
+  if (snapshotStatus?.status === "loading") {
+    return {
+      label: "Refreshing",
+      tone: "tone-warning",
+      lastSuccessAt: snapshotStatus.lastSuccessAt ? formatDateTime(snapshotStatus.lastSuccessAt) : "Never",
+    };
+  }
+  return {
+    label: "Waiting",
+    tone: "tone-warning",
+    lastSuccessAt: snapshotStatus?.lastSuccessAt ? formatDateTime(snapshotStatus.lastSuccessAt) : "Never",
+  };
+}
+
+function collectSystemUrls(workspace, liveUrls) {
+  const entries = [];
+  if (workspace?.serverUrl) {
+    entries.push({ label: "Research UI", url: `${workspace.serverUrl.replace(/\/$/, "")}/research_ui/index.html` });
+  }
+  Object.entries(liveUrls || {}).forEach(([key, value]) => {
+    if (typeof value !== "string" || !/^https?:\/\//i.test(value)) return;
+    entries.push({
+      label: titleCase(String(key).replace(/_/g, " ")),
+      url: value,
+    });
+  });
+  return entries;
+}
+
+function collectSystemLogPreview(logs, maxChars) {
+  const lines = Array.isArray(logs) ? logs.filter((entry) => typeof entry === "string" && entry.trim()) : [];
+  if (!lines.length) return "";
+  return formatLogPreview(lines.slice(-12).join("\n"), maxChars);
+}
+
+function buildSystemWatchItems({ workspace, snapshotStatus, brokerAlerts, latestFailedJob, launchJobs, liveUrls, latestRun }) {
+  const items = [];
+  if (workspace?.error) {
+    items.push({
+      tone: "negative",
+      label: "Workspace error",
+      body: workspace.error,
+    });
+  } else {
+    items.push({
+      tone: workspace?.status === "ready" ? "positive" : "warning",
+      label: "Workspace bootstrap",
+      body: workspace?.status === "ready"
+        ? "Research UI is reachable from the desktop shell."
+        : "Bootstrap is incomplete or waiting for the local server.",
+    });
+  }
+  if (snapshotStatus?.status === "error") {
+    items.push({
+      tone: "negative",
+      label: "Snapshot refresh",
+      body: snapshotStatus.error || "The local API refresh loop is currently degraded.",
+    });
+  }
+  if (latestFailedJob) {
+    items.push({
+      tone: "warning",
+      label: "Latest failed launch",
+      body: `${latestFailedJob.request_id || "-"} · ${titleCase(latestFailedJob.command || "unknown")} should be reviewed before trusting the current path.`,
+    });
+  } else {
+    items.push({
+      tone: launchJobs.length ? "positive" : "neutral",
+      label: "Launch review",
+      body: launchJobs.length ? "No failed launch is visible in the tracked recent jobs." : "No launch activity is visible yet.",
+    });
+  }
+  if (brokerAlerts.length) {
+    items.push({
+      tone: "negative",
+      label: "Broker boundary",
+      body: brokerAlerts.slice(0, 2).map((alert) => alert.code || alert.session_id || "alert").join(" | "),
+    });
+  } else {
+    items.push({
+      tone: "positive",
+      label: "Broker boundary",
+      body: "No broker alerts are currently surfaced.",
+    });
+  }
+  items.push({
+    tone: liveUrls?.core_ready ? "positive" : liveUrls?.frontend_reachable || liveUrls?.backend_reachable ? "warning" : "neutral",
+    label: "Optional Stepbit boundary",
+    body: liveUrls?.core_ready
+      ? "Frontend, backend, and core are available."
+      : liveUrls?.frontend_reachable || liveUrls?.backend_reachable
+        ? "Some Stepbit surfaces are reachable, but the core is not ready."
+        : "Stepbit is currently inactive from the shell perspective.",
+  });
+  if (latestRun?.run_id) {
+    items.push({
+      tone: "neutral",
+      label: "Latest indexed run",
+      body: `${latestRun.run_id} is the freshest artifact path available for inspection.`,
+    });
+  }
+  return items;
 }
 
 function selectPaperOpsNextAction({ paper, broker, latestFailedJob, latestJob, latestRun, decisionCompareRunIds, baselineRunId }) {
@@ -1560,7 +1970,7 @@ export function renderJobTab(tab, ctx) {
   }
 
   const failureSummary = ctx.buildFailureExplanation(job, tab.stderrText || "");
-  const statusTone = job.status === "succeeded" ? "tone-positive" : job.status === "failed" ? "tone-negative" : "";
+  const statusSignal = resolveLaunchSignal(job.status, { emptyLabel: "Launch pending" });
 
   return `
     <div class="artifact-shell">
@@ -1577,7 +1987,7 @@ export function renderJobTab(tab, ctx) {
         </div>
       </div>
       <div class="tab-summary-grid">
-        ${renderSummaryCard("Status", titleCase(job.status || "unknown"), statusTone)}
+        ${renderSummaryCard("Launch state", statusSignal.label, statusSignal.tone)}
         ${renderSummaryCard("Started", formatDateTime(job.started_at))}
         ${renderSummaryCard("Ended", formatDateTime(job.ended_at))}
         ${renderSummaryCard("Run id", job.run_id || "-")}

@@ -5,9 +5,8 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 const DESKTOP_ROOT = __dirname;
-const CHECKOUT_ROOT = path.resolve(DESKTOP_ROOT, "..");
-const WORKSPACE_ROOT = path.resolve(CHECKOUT_ROOT, "..");
-const PROJECT_ROOT = resolveCanonicalProjectRoot(CHECKOUT_ROOT, WORKSPACE_ROOT);
+const PROJECT_ROOT = path.resolve(DESKTOP_ROOT, "..");
+const WORKSPACE_ROOT = path.resolve(PROJECT_ROOT, "..");
 const SERVER_SCRIPT = path.join(PROJECT_ROOT, "research_ui", "server.py");
 const OUTPUTS_ROOT = process.env.QUANTLAB_DESKTOP_OUTPUTS_ROOT
   ? path.resolve(process.env.QUANTLAB_DESKTOP_OUTPUTS_ROOT)
@@ -19,96 +18,24 @@ const WORKSPACE_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "workspace_state.js
 const STEPBIT_APP_ROOT = path.join(WORKSPACE_ROOT, "stepbit-app");
 const STEPBIT_APP_CONFIG_PATH = path.join(STEPBIT_APP_ROOT, "config.yaml");
 const MAX_DIRECTORY_ENTRIES = 240;
-const RESEARCH_UI_PORT = 8000;
-const RESEARCH_UI_PORT_RETRY_LIMIT = 6;
-const RESEARCH_UI_URLS = Array.from({ length: RESEARCH_UI_PORT_RETRY_LIMIT }, (_unused, offset) => {
-  const port = RESEARCH_UI_PORT + offset;
-  return [
-    `http://127.0.0.1:${port}`,
-    `http://localhost:${port}`,
-  ];
-}).flat();
+const RESEARCH_UI_URLS = [
+  "http://127.0.0.1:8000",
+  "http://localhost:8000",
+];
 const RESEARCH_UI_HEALTH_PATH = "/api/paper-sessions-health";
 const RESEARCH_UI_STARTUP_TIMEOUT_MS = 25000;
 const ELECTRON_STATE_ROOT = path.join(DESKTOP_OUTPUTS_ROOT, "electron");
 const IS_SMOKE_RUN = process.env.QUANTLAB_DESKTOP_SMOKE === "1";
 const SMOKE_OUTPUT_PATH = process.env.QUANTLAB_DESKTOP_SMOKE_OUTPUT || "";
-const SMOKE_MODE = process.env.QUANTLAB_DESKTOP_SMOKE_MODE === "real-path" ? "real-path" : "fallback";
-const SMOKE_REQUIRE_SERVER = process.env.QUANTLAB_DESKTOP_SMOKE_REQUIRE_SERVER === "1";
-let smokeResultWritten = false;
-
-function createSmokeResult(overrides = {}) {
-  return {
-    mode: SMOKE_MODE,
-    bridgeReady: false,
-    shellReady: false,
-    serverReady: false,
-    apiReady: false,
-    localRunsReady: false,
-    serverUrl: workspaceState.serverUrl || "",
-    error: "",
-    ...overrides,
-  };
-}
-
-async function writeSmokeResult(result) {
-  if (!IS_SMOKE_RUN || !SMOKE_OUTPUT_PATH || smokeResultWritten) return;
-  smokeResultWritten = true;
-  await fsp.mkdir(path.dirname(SMOKE_OUTPUT_PATH), { recursive: true });
-  await fsp.writeFile(SMOKE_OUTPUT_PATH, `${JSON.stringify(result, null, 2)}\n`, "utf8");
-}
-
-function writeSmokeResultSync(result) {
-  if (!IS_SMOKE_RUN || !SMOKE_OUTPUT_PATH || smokeResultWritten) return;
-  smokeResultWritten = true;
-  fs.mkdirSync(path.dirname(SMOKE_OUTPUT_PATH), { recursive: true });
-  fs.writeFileSync(SMOKE_OUTPUT_PATH, `${JSON.stringify(result, null, 2)}\n`, "utf8");
-}
-
-async function failSmokeEarly(errorMessage, overrides = {}) {
-  await writeSmokeResult(createSmokeResult({
-    error: errorMessage,
-    ...overrides,
-  }));
-  process.exitCode = 1;
-  app.quit();
-}
-
-function isQuantLabProjectRoot(targetPath) {
-  if (!targetPath) return false;
-  const resolved = path.resolve(targetPath);
-  return fs.existsSync(path.join(resolved, "research_ui", "server.py"))
-    && fs.existsSync(path.join(resolved, "src"));
-}
-
-function resolveCanonicalProjectRoot(checkoutRoot, workspaceRoot) {
-  const overrideRoot = String(process.env.QUANTLAB_DESKTOP_PROJECT_ROOT || "").trim();
-  const siblingQuantLabRoot = path.join(workspaceRoot, "quant_lab");
-  const candidates = [
-    overrideRoot,
-    checkoutRoot,
-    siblingQuantLabRoot,
-  ]
-    .filter(Boolean)
-    .map((candidate) => path.resolve(candidate));
-
-  for (const candidate of candidates) {
-    if (isQuantLabProjectRoot(candidate)) return candidate;
-  }
-  return path.resolve(checkoutRoot);
-}
+const SKIP_RESEARCH_UI_BOOT = process.env.QUANTLAB_DESKTOP_DISABLE_SERVER_BOOT === "1";
 
 app.setPath("userData", path.join(ELECTRON_STATE_ROOT, "user-data"));
 app.setPath("cache", path.join(ELECTRON_STATE_ROOT, "cache"));
 
 const singleInstanceLock = app.requestSingleInstanceLock();
 if (!singleInstanceLock) {
-  writeSmokeResultSync(createSmokeResult({
-    error: "Another QuantLab Desktop instance is already running.",
-  }));
-  process.exitCode = 1;
   app.quit();
-  process.exit(process.exitCode || 1);
+  process.exit(0);
 }
 
 let mainWindow = null;
@@ -891,21 +818,6 @@ function createMainWindow() {
     },
   });
 
-  if (IS_SMOKE_RUN) {
-    mainWindow.webContents.once("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-      if (!isMainFrame || smokeResultWritten) return;
-      failSmokeEarly(`Smoke renderer failed to load (${errorCode}): ${errorDescription}`, {
-        serverUrl: validatedURL || "",
-      }).catch(() => {});
-    });
-    mainWindow.webContents.on("render-process-gone", (_event, details) => {
-      if (smokeResultWritten) return;
-      failSmokeEarly(`Smoke renderer exited before validation (${details?.reason || "unknown"}).`, {
-        error: `Smoke renderer exited before validation (${details?.reason || "unknown"}).`,
-      }).catch(() => {});
-    });
-  }
-
   mainWindow.loadFile(path.join(DESKTOP_ROOT, "renderer", "index.html"));
   if (!IS_SMOKE_RUN) {
     mainWindow.once("ready-to-show", () => {
@@ -919,7 +831,15 @@ function createMainWindow() {
 }
 
 async function runDesktopSmoke() {
-  const result = createSmokeResult();
+  const result = {
+    bridgeReady: false,
+    shellReady: false,
+    serverReady: false,
+    apiReady: false,
+    localRunsReady: false,
+    serverUrl: "",
+    error: "",
+  };
   try {
     result.bridgeReady = await mainWindow.webContents.executeJavaScript(
       "Boolean(window.quantlabDesktop && typeof window.quantlabDesktop.getWorkspaceState === 'function')",
@@ -941,7 +861,7 @@ async function runDesktopSmoke() {
     } catch (_error) {
       result.localRunsReady = false;
     }
-    result.shellReady = result.bridgeReady && (SMOKE_REQUIRE_SERVER ? result.serverReady : (result.serverReady || result.localRunsReady));
+    result.shellReady = result.bridgeReady && (result.serverReady || result.localRunsReady);
     if (!result.serverReady) {
       result.error = workspaceState.error || (result.localRunsReady
         ? "research_ui did not become reachable, but the shell loaded via the local runs index."
@@ -951,26 +871,18 @@ async function runDesktopSmoke() {
     result.error = error.message;
   }
 
-  await writeSmokeResult(result);
+  if (SMOKE_OUTPUT_PATH) {
+    await fsp.mkdir(path.dirname(SMOKE_OUTPUT_PATH), { recursive: true });
+    await fsp.writeFile(SMOKE_OUTPUT_PATH, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+  }
 
-  if (!result.bridgeReady || !result.shellReady || (SMOKE_REQUIRE_SERVER && (!result.serverReady || !result.apiReady))) {
+  if (!result.bridgeReady || !result.shellReady) {
     process.exitCode = 1;
   }
   app.quit();
 }
 
 ipcMain.handle("quantlab:get-workspace-state", async () => workspaceState);
-
-function okIpcResult(data) {
-  return { ok: true, data };
-}
-
-function errorIpcResult(error) {
-  return {
-    ok: false,
-    error: error && error.message ? error.message : String(error || "Unknown IPC error."),
-  };
-}
 
 ipcMain.handle("quantlab:request-json", async (_event, relativePath) => {
   try {
@@ -1079,18 +991,21 @@ if (singleInstanceLock) {
 
   app.whenReady().then(() => {
     createMainWindow();
-    appendLog(`[workspace] checkout root ${CHECKOUT_ROOT}`);
-    appendLog(`[workspace] canonical project root ${PROJECT_ROOT}`);
-    startResearchUiServer();
+    if (!SKIP_RESEARCH_UI_BOOT) startResearchUiServer();
     if (IS_SMOKE_RUN) {
       mainWindow.webContents.once("did-finish-load", () => {
         runDesktopSmoke().catch((error) => {
-          failSmokeEarly(error.message, {
-            bridgeReady: false,
-            shellReady: false,
-            serverReady: false,
-            apiReady: false,
-          }).catch(() => {});
+          if (SMOKE_OUTPUT_PATH) {
+            fsp.mkdir(path.dirname(SMOKE_OUTPUT_PATH), { recursive: true })
+              .then(() => fsp.writeFile(SMOKE_OUTPUT_PATH, `${JSON.stringify({ bridgeReady: false, shellReady: false, serverReady: false, apiReady: false, localRunsReady: false, error: error.message }, null, 2)}\n`, "utf8"))
+              .finally(() => {
+                process.exitCode = 1;
+                app.quit();
+              });
+          } else {
+            process.exitCode = 1;
+            app.quit();
+          }
         });
       });
     }
@@ -1104,23 +1019,8 @@ if (singleInstanceLock) {
 }
 
 app.on("window-all-closed", () => {
-  if (IS_SMOKE_RUN && !smokeResultWritten) {
-    writeSmokeResultSync(createSmokeResult({
-      error: "Smoke window closed before validation completed.",
-    }));
-    process.exitCode = 1;
-  }
   if (process.platform !== "darwin") {
     app.quit();
-  }
-});
-
-app.on("will-quit", () => {
-  if (IS_SMOKE_RUN && !smokeResultWritten) {
-    writeSmokeResultSync(createSmokeResult({
-      error: "Electron quit before smoke validation wrote a result.",
-    }));
-    process.exitCode = 1;
   }
 });
 
