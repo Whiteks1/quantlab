@@ -1332,10 +1332,43 @@ def _latest_by_activity(sessions: list[dict[str, Any]]) -> dict[str, Any] | None
     return dated[-1][0]
 
 
-def _hyperliquid_alert_sort_key(alert: dict[str, Any]) -> tuple[dt.datetime, str]:
+def _hyperliquid_alert_priority(alert: dict[str, Any]) -> int:
+    alert_code = str(alert.get("alert_code") or "")
+    priority_map = {
+        "HYPERLIQUID_RECONCILIATION_IDENTIFIERS_MISSING": 100,
+        "HYPERLIQUID_ORDER_STATUS_UNKNOWN": 90,
+        "HYPERLIQUID_ORDER_REJECTED": 80,
+        "HYPERLIQUID_CANCEL_REQUEST_FAILED": 70,
+        "HYPERLIQUID_SUBMIT_REQUEST_FAILED": 60,
+        "HYPERLIQUID_CANCEL_REJECTED": 50,
+        "HYPERLIQUID_SUBMIT_REJECTED": 40,
+        "HYPERLIQUID_SUPERVISION_ATTENTION": 35,
+        "HYPERLIQUID_CANCEL_SIGNING_KEY_MISSING": 30,
+        "HYPERLIQUID_CANCEL_SIGNER_MISMATCH": 29,
+        "HYPERLIQUID_ORDER_STATUS_MISSING": 20,
+        "HYPERLIQUID_ORDER_CANCELED": 10,
+        "HYPERLIQUID_SIGNED_ACTION_NOT_READY": 9,
+        "HYPERLIQUID_SIGNED_ACTION_UNSIGNED": 8,
+        "HYPERLIQUID_SIGNATURE_MISSING": 7,
+        "HYPERLIQUID_SUBMIT_PAYLOAD_MISSING": 6,
+        "HYPERLIQUID_SUBMIT_ATTENTION": 5,
+    }
+    if alert_code in priority_map:
+        return priority_map[alert_code]
+    severity = str(alert.get("severity") or "")
+    if severity == "critical":
+        return 2
+    if severity == "warning":
+        return 1
+    return 0
+
+
+def _hyperliquid_alert_sort_key(alert: dict[str, Any]) -> tuple[int, int, dt.datetime, str]:
     activity_at = alert.get("activity_at")
     try:
         parsed = dt.datetime.fromisoformat(str(activity_at)) if activity_at else dt.datetime.min
     except ValueError:
         parsed = dt.datetime.min
-    return parsed, str(alert.get("session_id") or "")
+    severity = str(alert.get("severity") or "")
+    severity_rank = 2 if severity == "critical" else 1 if severity == "warning" else 0
+    return _hyperliquid_alert_priority(alert), severity_rank, parsed, str(alert.get("session_id") or "")
