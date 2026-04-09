@@ -847,35 +847,8 @@ function renderTabs() {
   state.activeTabId = activeTab.id;
   elements.topbarTitle.textContent = activeTab.title;
   syncNav(activeTab.navKind || activeTab.kind);
-  if (activeTab.kind === "iframe") {
-    appendChildren(
-      elements.tabContent,
-      createElementNode("iframe", {
-        className: "tab-frame",
-        attrs: { src: activeTab.url, title: activeTab.title },
-      }),
-    );
-  } else if (activeTab.kind === "experiments") {
-    renderMarkupInto(elements.tabContent, renderExperimentsTab(activeTab));
-  } else if (activeTab.kind === "sweep-decision") {
-    renderMarkupInto(elements.tabContent, renderSweepDecisionTab(activeTab));
-  } else if (activeTab.kind === "runs") {
-    renderMarkupInto(elements.tabContent, renderRunsTab(activeTab));
-  } else if (activeTab.kind === "run") {
-    renderMarkupInto(elements.tabContent, renderRunTab(activeTab));
-  } else if (activeTab.kind === "compare") {
-    renderMarkupInto(elements.tabContent, renderCompareTab(activeTab));
-  } else if (activeTab.kind === "artifacts") {
-    renderMarkupInto(elements.tabContent, renderArtifactsTab(activeTab));
-  } else if (activeTab.kind === "candidates") {
-    renderMarkupInto(elements.tabContent, renderCandidatesTab(activeTab));
-  } else if (activeTab.kind === "paper") {
-    renderMarkupInto(elements.tabContent, renderPaperOpsTab(activeTab));
-  } else if (activeTab.kind === "job") {
-    renderMarkupInto(elements.tabContent, renderJobTab(activeTab));
-  } else {
-    appendChildren(elements.tabContent, createElementNode("div", { className: "tab-placeholder", text: activeTab.content || "" }));
-  }
+  const renderTab = TAB_RENDERERS[activeTab.kind] || renderTabFallback;
+  renderTab(activeTab);
   bindTabChromeEvents();
   bindTabContentEvents(activeTab);
 }
@@ -1086,6 +1059,49 @@ function bindTabChromeEvents() {
       closeTab(button.dataset.closeTab);
     });
   });
+}
+
+const TAB_RENDERERS = {
+  iframe(activeTab) {
+    appendChildren(
+      elements.tabContent,
+      createElementNode("iframe", {
+        className: "tab-frame",
+        attrs: { src: activeTab.url, title: activeTab.title },
+      }),
+    );
+  },
+  experiments(activeTab) {
+    renderMarkupInto(elements.tabContent, renderExperimentsTab(activeTab));
+  },
+  "sweep-decision"(activeTab) {
+    renderMarkupInto(elements.tabContent, renderSweepDecisionTab(activeTab));
+  },
+  runs(activeTab) {
+    renderMarkupInto(elements.tabContent, renderRunsTab(activeTab));
+  },
+  run(activeTab) {
+    renderMarkupInto(elements.tabContent, renderRunTab(activeTab));
+  },
+  compare(activeTab) {
+    renderMarkupInto(elements.tabContent, renderCompareTab(activeTab));
+  },
+  artifacts(activeTab) {
+    renderMarkupInto(elements.tabContent, renderArtifactsTab(activeTab));
+  },
+  candidates(activeTab) {
+    renderMarkupInto(elements.tabContent, renderCandidatesTab(activeTab));
+  },
+  paper(activeTab) {
+    renderMarkupInto(elements.tabContent, renderPaperOpsTab(activeTab));
+  },
+  job(activeTab) {
+    renderMarkupInto(elements.tabContent, renderJobTab(activeTab));
+  },
+};
+
+function renderTabFallback(activeTab) {
+  appendChildren(elements.tabContent, createElementNode("div", { className: "tab-placeholder", text: activeTab.content || "" }));
 }
 
 function bindTabContentEvents(tab) {

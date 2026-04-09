@@ -199,6 +199,9 @@
 - **Key Decisions**: `.agents` will serve as the lightweight project memory and workflow coordination layer for QuantLab.
 - **Next Steps**: Continue aligning documentation and workflow files with the real project structure and stage progression.
 
+- 2026-04-08: Started issue #215 renderer tab dispatch registry in a clean Desktop/UI worktree from `main`. Scope is limited to `desktop/renderer/app.js` plus `.agents` continuity, replacing the `renderTabs()` tab-kind conditional chain with a local render registry while preserving the existing fallback placeholder behavior.
+- 2026-04-08: Completed issue #215 renderer tab dispatch registry. `renderTabs()` now dispatches through a local `TAB_RENDERERS` registry with the same fallback placeholder behavior, and validation passed against both desktop smoke and a live `research_ui` surface at `http://127.0.0.1:8000/research_ui/index.html`.
+
 ---
 
 ## Template for New Sessions
