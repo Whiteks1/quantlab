@@ -1,5 +1,9 @@
 # Session Log - QuantLab
 
+- 2026-04-09: Started issue #275 in a clean Desktop/UI worktree from `main`. Scope is limited to desktop validation semantics: explicit fallback smoke, explicit real-path smoke, and CI wiring that makes the distinction visible without mixing in renderer or core changes.
+- 2026-04-09: Expanded issue #275 scope minimally to include `desktop/preload.js` because current `main` still carries the known preload bridge syntax regression. Without that blocker fix, both fallback and real-path smoke stop at `bridgeReady: false`, so the desktop validation slice cannot be validated.
+- 2026-04-09: Completed local validation for issue #275. `desktop/package.json` now exposes explicit `smoke:fallback` and `smoke:real-path` scripts, `desktop/scripts/smoke.js` and `desktop/main.js` distinguish the two semantics, and both modes passed locally after restoring the preload bridge blocker fix. CI wiring was updated in `.github/workflows/ci.yml` to add a dedicated `desktop-real-path` job.
+
 ## 2026-04-09 — Stepbit External-Provider Compatibility Smoke (Issue #281)
 - **Session Focus**: Consolidate a QuantLab-owned smoke for the external Stepbit provider boundary without widening the runtime surface.
 - **Tasks Completed**:
@@ -216,6 +220,8 @@
 - 2026-04-08: Started issue #215 renderer tab dispatch registry in a clean Desktop/UI worktree from `main`. Scope is limited to `desktop/renderer/app.js` plus `.agents` continuity, replacing the `renderTabs()` tab-kind conditional chain with a local render registry while preserving the existing fallback placeholder behavior.
 - 2026-04-08: Completed issue #215 renderer tab dispatch registry. `renderTabs()` now dispatches through a local `TAB_RENDERERS` registry with the same fallback placeholder behavior, and validation passed against both desktop smoke and a live `research_ui` surface at `http://127.0.0.1:8000/research_ui/index.html`.
 - 2026-04-09: Tightened both workflow documents so real diffs now default to the full closeout path: issue or task, branch, checks, coherent commit, PR, merge, issue closure, and local/remote cleanup unless the user explicitly pauses or repository state blocks the next step.
+- 2026-04-09: Hardened issue #275 after the first CI run exposed an early-exit gap in desktop smoke. `desktop/main.js` now writes a smoke failure result for normal early shutdown paths, and `desktop/scripts/smoke.js` now reports a missing result artifact with child exit context instead of failing with a raw `ENOENT`.
+- 2026-04-09: Kept issue #275 open after the next CI run exposed a Linux-only Electron sandbox abort on GitHub-hosted runners. `desktop/scripts/smoke.js` now adds the standard CI-only `--no-sandbox` flag for Linux smoke runs without changing local desktop behavior.
 
 ---
 

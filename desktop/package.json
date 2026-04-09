@@ -7,7 +7,9 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "smoke": "node scripts/smoke.js",
+    "smoke": "npm run smoke:fallback",
+    "smoke:fallback": "node scripts/smoke.js --mode=fallback",
+    "smoke:real-path": "node scripts/smoke.js --mode=real-path",
     "mcp": "node mcp-server.mjs"
   },
   "devDependencies": {
