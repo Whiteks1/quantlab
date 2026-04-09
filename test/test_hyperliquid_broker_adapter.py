@@ -1126,3 +1126,43 @@ def test_hyperliquid_order_status_report_requires_query_identifier():
     assert report["status_known"] is False
     assert report["normalized_state"] is None
     assert "missing_order_identifier" in report["errors"]
+
+
+def test_hyperliquid_submit_report_labels_missing_reconciliation_identifiers():
+    """D.2 contract: when a remote submit returns accepted but has no oid and no cloid,
+    submit_state must be 'submitted_remote_identifier_missing' and errors must include
+    'missing_reconciliation_identifiers'. This is the core D.2 ambiguous-state signal."""
+    adapter = HyperliquidBrokerAdapter()
+    signed_action = {
+        "artifact_type": "quantlab.hyperliquid.signed_action",
+        "readiness_allowed": True,
+        # No 'c' field in orders → no cloid
+        "action_payload": {"type": "order", "orders": [{"a": 1, "b": True, "p": "2450", "s": "0.25"}], "grouping": "na"},
+        "nonce": 1700000000000,
+        "signature_envelope": {
+            "signer_id": "0x1111111111111111111111111111111111111111",
+            "signing_payload_sha256": "abc123",
+            "signature_state": "signed",
+            "signature_present": True,
+            "signature": {"r": "0x1", "s": "0x2", "v": 27},
+        },
+    }
+
+    def fake_post_json(payload, **kwargs):
+        # Exchange responds accepted but returns no oid or cloid in statuses
+        return {"status": "ok", "response": {"type": "accepted", "data": {}}}
+
+    report = adapter.build_submit_report(
+        source_artifact_path="C:/tmp/hyperliquid_signed_action.json",
+        signed_action_artifact=signed_action,
+        reviewer="marce",
+        post_json=fake_post_json,
+        remote_submit=True,
+    ).to_dict()
+
+    assert report["submitted"] is True
+    assert report["remote_submit_called"] is True
+    assert report["oid"] is None
+    assert report["cloid"] is None
+    assert report["submit_state"] == "submitted_remote_identifier_missing"
+    assert "missing_reconciliation_identifiers" in report["errors"]

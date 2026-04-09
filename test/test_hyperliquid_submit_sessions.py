@@ -735,3 +735,114 @@ def test_invalid_hyperliquid_submit_session_raises(tmp_path):
 
     with pytest.raises(ConfigError):
         load_hyperliquid_submit_summary(session_dir)
+
+
+def test_hyperliquid_submit_index_surfaces_d2_ambiguity_counts(tmp_path):
+    """D.2 contract: index must expose reconciliation_required_sessions and
+    identifier_missing_sessions so operators can detect ambiguous submit states
+    at a glance without scanning individual session artifacts."""
+    import json
+    from pathlib import Path
+    from quantlab.reporting.hyperliquid_submit_index import build_hyperliquid_submits_index
+
+    sd = tmp_path / "20260327_ambiguous_demo"
+    sd.mkdir()
+    (sd / "session_metadata.json").write_text(json.dumps({
+        "session_id": "20260327_ambiguous_demo",
+        "status": "reconciliation_required",
+        "created_at": "2026-03-27T12:00:00",
+        "request_id": "req_d2",
+        "source_artifact_path": "C:/tmp/sa.json",
+        "source_signer_id": "0x1111111111111111111111111111111111111111",
+    }), encoding="utf-8")
+    (sd / "session_status.json").write_text(json.dumps({
+        "session_id": "20260327_ambiguous_demo",
+        "status": "reconciliation_required",
+        "updated_at": "2026-03-27T12:01:00",
+        "submit_state": "submitted_remote_identifier_missing",
+        "remote_submit_called": True,
+        "submitted": True,
+    }), encoding="utf-8")
+    (sd / "hyperliquid_signed_action.json").write_text(json.dumps({
+        "artifact_type": "quantlab.hyperliquid.signed_action",
+        "account_readiness": {"execution_context": {
+            "execution_account_id": "0x1111111111111111111111111111111111111111",
+        }},
+        "action_payload": {"orders": []},
+        "signature_envelope": {
+            "signer_id": "0x1111111111111111111111111111111111111111",
+            "signature_state": "signed",
+        },
+    }), encoding="utf-8")
+    (sd / "hyperliquid_submit_response.json").write_text(json.dumps({
+        "artifact_type": "quantlab.hyperliquid.submit_response",
+        "submit_state": "submitted_remote_identifier_missing",
+        "remote_submit_called": True,
+        "submitted": True,
+        "response_type": "accepted",
+        "oid": None,
+        "cloid": None,
+        "errors": ["missing_reconciliation_identifiers"],
+        "source_signer_id": "0x1111111111111111111111111111111111111111",
+    }), encoding="utf-8")
+
+    payload = build_hyperliquid_submits_index(tmp_path)
+
+    assert "reconciliation_required_sessions" in payload, "D.2 counter missing from index payload"
+    assert "identifier_missing_sessions" in payload, "D.2 counter missing from index payload"
+    assert payload["reconciliation_required_sessions"] == 1
+    assert payload["identifier_missing_sessions"] == 1
+    assert payload["status_counts"]["reconciliation_required"] == 1
+    assert payload["submit_state_counts"]["submitted_remote_identifier_missing"] == 1
+
+
+def test_hyperliquid_submit_index_d2_counters_zero_when_no_ambiguity(tmp_path):
+    """D.2 contract: index must show zero counters when no ambiguous sessions exist,
+    not omit the keys — downstream consumers must read 0 reliably."""
+    import json
+    from quantlab.reporting.hyperliquid_submit_index import build_hyperliquid_submits_index
+
+    sd = tmp_path / "20260327_normal_demo"
+    sd.mkdir()
+    (sd / "session_metadata.json").write_text(json.dumps({
+        "session_id": "20260327_normal_demo",
+        "status": "submitted",
+        "created_at": "2026-03-27T12:00:00",
+        "request_id": "req_ok",
+        "source_artifact_path": "C:/tmp/sa.json",
+        "source_signer_id": "0x1111111111111111111111111111111111111111",
+    }), encoding="utf-8")
+    (sd / "session_status.json").write_text(json.dumps({
+        "session_id": "20260327_normal_demo",
+        "status": "submitted",
+        "updated_at": "2026-03-27T12:01:00",
+        "submit_state": "submitted_remote",
+        "remote_submit_called": True,
+        "submitted": True,
+    }), encoding="utf-8")
+    (sd / "hyperliquid_signed_action.json").write_text(json.dumps({
+        "artifact_type": "quantlab.hyperliquid.signed_action",
+        "account_readiness": {"execution_context": {
+            "execution_account_id": "0x1111111111111111111111111111111111111111",
+        }},
+        "action_payload": {"orders": [{"c": "abc123"}]},
+        "signature_envelope": {
+            "signer_id": "0x1111111111111111111111111111111111111111",
+            "signature_state": "signed",
+        },
+    }), encoding="utf-8")
+    (sd / "hyperliquid_submit_response.json").write_text(json.dumps({
+        "artifact_type": "quantlab.hyperliquid.submit_response",
+        "submit_state": "submitted_remote",
+        "remote_submit_called": True,
+        "submitted": True,
+        "response_type": "resting",
+        "oid": 12345,
+        "cloid": "abc123",
+        "errors": [],
+        "source_signer_id": "0x1111111111111111111111111111111111111111",
+    }), encoding="utf-8")
+
+    payload = build_hyperliquid_submits_index(tmp_path)
+    assert payload["reconciliation_required_sessions"] == 0
+    assert payload["identifier_missing_sessions"] == 0
