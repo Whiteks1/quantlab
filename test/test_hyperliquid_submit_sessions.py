@@ -177,10 +177,57 @@ def test_refresh_hyperliquid_submit_index(tmp_path):
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert payload["sessions"][0]["alert_status"] == "warning"
     assert payload["sessions"][0]["latest_alert_code"] == "HYPERLIQUID_ORDER_STATUS_MISSING"
+    assert payload["reconciliation_required_sessions"] == 0
+    assert payload["identifier_missing_sessions"] == 0
     md_content = md_path.read_text(encoding="utf-8")
     assert "# Hyperliquid Submits Index" in md_content
     assert "## Summary" in md_content
     assert "## Sessions" in md_content
+
+
+def test_hyperliquid_submit_index_surfaces_d2_ambiguity_counts(tmp_path):
+    session_dir = _write_session(tmp_path)
+    (session_dir / "session_status.json").write_text(
+        json.dumps(
+            {
+                "session_id": "20260327_hyperliquid_submit_demo",
+                "status": "reconciliation_required",
+                "updated_at": "2026-03-27T12:10:00",
+                "submit_state": "submitted_remote_identifier_missing",
+                "remote_submit_called": True,
+                "submitted": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "hyperliquid_submit_response.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.submit_response",
+                "submit_state": "submitted_remote_identifier_missing",
+                "remote_submit_called": True,
+                "submitted": True,
+                "response_type": "accepted",
+                "oid": None,
+                "cloid": None,
+                "errors": ["missing_reconciliation_identifiers"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    args = _make_args(hyperliquid_submit_sessions_index=str(tmp_path))
+    assert handle_hyperliquid_submit_sessions_commands(args) is True
+
+    payload = json.loads((tmp_path / "hyperliquid_submits_index.json").read_text(encoding="utf-8"))
+    assert payload["reconciliation_required_sessions"] == 1
+    assert payload["identifier_missing_sessions"] == 1
+    assert payload["status_counts"]["reconciliation_required"] == 1
+    assert payload["submit_state_counts"]["submitted_remote_identifier_missing"] == 1
+
+    md_content = (tmp_path / "hyperliquid_submits_index.md").read_text(encoding="utf-8")
+    assert "Reconciliation required sessions" in md_content
+    assert "Identifier-missing submit acknowledgements" in md_content
 
 
 def test_hyperliquid_submit_health_summary(tmp_path, capsys):
@@ -196,6 +243,8 @@ def test_hyperliquid_submit_health_summary(tmp_path, capsys):
     assert health_payload["artifact_type"] == "quantlab.hyperliquid.submit_health"
     assert health_payload["alert_status"] == "warning"
     assert health_payload["latest_alert_code"] == "HYPERLIQUID_ORDER_STATUS_MISSING"
+    assert health_payload["reconciliation_required_sessions"] == 0
+    assert health_payload["identifier_missing_sessions"] == 0
     assert "Hyperliquid submission health" in output
     assert "health_path" in output
     assert "total_sessions" in output
@@ -772,6 +821,46 @@ def test_hyperliquid_submit_health_includes_fill_and_close_state_counts(tmp_path
     assert payload["fill_state_counts"]["filled"] == 1
     assert payload["latest_close_state"] == "closed"
     assert payload["latest_fill_state"] == "filled"
+
+
+def test_hyperliquid_submit_health_surfaces_d2_ambiguity_counts(tmp_path):
+    session_dir = _write_session(tmp_path)
+    (session_dir / "session_status.json").write_text(
+        json.dumps(
+            {
+                "session_id": "20260327_hyperliquid_submit_demo",
+                "status": "reconciliation_required",
+                "updated_at": "2026-03-27T12:10:00",
+                "submit_state": "submitted_remote_identifier_missing",
+                "remote_submit_called": True,
+                "submitted": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "hyperliquid_submit_response.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.submit_response",
+                "submit_state": "submitted_remote_identifier_missing",
+                "remote_submit_called": True,
+                "submitted": True,
+                "response_type": "accepted",
+                "oid": None,
+                "cloid": None,
+                "errors": ["missing_reconciliation_identifiers"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    from quantlab.cli.hyperliquid_submit_sessions import build_hyperliquid_submission_health
+
+    payload = build_hyperliquid_submission_health(tmp_path)
+    assert payload["reconciliation_required_sessions"] == 1
+    assert payload["identifier_missing_sessions"] == 1
+    assert payload["status_counts"]["reconciliation_required"] == 1
+    assert payload["submit_state_counts"]["submitted_remote_identifier_missing"] == 1
 
 
 def test_load_hyperliquid_submit_summary_includes_fill_summary_fields(tmp_path):

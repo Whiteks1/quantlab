@@ -1041,6 +1041,10 @@ def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
         "order_status_known_sessions": sum(1 for session in sessions if session.get("order_status_known")),
         "reconciliation_sessions": sum(1 for session in sessions if session.get("reconciliation_present")),
         "effective_order_known_sessions": sum(1 for session in sessions if session.get("effective_order_known")),
+        "reconciliation_required_sessions": sum(1 for session in sessions if session.get("status") == "reconciliation_required"),
+        "identifier_missing_sessions": sum(
+            1 for session in sessions if session.get("submit_state") == "submitted_remote_identifier_missing"
+        ),
         "status_counts": dict(Counter((session.get("status") or "unknown") for session in sessions)),
         "submit_state_counts": dict(
             Counter((session.get("submit_state") or "no_submit_response") for session in sessions)
