@@ -1,5 +1,18 @@
 # Session Log - QuantLab
 
+## 2026-04-09 — D.2 State Alignment and Stale Governance Cleanup (Issue #307)
+- **Session Focus**: Bring `.agents/current-state.md` back into sync with the Hyperliquid D.2 work already merged into `main`, and clear stale governance noise.
+- **Tasks Completed**:
+  - Updated `.agents/current-state.md` to reflect the April D.2 slices already merged for idempotency, ambiguous-submit labeling, reconciliation precedence, aggregate visibility, aggregate alert priority, and critical-priority regression coverage.
+  - Removed the stale `strategy_research.md` debt note because that duplicate workflow file no longer exists in the tree.
+  - Reframed Stage D.2 as residual hardening-by-evidence rather than broad execution expansion by default.
+  - Closed stale governance issue #284 because the referenced `broker_preflight` blocker was already resolved by later merged Motor/Core work.
+- **Key Decisions**:
+  - This is a state/governance cleanup slice only; it does not change runtime, contracts, or desktop behavior.
+  - D.2 remains the active execution-safety stage, but new slices now require a demonstrated operator-safety gap instead of roadmap inertia alone.
+- **Validation Notes**:
+  - Verified by comparing `.agents/current-state.md` and `.agents/session-log.md` against the merged April D.2 history on `main`.
+
 ## 2026-04-09 — Hyperliquid Critical Alert Precedence Coverage (Issue #305)
 - **Session Focus**: Lock the aggregate Hyperliquid alert-priority policy with focused regressions for critical post-submit states.
 - **Tasks Completed**:
