@@ -1169,7 +1169,18 @@ def _collect_hyperliquid_submission_alerts(sessions: list[dict[str, Any]]) -> li
             )
 
         if submitted:
-            if not session.get("order_status_present") and not session.get("reconciliation_present"):
+            if str(session.get("submit_state") or "") == "submitted_remote_identifier_missing":
+                alerts.append(
+                    _build_hyperliquid_alert(
+                        code="HYPERLIQUID_RECONCILIATION_IDENTIFIERS_MISSING",
+                        severity="critical",
+                        session=session,
+                        activity_at=activity_at,
+                        message=_join_reasons(session.get("submit_errors"))
+                        or "Submitted Hyperliquid session is missing both oid and cloid, so immediate reconciliation is not possible.",
+                    )
+                )
+            elif not session.get("order_status_present") and not session.get("reconciliation_present"):
                 alerts.append(
                     _build_hyperliquid_alert(
                         code="HYPERLIQUID_ORDER_STATUS_MISSING",

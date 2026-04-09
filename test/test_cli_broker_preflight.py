@@ -551,6 +551,77 @@ def test_writes_hyperliquid_submit_session(monkeypatch, tmp_path):
     assert (root_dir / "hyperliquid_submits_index.csv").exists()
 
 
+def test_hyperliquid_submit_session_marks_unreconcilable_submit(monkeypatch, tmp_path):
+    from quantlab.cli import broker_preflight as module
+
+    signed_action_path = tmp_path / "hyperliquid_signed_action.json"
+    signed_action_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.signed_action",
+                "readiness_allowed": True,
+                "intent": {"symbol": "ETH", "side": "buy"},
+                "nonce": 1700000000000,
+                "signature_envelope": {
+                    "signature_state": "signed",
+                    "signature_present": True,
+                    "signature": {"r": "0x1", "s": "0x2", "v": 27},
+                    "signer_id": "0x2222222222222222222222222222222222222222",
+                    "signing_payload_sha256": "abc123",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_submit(self, **kwargs):
+        class _Fake:
+            def to_dict(self):
+                return {
+                    "artifact_type": "quantlab.hyperliquid.submit_response",
+                    "adapter_name": "hyperliquid",
+                    "generated_at": "2026-03-27T12:00:00",
+                    "source_artifact_path": str(signed_action_path),
+                    "source_action_hash": "0xabc",
+                    "source_signer_id": "0x2222222222222222222222222222222222222222",
+                    "source_signing_payload_sha256": "abc123",
+                    "submit_payload": {"action": {"type": "order"}, "nonce": 1700000000000},
+                    "submit_state": "submitted_remote_identifier_missing",
+                    "remote_submit_called": True,
+                    "submitted": True,
+                    "response_type": "accepted",
+                    "oid": None,
+                    "cloid": None,
+                    "exchange_response": {"status": "ok"},
+                    "reviewer": "marce",
+                    "note": "go",
+                    "errors": ["missing_reconciliation_identifiers"],
+                }
+
+        return _Fake()
+
+    monkeypatch.setattr(module.HyperliquidBrokerAdapter, "build_submit_report", fake_submit)
+
+    root_dir = tmp_path / "hyperliquid_submits"
+    args = _make_args(
+        hyperliquid_submit_session=str(signed_action_path),
+        hyperliquid_submit_reviewer="marce",
+        hyperliquid_submit_note="go",
+        hyperliquid_submit_confirm=True,
+        hyperliquid_submit_sessions_root=str(root_dir),
+        _request_id="req_hl_submit_ambiguous",
+    )
+    result = handle_broker_preflight_commands(args)
+
+    assert result["status"] == "success"
+    assert result["submit_state"] == "submitted_remote_identifier_missing"
+
+    session_dir = next(child for child in root_dir.iterdir() if child.is_dir())
+    session_status = json.loads((session_dir / "session_status.json").read_text(encoding="utf-8"))
+    assert session_status["status"] == "reconciliation_required"
+    assert session_status["submit_state"] == "submitted_remote_identifier_missing"
+
+
 def test_hyperliquid_submit_session_refuses_duplicate_replay(monkeypatch, tmp_path):
     from quantlab.cli import broker_preflight as module
 

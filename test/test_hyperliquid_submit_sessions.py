@@ -602,6 +602,53 @@ def test_hyperliquid_submit_alerts_include_supervision_attention(tmp_path, capsy
     assert any(alert["alert_code"] == "HYPERLIQUID_SUPERVISION_ATTENTION" for alert in payload["alerts"])
 
 
+def test_hyperliquid_submit_alerts_flag_missing_reconciliation_identifiers(tmp_path, capsys):
+    session_dir = _write_session(tmp_path)
+    (session_dir / "hyperliquid_signed_action.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.signed_action",
+                "account_readiness": {
+                    "execution_context": {
+                        "execution_account_id": "0x1111111111111111111111111111111111111111",
+                    }
+                },
+                "action_payload": {"orders": [{"a": 1, "b": True, "p": "2450", "s": "0.25"}]},
+                "signature_envelope": {
+                    "signer_id": "0x1111111111111111111111111111111111111111",
+                    "signature_state": "signed",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session_dir / "hyperliquid_submit_response.json").write_text(
+        json.dumps(
+            {
+                "artifact_type": "quantlab.hyperliquid.submit_response",
+                "submit_state": "submitted_remote_identifier_missing",
+                "remote_submit_called": True,
+                "submitted": True,
+                "response_type": "accepted",
+                "oid": None,
+                "cloid": None,
+                "source_signer_id": "0x1111111111111111111111111111111111111111",
+                "errors": ["missing_reconciliation_identifiers"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    args = _make_args(hyperliquid_submit_sessions_alerts=str(tmp_path))
+    assert handle_hyperliquid_submit_sessions_commands(args) is True
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["alert_status"] == "critical"
+    assert any(
+        alert["alert_code"] == "HYPERLIQUID_RECONCILIATION_IDENTIFIERS_MISSING" for alert in payload["alerts"]
+    )
+
+
 def test_hyperliquid_submit_alerts_use_reconciliation_state(tmp_path, capsys):
     session_dir = _write_session(tmp_path)
     (session_dir / "hyperliquid_order_status.json").write_text(

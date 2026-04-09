@@ -1,5 +1,18 @@
 # Session Log - QuantLab
 
+## 2026-04-09 — Hyperliquid Unreconcilable Submit Acknowledgement Labeling (Issue #295)
+- **Session Focus**: Tighten Stage D.2 submit safety by making ambiguous successful Hyperliquid submit acknowledgements explicit when they cannot be reconciled immediately.
+- **Tasks Completed**:
+  - Updated `src/quantlab/brokers/hyperliquid.py` so a remote `status: ok` response without both `oid` and `cloid` is labeled `submitted_remote_identifier_missing` instead of looking like a normal `submitted_remote`.
+  - Updated `src/quantlab/cli/broker_preflight.py` so canonical submit sessions route that state to `reconciliation_required`.
+  - Updated `src/quantlab/cli/hyperliquid_submit_sessions.py` to emit a dedicated critical alert for the missing-identifier case.
+  - Added focused adapter, broker-preflight, and session-alert tests for the new behavior.
+- **Key Decisions**:
+  - The slice preserves the fact that remote submit was called and may have succeeded; it only removes the false sense of normal post-submit traceability.
+  - The ambiguous case is treated as an operator-visible reconciliation problem, not as a generic rejection.
+- **Validation Notes**:
+  - Verified with `PYTHONPATH=<worktree>/src python -m pytest -q test/test_hyperliquid_broker_adapter.py test/test_cli_broker_preflight.py test/test_hyperliquid_submit_sessions.py`.
+
 - 2026-04-09: Created the Desktop/UI UX remediation issue block after consolidating desktop findings into three root problems: workstation containment, right-rail support-lane clarity, and decision guidance across runs surfaces. Opened GitHub issues #286, #287, and #288 to map the next implementation sequence before touching renderer behavior.
 - 2026-04-09: Created a Desktop/UI issue block for the right-rail support lane after confirming that the upper quick-entry box and the lower assistant panel currently share the same output log and therefore duplicate semantics. Added issues #218–#221 to separate quick commands from assistant history, clarify Stepbit routing, and reduce right-rail noise before touching renderer behavior.
 ## 2026-04-09 — CLI Health Worktree-Safe Check (Issue #293)
