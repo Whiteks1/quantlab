@@ -7,6 +7,7 @@ async function main() {
   const desktopRoot = path.resolve(__dirname, "..");
   const projectRoot = path.resolve(desktopRoot, "..");
   const electronBinary = require("electron");
+  const electronArgs = process.platform === "linux" ? ["--no-sandbox", "."] : ["."];
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "quantlab-desktop-smoke-"));
   const outputPath = path.join(tempRoot, "result.json");
   const desktopOutputsRoot = path.join(tempRoot, "outputs");
@@ -75,7 +76,7 @@ async function main() {
   }
 
   try {
-    const child = spawn(electronBinary, ["."], {
+    const child = spawn(electronBinary, electronArgs, {
       cwd: desktopRoot,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
@@ -105,9 +106,24 @@ async function main() {
       child.on("exit", (code) => resolve(code ?? 1));
     });
     clearTimeout(timeout);
-
-    const raw = await fs.readFile(outputPath, "utf8");
-    const result = JSON.parse(raw);
+    let result = null;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      try {
+        const raw = await fs.readFile(outputPath, "utf8");
+        result = JSON.parse(raw);
+        break;
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+    if (!result) {
+      throw new Error(
+        `Desktop smoke did not persist result.json before Electron exited (code ${exitCode}).`
+        + `${stdout.trim() ? ` stdout: ${stdout.trim()}` : ""}`
+        + `${stderr.trim() ? ` stderr: ${stderr.trim()}` : ""}`,
+      );
+    }
 
     if (exitCode !== 0 || !result.bridgeReady || !result.shellReady) {
       if (stdout.trim()) console.error(stdout.trim());

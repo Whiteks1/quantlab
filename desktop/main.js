@@ -28,6 +28,8 @@ const ELECTRON_STATE_ROOT = path.join(DESKTOP_OUTPUTS_ROOT, "electron");
 const IS_SMOKE_RUN = process.env.QUANTLAB_DESKTOP_SMOKE === "1";
 const SMOKE_OUTPUT_PATH = process.env.QUANTLAB_DESKTOP_SMOKE_OUTPUT || "";
 const SKIP_RESEARCH_UI_BOOT = process.env.QUANTLAB_DESKTOP_DISABLE_SERVER_BOOT === "1";
+let smokeResultPersisted = false;
+let smokeDidFinishLoadSeen = false;
 
 app.setPath("userData", path.join(ELECTRON_STATE_ROOT, "user-data"));
 app.setPath("cache", path.join(ELECTRON_STATE_ROOT, "cache"));
@@ -830,8 +832,8 @@ function createMainWindow() {
   });
 }
 
-async function runDesktopSmoke() {
-  const result = {
+function defaultSmokeResult(overrides = {}) {
+  return {
     bridgeReady: false,
     shellReady: false,
     serverReady: false,
@@ -839,7 +841,34 @@ async function runDesktopSmoke() {
     localRunsReady: false,
     serverUrl: "",
     error: "",
+    ...overrides,
   };
+}
+
+async function persistSmokeResult(resultOverrides = {}) {
+  if (!SMOKE_OUTPUT_PATH || smokeResultPersisted) return;
+  const result = defaultSmokeResult(resultOverrides);
+  await fsp.mkdir(path.dirname(SMOKE_OUTPUT_PATH), { recursive: true });
+  await fsp.writeFile(SMOKE_OUTPUT_PATH, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+  smokeResultPersisted = true;
+}
+
+async function failSmokeAndQuit(errorMessage, overrides = {}) {
+  try {
+    await persistSmokeResult({
+      error: errorMessage,
+      ...overrides,
+    });
+  } catch (_error) {
+    // Best effort persistence; the outer smoke harness also handles missing files.
+  } finally {
+    process.exitCode = 1;
+    app.quit();
+  }
+}
+
+async function runDesktopSmoke() {
+  const result = defaultSmokeResult();
   try {
     result.bridgeReady = await mainWindow.webContents.executeJavaScript(
       "Boolean(window.quantlabDesktop && typeof window.quantlabDesktop.getWorkspaceState === 'function')",
@@ -871,10 +900,7 @@ async function runDesktopSmoke() {
     result.error = error.message;
   }
 
-  if (SMOKE_OUTPUT_PATH) {
-    await fsp.mkdir(path.dirname(SMOKE_OUTPUT_PATH), { recursive: true });
-    await fsp.writeFile(SMOKE_OUTPUT_PATH, `${JSON.stringify(result, null, 2)}\n`, "utf8");
-  }
+  await persistSmokeResult(result);
 
   if (!result.bridgeReady || !result.shellReady) {
     process.exitCode = 1;
@@ -993,19 +1019,16 @@ if (singleInstanceLock) {
     createMainWindow();
     if (!SKIP_RESEARCH_UI_BOOT) startResearchUiServer();
     if (IS_SMOKE_RUN) {
+      mainWindow.webContents.once("did-fail-load", (_event, errorCode, errorDescription) => {
+        failSmokeAndQuit(`Desktop smoke load failed: ${errorDescription || `code ${errorCode}`}`);
+      });
+      mainWindow.webContents.once("render-process-gone", (_event, details) => {
+        failSmokeAndQuit(`Desktop smoke renderer exited before completion: ${details?.reason || "unknown"}`);
+      });
       mainWindow.webContents.once("did-finish-load", () => {
+        smokeDidFinishLoadSeen = true;
         runDesktopSmoke().catch((error) => {
-          if (SMOKE_OUTPUT_PATH) {
-            fsp.mkdir(path.dirname(SMOKE_OUTPUT_PATH), { recursive: true })
-              .then(() => fsp.writeFile(SMOKE_OUTPUT_PATH, `${JSON.stringify({ bridgeReady: false, shellReady: false, serverReady: false, apiReady: false, localRunsReady: false, error: error.message }, null, 2)}\n`, "utf8"))
-              .finally(() => {
-                process.exitCode = 1;
-                app.quit();
-              });
-          } else {
-            process.exitCode = 1;
-            app.quit();
-          }
+          failSmokeAndQuit(error.message);
         });
       });
     }
@@ -1019,6 +1042,14 @@ if (singleInstanceLock) {
 }
 
 app.on("window-all-closed", () => {
+  if (IS_SMOKE_RUN && !smokeResultPersisted) {
+    failSmokeAndQuit(
+      smokeDidFinishLoadSeen
+        ? "Desktop smoke window closed before the result was persisted."
+        : "Desktop smoke window closed before the renderer finished loading.",
+    );
+    return;
+  }
   if (process.platform !== "darwin") {
     app.quit();
   }
@@ -1026,4 +1057,15 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   stopResearchUiServer();
+});
+
+process.on("uncaughtException", (error) => {
+  if (!IS_SMOKE_RUN) throw error;
+  failSmokeAndQuit(`Desktop smoke uncaught exception: ${error?.message || String(error)}`);
+});
+
+process.on("unhandledRejection", (reason) => {
+  if (!IS_SMOKE_RUN) throw reason;
+  const message = reason instanceof Error ? reason.message : String(reason);
+  failSmokeAndQuit(`Desktop smoke unhandled rejection: ${message}`);
 });
