@@ -105,6 +105,19 @@ const state = {
   workspacePersistTimer: null,
 };
 
+const WORKBENCH_PRIORITY_KINDS = new Set([
+  "runs",
+  "run",
+  "compare",
+  "candidates",
+  "artifacts",
+  "paper",
+  "system",
+  "experiments",
+  "sweep-decision",
+  "job",
+]);
+
 const elements = {
   runtimeSummary: document.getElementById("runtime-summary"),
   runtimeMeta: document.getElementById("runtime-meta"),
@@ -151,6 +164,7 @@ const elements = {
   workflowRunsList: document.getElementById("workflow-runs-list"),
   workflowOpenCompare: document.getElementById("workflow-open-compare"),
   workflowClearSelection: document.getElementById("workflow-clear-selection"),
+  workspaceGrid: document.querySelector(".workspace-grid"),
 };
 
 const paletteActions = PALETTE_ACTION_SPECS.map((action) => ({
@@ -909,6 +923,7 @@ function renderChatAdapterStatus() {
 
 function renderTabs() {
   if (!state.tabs.length) {
+    syncWorkspaceLayoutMode(null);
     clearElement(elements.tabsBar);
     appendChildren(
       elements.tabContent,
@@ -944,6 +959,7 @@ function renderTabs() {
   );
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) || state.tabs[0];
   state.activeTabId = activeTab.id;
+  syncWorkspaceLayoutMode(activeTab);
   elements.topbarTitle.textContent = activeTab.title;
   syncTopbarChrome(activeTab);
   syncNav(activeTab.navKind || activeTab.kind);
@@ -980,6 +996,14 @@ function renderTabs() {
   }
   bindTabChromeEvents();
   bindTabContentEvents(activeTab);
+}
+
+function syncWorkspaceLayoutMode(activeTab) {
+  if (!elements.workspaceGrid) return;
+  const kind = activeTab?.kind || "";
+  const priority = WORKBENCH_PRIORITY_KINDS.has(kind) ? "high" : "normal";
+  elements.workspaceGrid.dataset.activeTabKind = kind;
+  elements.workspaceGrid.dataset.workbenchPriority = priority;
 }
 
 function renderPalette() {
