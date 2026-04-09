@@ -430,10 +430,11 @@ def handle_broker_order_validations_commands(args) -> bool:
         from quantlab.reporting.broker_order_validation_index import write_broker_order_validations_index
 
         root_dir = _require_directory(args.broker_order_validations_index, "Broker order validations root")
-        csv_path, json_path = write_broker_order_validations_index(root_dir)
+        csv_path, json_path, md_path = write_broker_order_validations_index(root_dir)
         print("\nBroker order validation index refreshed:\n")
         print(f"  csv_path : {csv_path}")
         print(f"  json_path: {json_path}")
+        print(f"  md_path  : {md_path}")
         return True
 
     return False

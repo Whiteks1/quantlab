@@ -14,6 +14,7 @@ from quantlab.cli.broker_order_validations import (
 )
 from quantlab.errors import ConfigError
 from quantlab.reporting.broker_order_validation_index import build_broker_order_validations_index
+from quantlab.reporting.broker_order_validation_index import write_broker_order_validations_index
 
 
 def _write_validation_session(
@@ -304,6 +305,19 @@ def test_builds_broker_order_validations_index(broker_order_validations_root: Pa
     assert payload["n_sessions"] == 2
     assert payload["sessions"][0]["session_id"] == "validate_001"
     assert payload["sessions"][1]["validation_accepted"] is False
+
+
+def test_writes_broker_order_validations_index_markdown(broker_order_validations_root: Path):
+    csv_path, json_path, md_path = write_broker_order_validations_index(broker_order_validations_root)
+
+    assert Path(csv_path).exists()
+    assert Path(json_path).exists()
+    assert Path(md_path).exists()
+
+    md_text = Path(md_path).read_text(encoding="utf-8")
+    assert "Broker Order Validations Index" in md_text
+    assert "## Sessions" in md_text
+    assert "validate_001" in md_text
 
 
 def test_invalid_session_dir_raises_config_error(broker_order_validations_root: Path):
