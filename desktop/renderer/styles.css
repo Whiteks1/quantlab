@@ -379,6 +379,33 @@ button:disabled {
     background: rgba(10, 16, 24, 0.74);
 }
 
+.assistant-quick-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.assistant-quick-row input {
+    flex: 1;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: rgba(8, 14, 22, 0.92);
+    color: var(--text);
+    padding: 10px 13px;
+    font-size: 0.88rem;
+}
+
+.palette-item--legacy {
+    opacity: 0.54;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+    padding-top: 4px;
+}
+
+.palette-item--legacy .palette-label {
+    color: var(--muted);
+}
+
 .tabs-shell {
     display: grid;
     grid-template-rows: auto auto 1fr;

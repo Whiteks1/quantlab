@@ -1000,9 +1000,13 @@ function renderPalette() {
       visibleActions.map((action) =>
         createElementNode(
           "button",
-          { className: "palette-item", dataset: { paletteAction: action.id }, type: "button" },
+          {
+            className: action.legacy ? "palette-item palette-item--legacy" : "palette-item",
+            dataset: { paletteAction: action.id },
+            type: "button",
+          },
           [
-            createElementNode("strong", { text: action.label }),
+            createElementNode("strong", { className: "palette-label", text: action.label }),
             createElementNode("span", { text: action.description }),
           ],
         ),
