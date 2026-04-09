@@ -1,5 +1,7 @@
 # Session Log - QuantLab
 
+- 2026-04-09: Created a Desktop/UI issue block for the right-rail support lane after confirming that the upper quick-entry box and the lower assistant panel currently share the same output log and therefore duplicate semantics. Added issues #218–#221 to separate quick commands from assistant history, clarify Stepbit routing, and reduce right-rail noise before touching renderer behavior.
+
 ## 2026-03-24 — Canonical Run Machine Contract (Issue #62)
 - **Session Focus**: Reduce the remaining contract asymmetry between plain `run` and `sweep` inside canonical `report.json`.
 - **Tasks Completed**:
