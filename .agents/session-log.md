@@ -1,5 +1,16 @@
 # Session Log - QuantLab
 
+## 2026-04-09 — Hyperliquid Aggregate Alert Priority (Issue #303)
+- **Session Focus**: Make aggregate Hyperliquid submit alerts surface operator urgency instead of picking the newest alert by timestamp alone.
+- **Tasks Completed**:
+  - Updated `src/quantlab/cli/hyperliquid_submit_sessions.py` so aggregate `latest_alert_*` selection uses explicit alert priority plus severity before recency.
+  - Added focused regression tests proving a critical identifier-missing acknowledgement outranks a newer warning and a newer generic unknown-status alert in aggregate surfaces.
+- **Key Decisions**:
+  - This slice changes only aggregate alert prioritization; it does not alter per-session alert emission or the underlying D.2 state machine.
+  - Priority is encoded explicitly for known Hyperliquid submit alert codes so operator-facing aggregate surfaces reflect urgency deterministically.
+- **Validation Notes**:
+  - Verified with `PYTHONPATH=<worktree>/src python -m pytest -q test/test_hyperliquid_submit_sessions.py`.
+
 ## 2026-04-09 — Hyperliquid Aggregate Ambiguity Visibility (Issue #300)
 - **Session Focus**: Make aggregate Hyperliquid submit visibility call out the new D.2 ambiguity states explicitly instead of burying them in generic counts.
 - **Tasks Completed**:
