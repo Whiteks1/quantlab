@@ -144,3 +144,31 @@ This log is the **source of truth** for run history.
 ## Guiding Rule
 QuantLab must remain a **research-first system**: prioritize correctness, reproducibility, and clarity over speed, convenience, or premature platform expansion.
 
+## High-Control Modules
+
+The following modules handle live execution boundaries, broker communication, or irreversible state transitions. They require elevated change discipline.
+
+### Declared high-control modules
+
+| Module | Reason |
+|--------|--------|
+| `src/quantlab/brokers/hyperliquid.py` | Broker adapter for Hyperliquid. Manages order signing, submission, reconciliation, and ambiguous-state detection. Any bug here can cause unrecoverable production positions. |
+| `src/quantlab/cli/hyperliquid_submit_sessions.py` | CLI orchestrator for Hyperliquid submit sessions. Manages session lifecycle, D.2 index counters, reconciliation reporting, and cancel flows. |
+
+### Rules for modifying high-control modules
+
+1. **No refactoring without proven production need.** Do not restructure, rename, or reorganize these files unless a concrete bug or operational requirement demands it. Aesthetic or style refactors are explicitly prohibited.
+
+2. **Mandatory preflight.** Before touching either module, run the full relevant test suite and confirm it passes on `main`. Document the baseline in the PR.
+
+3. **Full diff review required.** Every line changed in a high-control module must appear in the PR diff. No squashing of individual changes. The reviewer must be able to trace each modification to a stated requirement.
+
+4. **Test coverage is mandatory.** Any behavioral change — including edge cases, error paths, and state transitions — must be covered by a new or updated test before the PR is opened.
+
+5. **D.2 contract is non-negotiable.** The following states and counters must remain present and correct at all times:
+   - `submitted_remote_identifier_missing` detection in `build_submit_report`
+   - `missing_reconciliation_identifiers` error label
+   - `reconciliation_required_sessions` and `identifier_missing_sessions` in the index payload
+
+6. **No silent removal of tests.** Deleting or weakening a test that covers a high-control module requires explicit written justification in the PR body. Accidental removal is treated as a regression.
+
