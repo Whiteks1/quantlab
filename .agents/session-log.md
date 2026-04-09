@@ -273,6 +273,7 @@
 - 2026-04-09: Hardened issue #275 after the first CI run exposed an early-exit gap in desktop smoke. `desktop/main.js` now writes a smoke failure result for normal early shutdown paths, and `desktop/scripts/smoke.js` now reports a missing result artifact with child exit context instead of failing with a raw `ENOENT`.
 - 2026-04-09: Kept issue #275 open after the next CI run exposed a Linux-only Electron sandbox abort on GitHub-hosted runners. `desktop/scripts/smoke.js` now adds the standard CI-only `--no-sandbox` flag for Linux smoke runs without changing local desktop behavior.
 - 2026-04-09: Started and completed issue #286 workstation containment in a clean Desktop/UI worktree from `main`. The desktop shell now keeps one primary surface at a time, bounds context-tab accumulation, restores old workspace state into a single preserved primary surface, and tightens scroll containment across sidebar, workbench, workflow, and command palette. Validation passed with `npm run smoke:fallback` and `npm run smoke:real-path` from `desktop/`.
+- 2026-04-09: Started and completed issue #287 right-rail support lane semantics in a clean Desktop/UI worktree from `main`. The upper support entry now behaves as `Quick commands` with deterministic feedback, the lower panel is the single assistant/history locus, Stepbit routing is explicit, and sidebar suggested actions no longer masquerade as a second assistant input. Validation passed with `npm run smoke:fallback` and `npm run smoke:real-path` from `desktop/`.
 
 ---
 

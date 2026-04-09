@@ -74,6 +74,10 @@ const state = {
   experimentConfigPreviewCache: new Map(),
   isSubmittingLaunch: false,
   launchFeedback: "Use deterministic inputs or ask from chat.",
+  quickCommandFeedback: {
+    tone: "neutral",
+    text: "Use quick commands for open runs, compare selected, show artifacts, or show runtime status.",
+  },
   refreshTimer: null,
   isStepbitSubmitting: false,
   snapshotStatus: {
@@ -118,6 +122,7 @@ const elements = {
   paletteSearch: document.getElementById("palette-search"),
   paletteInput: document.getElementById("palette-input"),
   runCommand: document.getElementById("run-command"),
+  commandFeedback: document.getElementById("command-feedback"),
   commandPaletteTrigger: document.getElementById("command-palette-trigger"),
   openBrowserRuns: document.getElementById("open-browser-runs"),
   paletteOverlay: document.getElementById("palette-overlay"),
@@ -157,7 +162,7 @@ const PRIMARY_SURFACE_IDS = new Set([
 ]);
 
 const paletteActions = [
-  ["chat", "Open Chat", "Return focus to the command bus.", () => focusChat()],
+  ["chat", "Open Assistant", "Return focus to the assistant history and input.", () => focusChat()],
   ["experiments", "Open Experiments", "Open the native experiments and sweeps workspace.", () => openExperimentsTab()],
   ["sweep-handoff", "Open Sweep Handoff", "Open the local sweep decision handoff compare.", () => openSweepDecisionTab()],
   ["launch", "Open Launch", "Open the QuantLab launch surface.", () => openResearchTab("launch", "Launch", "#/launch", { replacePrimary: true })],
@@ -241,15 +246,14 @@ function bindEvents() {
   document.querySelectorAll("[data-prompt]").forEach((button) => {
     button.addEventListener("click", () => {
       const prompt = button.dataset.prompt || "";
-      elements.chatInput.value = prompt;
-      handleChatPrompt(prompt);
+      handleSupportShortcut(prompt);
     });
   });
   elements.chatForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const prompt = elements.chatInput.value.trim();
     if (!prompt) return;
-    handleChatPrompt(prompt);
+    handleChatPrompt(prompt, { source: "assistant", echoUser: true });
     elements.chatInput.value = "";
   });
   elements.chatStepbit.addEventListener("click", () => {
@@ -261,7 +265,14 @@ function bindEvents() {
   elements.runCommand.addEventListener("click", () => {
     const prompt = elements.paletteInput.value.trim();
     if (!prompt) return;
-    handleChatPrompt(prompt);
+    handleQuickCommand(prompt);
+  });
+  elements.paletteInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    const prompt = elements.paletteInput.value.trim();
+    if (!prompt) return;
+    handleQuickCommand(prompt);
   });
   elements.commandPaletteTrigger.addEventListener("click", () => {
     state.paletteOpen = true;
@@ -423,11 +434,23 @@ async function loadRunsRegistrySnapshot() {
 }
 
 function renderAll() {
+  renderCommandFeedback();
   renderChat();
   renderTabs();
   renderPalette();
   renderWorkflow();
   renderChatAdapterStatus();
+}
+
+function renderCommandFeedback() {
+  elements.commandFeedback.textContent = state.quickCommandFeedback.text;
+  elements.commandFeedback.className = "command-feedback";
+  if (state.quickCommandFeedback.tone === "warning") {
+    elements.commandFeedback.classList.add("is-warning");
+  }
+  if (state.quickCommandFeedback.tone === "success") {
+    elements.commandFeedback.classList.add("is-success");
+  }
 }
 
 function defaultShellWorkspaceStore() {
@@ -921,7 +944,7 @@ function renderActiveSurfaceMeta(activeTab = null) {
   const contextCount = getContextTabs().length;
   const surfaceMode = !activeTab ? "support" : isPrimarySurfaceTab(activeTab) ? "primary" : "context";
   const surfaceLabel = !activeTab ? "Support lane" : surfaceMode === "primary" ? "Primary surface" : "Context tab";
-  const focusLabel = activeTab?.title || "Command bus";
+  const focusLabel = activeTab?.title || "Assistant support";
 
   appendChildren(
     elements.topbarSurfaceMeta,
@@ -946,7 +969,7 @@ function renderTabs() {
         "div",
         {
           className: "tab-placeholder",
-          text: "No context tab is open yet.\n\nUse chat, quick command, or the workflow panel to launch work, open runs, compare candidates, or inspect artifacts.",
+          text: "No context tab is open yet.\n\nUse quick commands, assistant, or the workflow panel to launch work, open runs, compare candidates, or inspect artifacts.",
         },
       ),
     );
@@ -1553,6 +1576,7 @@ function handleStepbitPrompt(prompt) {
   const trimmedPrompt = String(prompt || "").trim();
   if (!trimmedPrompt) return;
   pushMessage("user", trimmedPrompt);
+  setQuickCommandFeedback("Stepbit routing is active in Assistant history below.", "neutral");
   void submitStepbitPrompt(trimmedPrompt, "chat");
 }
 
@@ -1567,111 +1591,187 @@ function askStepbitAboutLatestFailure() {
   void submitStepbitPrompt(prompt, "palette");
 }
 
-async function handleChatPrompt(prompt) {
+function setQuickCommandFeedback(text, tone = "neutral") {
+  state.quickCommandFeedback = {
+    tone,
+    text,
+  };
+  renderCommandFeedback();
+}
+
+function handleSupportShortcut(prompt) {
   const trimmedPrompt = String(prompt || "").trim();
   if (!trimmedPrompt) return;
-  pushMessage("user", trimmedPrompt);
+  if (trimmedPrompt.toLowerCase().startsWith("ask stepbit")) {
+    const stepbitPrompt = trimmedPrompt.replace(/^ask stepbit\s*/i, "").trim();
+    elements.chatInput.value = stepbitPrompt || trimmedPrompt;
+    focusChat();
+    setQuickCommandFeedback("Stepbit requests belong in Assistant. The prompt draft was moved below.", "warning");
+    return;
+  }
+  elements.paletteInput.value = trimmedPrompt;
+  handleQuickCommand(trimmedPrompt);
+}
+
+function handleQuickCommand(prompt) {
+  const trimmedPrompt = String(prompt || "").trim();
+  if (!trimmedPrompt) return;
+  elements.paletteInput.value = "";
+  void handleChatPrompt(trimmedPrompt, { source: "quick-command", echoUser: false });
+}
+
+async function handleChatPrompt(prompt, options = {}) {
+  const trimmedPrompt = String(prompt || "").trim();
+  if (!trimmedPrompt) return;
+  const { source = "assistant", echoUser = true } = options;
+  const isQuickCommand = source === "quick-command";
+  if (echoUser) pushMessage("user", trimmedPrompt);
   const stepbitPrompt = extractStepbitPrompt(trimmedPrompt);
   if (stepbitPrompt) {
+    if (isQuickCommand) {
+      elements.chatInput.value = stepbitPrompt;
+      focusChat();
+      setQuickCommandFeedback("Stepbit prompts belong in Assistant. The prompt draft was moved below.", "warning");
+      return;
+    }
     await submitStepbitPrompt(stepbitPrompt, "chat");
     return;
   }
   const normalized = trimmedPrompt.toLowerCase();
   if (normalized.includes("open experiments") || normalized.includes("open sweeps") || normalized === "experiments") {
     openExperimentsTab();
-    pushMessage("assistant", "Opened the native experiments workspace.");
+    if (isQuickCommand) {
+      setQuickCommandFeedback("Opened Experiments in the primary workbench.", "success");
+    } else {
+      pushMessage("assistant", "Opened the native experiments workspace.");
+    }
     return;
   }
   if (normalized.includes("open sweep handoff") || normalized.includes("open sweep decision")) {
     openSweepDecisionTab();
+    if (isQuickCommand) setQuickCommandFeedback("Opened Sweep Handoff in the workbench.", "success");
     return;
   }
   if (normalized.includes("refresh experiments") || normalized.includes("refresh sweeps")) {
     refreshExperimentsWorkspace({ focusTab: true, silent: false });
+    if (isQuickCommand) setQuickCommandFeedback("Refreshing experiments workspace.", "success");
     return;
   }
   if (normalized.includes("open launch") || normalized === "launch") {
     openResearchTab("launch", "Launch", "#/launch", { replacePrimary: true });
-    pushMessage("assistant", "Opened the Launch surface inside a desktop tab.");
+    if (isQuickCommand) {
+      setQuickCommandFeedback("Opened Launch in the primary workbench.", "success");
+    } else {
+      pushMessage("assistant", "Opened the Launch surface inside a desktop tab.");
+    }
     return;
   }
   if (normalized.includes("open compare") || normalized === "compare" || normalized.includes("compare selected")) {
     openCompareSelectionTab(state.selectedRunIds, "selected runs", { replacePrimary: true });
+    if (isQuickCommand) setQuickCommandFeedback("Opened Compare in the primary workbench.", "success");
     return;
   }
   if (normalized.includes("open shortlist compare")) {
     openShortlistCompareTab();
+    if (isQuickCommand) setQuickCommandFeedback("Opened shortlist compare in the workbench.", "success");
     return;
   }
   if (normalized.includes("open candidates") || normalized.includes("open shortlist")) {
     openCandidatesTab();
-    pushMessage("assistant", "Opened the candidates and shortlist surface.");
+    if (isQuickCommand) {
+      setQuickCommandFeedback("Opened Candidates in the primary workbench.", "success");
+    } else {
+      pushMessage("assistant", "Opened the candidates and shortlist surface.");
+    }
     return;
   }
   if (normalized.includes("open ops") || normalized.includes("paper ops")) {
     openPaperOpsTab();
-    pushMessage("assistant", "Opened the native Paper Ops surface.");
+    if (isQuickCommand) {
+      setQuickCommandFeedback("Opened Paper Ops in the primary workbench.", "success");
+    } else {
+      pushMessage("assistant", "Opened the native Paper Ops surface.");
+    }
     return;
   }
   if (normalized.includes("open runs") || normalized === "runs") {
     openRunsNativeTab();
-    pushMessage("assistant", "Opened the native run explorer.");
+    if (isQuickCommand) {
+      setQuickCommandFeedback("Opened Runs in the primary workbench.", "success");
+    } else {
+      pushMessage("assistant", "Opened the native run explorer.");
+    }
     return;
   }
   if (normalized.includes("open baseline")) {
     openBaselineRunTab();
+    if (isQuickCommand) setQuickCommandFeedback("Opened the current baseline run.", "success");
     return;
   }
   if (normalized.includes("latest run")) {
     openLatestRunTab();
+    if (isQuickCommand) setQuickCommandFeedback("Opened the latest indexed run.", "success");
     return;
   }
   if (normalized.includes("latest failed launch") || normalized.includes("latest failed job")) {
     openLatestFailedLaunchTab();
+    if (isQuickCommand) setQuickCommandFeedback("Opened the latest failed launch for review.", "success");
     return;
   }
   if (normalized.includes("explain latest failure") || normalized.includes("explain failure")) {
     explainLatestFailureInChat();
+    if (isQuickCommand) setQuickCommandFeedback("Failure explanation recorded in Assistant history below.", "success");
     return;
   }
   if (normalized.startsWith("show artifacts")) {
     const explicitRunId = extractRunIdAfterPrefix(prompt, "show artifacts for");
     explicitRunId ? openArtifactsTabForRun(explicitRunId) : openArtifactsForPreferredRun();
+    if (isQuickCommand) setQuickCommandFeedback("Opened artifacts in the workbench.", "success");
     return;
   }
   if (normalized.includes("show runtime status") || normalized === "status") {
     summarizeRuntimeInChat();
+    if (isQuickCommand) setQuickCommandFeedback("Runtime summary recorded in Assistant history below.", "success");
     return;
   }
   if (normalized.startsWith("mark candidate")) {
     const runId = extractRunIdAfterPrefix(trimmedPrompt, "mark candidate").trim();
     if (!runId) {
       pushMessage("assistant", "Use `mark candidate <run_id>` to promote a run into the shortlist workflow.");
+      if (isQuickCommand) setQuickCommandFeedback("Quick commands need a run id: `mark candidate <run_id>`.", "warning");
       return;
     }
     toggleCandidate(runId, true);
+    if (isQuickCommand) setQuickCommandFeedback(`Marked ${runId} as candidate. Confirmation appears in Assistant history.`, "success");
     return;
   }
   if (normalized.startsWith("mark baseline")) {
     const runId = extractRunIdAfterPrefix(trimmedPrompt, "mark baseline").trim();
     if (!runId) {
       pushMessage("assistant", "Use `mark baseline <run_id>` to pin the reference run.");
+      if (isQuickCommand) setQuickCommandFeedback("Quick commands need a run id: `mark baseline <run_id>`.", "warning");
       return;
     }
     setBaseline(runId);
+    if (isQuickCommand) setQuickCommandFeedback(`Updated baseline for ${runId}. Confirmation appears in Assistant history.`, "success");
     return;
   }
   const launchRunPayload = parseLaunchRunPrompt(trimmedPrompt);
   if (launchRunPayload) {
     submitLaunchRequest(launchRunPayload, "chat");
+    if (isQuickCommand) setQuickCommandFeedback("Submitted launch request. Progress appears in Assistant history and Launch.", "success");
     return;
   }
   const launchSweepPayload = parseLaunchSweepPrompt(trimmedPrompt);
   if (launchSweepPayload) {
     submitLaunchRequest(launchSweepPayload, "chat");
+    if (isQuickCommand) setQuickCommandFeedback("Submitted sweep request. Progress appears in Assistant history and Launch.", "success");
     return;
   }
   pushMessage("assistant", "This shell now supports real backend-backed actions. Try:\n- open experiments\n- open sweep handoff\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/experiments/eth_2023_grid.yaml\n- open candidates\n- mark candidate <run_id>\n- mark baseline <run_id>\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure\n- ask stepbit explain the latest failed launch");
+  if (isQuickCommand) {
+    setQuickCommandFeedback("Command not recognized. Use deterministic verbs like open, show, compare, launch, or mark.", "warning");
+  }
 }
 
 async function submitLaunchRequest(payload, source) {
