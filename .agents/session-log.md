@@ -1,6 +1,7 @@
 # Session Log - QuantLab
 
 - 2026-04-09: Created the Desktop/UI UX remediation issue block after consolidating desktop findings into three root problems: workstation containment, right-rail support-lane clarity, and decision guidance across runs surfaces. Opened GitHub issues #286, #287, and #288 to map the next implementation sequence before touching renderer behavior.
+- 2026-04-09: Created a Desktop/UI issue block for the right-rail support lane after confirming that the upper quick-entry box and the lower assistant panel currently share the same output log and therefore duplicate semantics. Added issues #218–#221 to separate quick commands from assistant history, clarify Stepbit routing, and reduce right-rail noise before touching renderer behavior.
 ## 2026-04-09 — CLI Health Worktree-Safe Check (Issue #293)
 - **Session Focus**: Remove a false negative in CLI health validation so `--check` remains trustworthy across non-canonical worktree names.
 - **Tasks Completed**:
@@ -260,4 +261,5 @@
   - [Task 2]
 - **Key Decisions**: [Logic, scope, or architecture changes]
 - **Next Steps**: [Planned work for the next session]
+
 
