@@ -47,6 +47,7 @@ const CONFIG = {
   refreshIntervalMs: 15000,
   maxWorklistRuns: 8,
   maxRecentJobs: 4,
+  maxContextTabs: 6,
   maxLogPreviewChars: 5000,
   maxCandidateCompare: 4,
   maxExperimentsConfigs: 12,
@@ -142,17 +143,28 @@ const elements = {
   workflowRunsList: document.getElementById("workflow-runs-list"),
   workflowOpenCompare: document.getElementById("workflow-open-compare"),
   workflowClearSelection: document.getElementById("workflow-clear-selection"),
+  topbarSurfaceMeta: document.getElementById("topbar-surface-meta"),
+  workbenchMeta: document.getElementById("workbench-meta"),
 };
+
+const PRIMARY_SURFACE_IDS = new Set([
+  "experiments",
+  "iframe:#/launch",
+  "runs-native",
+  "compare:selected",
+  "candidates",
+  "paper-ops",
+]);
 
 const paletteActions = [
   ["chat", "Open Chat", "Return focus to the command bus.", () => focusChat()],
   ["experiments", "Open Experiments", "Open the native experiments and sweeps workspace.", () => openExperimentsTab()],
   ["sweep-handoff", "Open Sweep Handoff", "Open the local sweep decision handoff compare.", () => openSweepDecisionTab()],
-  ["launch", "Open Launch", "Open the QuantLab launch surface.", () => openResearchTab("launch", "Launch", "#/launch")],
+  ["launch", "Open Launch", "Open the QuantLab launch surface.", () => openResearchTab("launch", "Launch", "#/launch", { replacePrimary: true })],
   ["runs", "Open Runs", "Open the native run explorer.", () => openRunsNativeTab()],
   ["runs-legacy", "Open Runs (Legacy)", "Open the browser-based run explorer.", () => openResearchTab("runs", "Runs (legacy)", "#/")],
   ["candidates", "Open Candidates", "Open the shortlist and baseline surface.", () => openCandidatesTab()],
-  ["compare", "Open Compare", "Open a compare tab from selected runs.", () => openCompareSelectionTab()],
+  ["compare", "Open Compare", "Open a compare tab from selected runs.", () => openCompareSelectionTab(state.selectedRunIds, "selected runs", { replacePrimary: true })],
   ["shortlist-compare", "Open Shortlist Compare", "Compare the current shortlist or baseline set.", () => openShortlistCompareTab()],
   ["baseline-run", "Open Baseline Run", "Open the current baseline run workspace.", () => openBaselineRunTab()],
   ["ops", "Open Paper Ops", "Open the native operational surface.", () => openPaperOpsTab()],
@@ -219,10 +231,10 @@ function bindEvents() {
       const action = button.dataset.action;
       if (action === "open-chat") focusChat();
       if (action === "open-experiments") openExperimentsTab();
-      if (action === "open-launch") openResearchTab("launch", "Launch", "#/launch");
+      if (action === "open-launch") openResearchTab("launch", "Launch", "#/launch", { replacePrimary: true });
       if (action === "open-runs") openRunsNativeTab();
       if (action === "open-candidates") openCandidatesTab();
-      if (action === "open-compare") openCompareSelectionTab();
+      if (action === "open-compare") openCompareSelectionTab(state.selectedRunIds, "selected runs", { replacePrimary: true });
       if (action === "open-ops") openPaperOpsTab();
     });
   });
@@ -554,8 +566,10 @@ function serializeShellWorkspaceStore() {
 
 function restoreShellWorkspaceStore(store) {
   const restored = normalizeShellWorkspaceStore(store);
-  state.tabs = restored.tabs;
-  state.activeTabId = restored.active_tab_id;
+  state.tabs = collapsePrimarySurfaceTabs(restored.tabs, restored.active_tab_id);
+  state.activeTabId = state.tabs.some((tab) => tab.id === restored.active_tab_id)
+    ? restored.active_tab_id
+    : state.tabs[0]?.id || null;
   state.selectedRunIds = restored.selected_run_ids;
   applyLaunchFormState(restored.launch_form);
 }
@@ -586,7 +600,7 @@ function reconcileWorkspaceTabs() {
   const experimentsReady = state.experimentsWorkspace.status === "ready";
   let changed = false;
 
-  const nextTabs = state.tabs
+  let nextTabs = state.tabs
     .map((tab) => {
       if (tab.kind === "run" || tab.kind === "artifacts") {
         if (!validRunIds.has(tab.runId)) {
@@ -636,6 +650,8 @@ function reconcileWorkspaceTabs() {
       return tab;
     })
     .filter(Boolean);
+
+  nextTabs = collapsePrimarySurfaceTabs(pruneContextTabs(nextTabs), state.activeTabId);
 
   const nextActiveTabId = nextTabs.some((tab) => tab.id === state.activeTabId) ? state.activeTabId : nextTabs[0]?.id || null;
   if (!changed && nextActiveTabId === state.activeTabId) return false;
@@ -860,6 +876,67 @@ function renderChatAdapterStatus() {
     : "Stepbit adapter offline.";
 }
 
+function isPrimarySurfaceTab(tab) {
+  return Boolean(tab?.id && PRIMARY_SURFACE_IDS.has(tab.id));
+}
+
+function getPrimarySurfaceTabs(tabs = state.tabs) {
+  return tabs.filter((tab) => isPrimarySurfaceTab(tab));
+}
+
+function getContextTabs(tabs = state.tabs) {
+  return tabs.filter((tab) => !isPrimarySurfaceTab(tab));
+}
+
+function collapsePrimarySurfaceTabs(tabs, preferredActiveId = null) {
+  const primaryTabs = getPrimarySurfaceTabs(tabs);
+  if (primaryTabs.length <= 1) return tabs;
+  const keepId = primaryTabs.find((tab) => tab.id === preferredActiveId)?.id || primaryTabs[primaryTabs.length - 1]?.id;
+  return tabs.filter((tab) => !isPrimarySurfaceTab(tab) || tab.id === keepId);
+}
+
+function pruneContextTabs(tabs, preferredActiveId = null) {
+  const contextTabs = getContextTabs(tabs);
+  if (contextTabs.length <= CONFIG.maxContextTabs) return tabs;
+  const protectedIds = new Set([preferredActiveId, state.activeTabId].filter(Boolean));
+  const overflow = contextTabs.length - CONFIG.maxContextTabs;
+  const dropIds = new Set();
+
+  for (const tab of contextTabs) {
+    if (dropIds.size >= overflow) break;
+    if (protectedIds.has(tab.id)) continue;
+    dropIds.add(tab.id);
+  }
+
+  for (const tab of contextTabs) {
+    if (dropIds.size >= overflow) break;
+    if (!dropIds.has(tab.id)) dropIds.add(tab.id);
+  }
+
+  return tabs.filter((tab) => !dropIds.has(tab.id));
+}
+
+function renderActiveSurfaceMeta(activeTab = null) {
+  const primaryCount = getPrimarySurfaceTabs().length;
+  const contextCount = getContextTabs().length;
+  const surfaceMode = !activeTab ? "support" : isPrimarySurfaceTab(activeTab) ? "primary" : "context";
+  const surfaceLabel = !activeTab ? "Support lane" : surfaceMode === "primary" ? "Primary surface" : "Context tab";
+  const focusLabel = activeTab?.title || "Command bus";
+
+  appendChildren(
+    elements.topbarSurfaceMeta,
+    createElementNode("span", { className: `surface-meta-chip ${surfaceMode}`, text: surfaceLabel }),
+    createElementNode("span", { className: "surface-meta-chip", text: `Focus ${focusLabel}` }),
+    createElementNode("span", { className: "surface-meta-chip", text: `${primaryCount} primary · ${contextCount} context` }),
+  );
+
+  elements.workbenchMeta.textContent = !activeTab
+    ? "Sidebar navigation opens one primary surface at a time. Context tabs stay bounded until you need them."
+    : isPrimarySurfaceTab(activeTab)
+      ? `Primary surface active. ${contextCount} context tab${contextCount === 1 ? "" : "s"} remain available without displacing the workbench.`
+      : `Context tab active. The current primary surface stays preserved behind this review path.`;
+}
+
 function renderTabs() {
   if (!state.tabs.length) {
     clearElement(elements.tabsBar);
@@ -874,6 +951,7 @@ function renderTabs() {
       ),
     );
     elements.topbarTitle.textContent = "Chat";
+    renderActiveSurfaceMeta(null);
     syncNav("chat");
     return;
   }
@@ -883,12 +961,15 @@ function renderTabs() {
       createElementNode(
         "button",
         {
-          className: `tab-pill ${tab.id === state.activeTabId ? "is-active" : ""}`,
+          className: `tab-pill ${tab.id === state.activeTabId ? "is-active" : ""} ${isPrimarySurfaceTab(tab) ? "is-primary" : "is-context"}`,
           dataset: { tabId: tab.id },
           type: "button",
         },
         [
-          createElementNode("span", { text: tab.title }),
+          createElementNode("span", { className: "tab-pill-label" }, [
+            createElementNode("span", { text: tab.title }),
+            createElementNode("span", { className: "tab-pill-meta", text: isPrimarySurfaceTab(tab) ? "Primary" : "Context" }),
+          ]),
           createElementNode("span", { className: "tab-close", text: "×", dataset: { closeTab: tab.id } }),
         ],
       ),
@@ -897,6 +978,7 @@ function renderTabs() {
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) || state.tabs[0];
   state.activeTabId = activeTab.id;
   elements.topbarTitle.textContent = activeTab.title;
+  renderActiveSurfaceMeta(activeTab);
   syncNav(activeTab.navKind || activeTab.kind);
   const renderTab = TAB_RENDERERS[activeTab.kind] || renderTabFallback;
   renderTab(activeTab);
@@ -1509,12 +1591,12 @@ async function handleChatPrompt(prompt) {
     return;
   }
   if (normalized.includes("open launch") || normalized === "launch") {
-    openResearchTab("launch", "Launch", "#/launch");
+    openResearchTab("launch", "Launch", "#/launch", { replacePrimary: true });
     pushMessage("assistant", "Opened the Launch surface inside a desktop tab.");
     return;
   }
   if (normalized.includes("open compare") || normalized === "compare" || normalized.includes("compare selected")) {
-    openCompareSelectionTab();
+    openCompareSelectionTab(state.selectedRunIds, "selected runs", { replacePrimary: true });
     return;
   }
   if (normalized.includes("open shortlist compare")) {
@@ -1600,7 +1682,7 @@ async function submitLaunchRequest(payload, source) {
     const result = await window.quantlabDesktop.postJson(CONFIG.launchControlPath, payload);
     state.launchFeedback = result.message || "Launch accepted.";
     await refreshSnapshot();
-    openResearchTab("launch", "Launch", "#/launch");
+    openResearchTab("launch", "Launch", "#/launch", { replacePrimary: true });
     pushMessage("assistant", `${result.message || "Launch accepted."}\n${summarizeLaunchPayload(payload)}`);
   } catch (error) {
     const message = error.message || "Launch failed.";
@@ -1631,9 +1713,8 @@ function summarizeRuntimeInChat() {
 }
 
 function focusChat() {
-  state.activeTabId = null;
-  renderTabs();
-  pushMessage("assistant", "Chat stays at the center of the shell. Use it to launch work, open runs, compare, or inspect artifacts.");
+  elements.chatInput.focus();
+  elements.chatInput.select();
 }
 
 async function openExperimentsTab() {
@@ -1645,7 +1726,7 @@ async function openExperimentsTab() {
     title: "Experiments",
     selectedConfigPath: current?.selectedConfigPath || state.experimentsWorkspace.configs[0]?.path || null,
     selectedSweepId: current?.selectedSweepId || state.experimentsWorkspace.sweeps[0]?.run_id || null,
-  });
+  }, { replacePrimary: true });
   await refreshExperimentsWorkspace({ focusTab: true, silent: true });
 }
 
@@ -1672,24 +1753,22 @@ function openRunsNativeTab() {
     kind: "runs",
     navKind: "runs",
     title: "Runs",
-  });
+  }, { replacePrimary: true });
 }
 
-function openResearchTab(navKind, title, hash) {
+function openResearchTab(navKind, title, hash, options = {}) {
   if (!state.workspace.serverUrl) {
     pushMessage("assistant", "research_ui is unavailable. Browser-based tabs are disabled, but native/local surfaces remain usable.");
     return;
   }
   const id = `iframe:${hash}`;
-  const existing = state.tabs.find((tab) => tab.id === id);
-  if (existing) {
-    state.activeTabId = existing.id;
-    renderTabs();
-    return;
-  }
-  state.tabs.push({ id, kind: "iframe", navKind, title, url: `${state.workspace.serverUrl}/research_ui/index.html${hash}` });
-  state.activeTabId = id;
-  renderTabs();
+  upsertTab({
+    id,
+    kind: "iframe",
+    navKind,
+    title,
+    url: `${state.workspace.serverUrl}/research_ui/index.html${hash}`,
+  }, { replacePrimary: Boolean(options.replacePrimary) });
 }
 
 function openLatestRunTab() {
@@ -1719,14 +1798,14 @@ async function openRunDetailTab(runId) {
   }
 }
 
-async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabel = "selected runs") {
+async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabel = "selected runs", options = {}) {
   const selectedRuns = uniqueRunIds(runIds).map(findRun).filter(Boolean);
   if (selectedRuns.length < 2) {
     pushMessage("assistant", "Select 2 to 4 runs in the worklist before opening compare.");
     return;
   }
   const compareSet = selectedRuns.slice(0, CONFIG.maxCandidateCompare);
-  const tabId = `compare:${compareSet.map((run) => run.run_id).join("|")}`;
+  const tabId = options.replacePrimary ? "compare:selected" : `compare:${compareSet.map((run) => run.run_id).join("|")}`;
   upsertTab({
     id: tabId,
     kind: "compare",
@@ -1736,7 +1815,7 @@ async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabe
     rankMetric: "sharpe_simple",
     status: "loading",
     detailMap: {},
-  });
+  }, { replacePrimary: Boolean(options.replacePrimary) });
   try {
     const details = await Promise.all(compareSet.map(async (run) => {
       try {
@@ -1755,7 +1834,7 @@ async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabe
       rankMetric: "sharpe_simple",
       status: "ready",
       detailMap: Object.fromEntries(details),
-    });
+    }, { replacePrimary: Boolean(options.replacePrimary) });
   } catch (_error) {
     upsertTab({
       id: tabId,
@@ -1766,7 +1845,7 @@ async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabe
       rankMetric: "sharpe_simple",
       status: "ready",
       detailMap: {},
-    });
+    }, { replacePrimary: Boolean(options.replacePrimary) });
   }
   pushMessage("assistant", `Opened a compare tab for ${compareSet.length} ${sourceLabel}.`);
 }
@@ -1778,7 +1857,7 @@ function openCandidatesTab(filter = "all") {
     navKind: "candidates",
     title: "Candidates",
     filter,
-  });
+  }, { replacePrimary: true });
 }
 
 function openPaperOpsTab() {
@@ -1787,7 +1866,7 @@ function openPaperOpsTab() {
     kind: "paper",
     navKind: "ops",
     title: "Paper Ops",
-  });
+  }, { replacePrimary: true });
 }
 
 function openBaselineRunTab() {
@@ -2162,7 +2241,10 @@ function buildSweepDecisionRows(sweepRunId, configPath, rows) {
 
 function closeTab(tabId) {
   state.tabs = state.tabs.filter((tab) => tab.id !== tabId);
-  if (state.activeTabId === tabId) state.activeTabId = state.tabs[0]?.id || null;
+  if (state.activeTabId === tabId) {
+    const nextPrimaryTab = getPrimarySurfaceTabs(state.tabs)[0] || null;
+    state.activeTabId = nextPrimaryTab?.id || state.tabs[0]?.id || null;
+  }
   renderTabs();
   scheduleShellWorkspacePersist();
 }
@@ -2337,10 +2419,21 @@ function getRendererContext() {
   };
 }
 
-function upsertTab(nextTab) {
-  const index = state.tabs.findIndex((tab) => tab.id === nextTab.id);
-  if (index >= 0) state.tabs[index] = { ...state.tabs[index], ...nextTab };
-  else state.tabs.push(nextTab);
+function upsertTab(nextTab, options = {}) {
+  const replacePrimary = Boolean(options.replacePrimary) || isPrimarySurfaceTab(nextTab);
+  if (replacePrimary) {
+    const contextTabs = getContextTabs(state.tabs);
+    const existingPrimaryTab = state.tabs.find((tab) => tab.id === nextTab.id) || null;
+    state.tabs = [...contextTabs, existingPrimaryTab ? { ...existingPrimaryTab, ...nextTab } : nextTab];
+  } else {
+    const index = state.tabs.findIndex((tab) => tab.id === nextTab.id);
+    if (index >= 0) {
+      state.tabs[index] = { ...state.tabs[index], ...nextTab };
+    } else {
+      state.tabs.push(nextTab);
+    }
+    state.tabs = pruneContextTabs(state.tabs, nextTab.id);
+  }
   state.activeTabId = nextTab.id;
   renderTabs();
   scheduleShellWorkspacePersist();
