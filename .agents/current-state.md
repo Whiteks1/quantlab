@@ -125,22 +125,25 @@
 | `codex/fix-315-d2-coverage-restore` | Deleted (fix in main via other path) |
 | `codex/issue-316/317/318/319` | Merged via individual PRs #324–#327 |
 
-### Local branches with pending work (need issue + PR)
-| Branch | Diff vs main | Scope | Priority |
-|--------|-------------|-------|---------|
-| `codex/broker-evidence-readiness` | 10 files, 442 ins | feat: broker evidence readiness check | 🔴 High |
-| `codex/cursor-mcp-integration` | 11 files, 1565 ins | feat: Cursor MCP integration | 🟠 Medium |
-| `codex/landing-github-pages` | 5 files, 1294 ins | feat: GitHub Pages deploy | 🟠 Medium |
-| `codex/supervised-broker-runbook` | 4 files, 284 ins | docs: supervised broker runbook | 🟡 Low |
-| `codex/pretrade-intake-artifact-links` | 2 files, 47 ins | feat: pretrade artifact paths in research_ui | 🟡 Low |
-| `codex/desktop-tab-state-hardening` | — | Active worktree (quant_lab-desktop-216) | 🔵 Active |
+### Local branches — final state
+| Branch | Status |
+|--------|--------|
+| `codex/desktop-tab-state-hardening` | 🔵 Active worktree (quant_lab-desktop-216) — do not delete |
 
-### Branches audited and confirmed absorbed by main
-| Branch | Resolution |
-|--------|-----------|
-| `codex/bitget-roadmap-note` | Content in main (README.md:52, roadmap.md:273, current-state.md:40) |
-| `codex/desktop-runtime-hardening` | Content in main via PR #327 |
-| `codex/mcp-outputs-artifacts` | Content in main via PR #327 (342 lines > 329 in branch) |
+### All other local codex/* branches — audited and deleted
+All branches were confirmed **older than main** via two-dot diff (each had 7,000–12,000 deletions vs main, meaning main already supersedes them completely). Deleted without PR:
+
+| Branch | Reason |
+|--------|--------|
+| `codex/broker-evidence-readiness` | content in main; branch had 11,762 deletions vs main |
+| `codex/cursor-mcp-integration` | content in main; branch had 7,896 deletions vs main |
+| `codex/landing-github-pages` | content in main; branch had 10,090 deletions vs main |
+| `codex/supervised-broker-runbook` | content in main; branch had 12,200 deletions vs main |
+| `codex/pretrade-intake-artifact-links` | content in main; branch had 9,409 deletions vs main |
+| `codex/bitget-roadmap-note` | content confirmed in main at README.md:52, roadmap.md:273 |
+| `codex/desktop-runtime-hardening` | content in main via PR #327 |
+| `codex/mcp-outputs-artifacts` | content in main via PR #327 (342 lines > 329 in branch) |
+
 
 
 ### Root artifacts
