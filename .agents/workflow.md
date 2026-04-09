@@ -18,6 +18,31 @@ QuantLab follows a strict **Issue-Branch-PR** workflow:
 
 Codex-created branches should use the `codex/` prefix.
 
+### Mandatory closeout path for real diffs
+
+When a slice produces a real diff, the default expectation is to carry it through the full repository workflow, not to stop at a local patch.
+
+Default path:
+
+1. issue in scope
+2. dedicated branch
+3. implementation
+4. relevant checks
+5. coherent commit or commits
+6. PR
+7. merge
+8. issue closure
+9. local and remote cleanup
+
+This is the default and should not require an extra prompt from the user at each routine step.
+
+Exceptions must be explicit:
+- the user asks to stop before the next workflow step
+- repository permissions or hosting access block the next step
+- repository state makes the next step unsafe or ambiguous
+
+If any exception applies, state it clearly and stop at the highest safe point.
+
 ---
 
 ## 2. Agent Collaboration Model
@@ -45,7 +70,8 @@ During implementation:
 When finishing work:
 - Summarize what was completed.
 - Note any important continuity for the next session.
-- Leave the branch in a reviewable state for PR preparation.
+- Leave the branch in a reviewable state for PR preparation or complete the PR path if nothing blocks it.
+- Do not leave a diff-bearing slice half-closed by default when the next workflow step is routine and safe.
 
 ---
 
@@ -75,3 +101,15 @@ Before changing files, confirm:
 - that the task scope is still respected
 - that unrelated files remain untouched
 - that stray files are not being pulled into the change without an explicit decision
+
+When a slice has a real diff, the expected closeout checklist is:
+- issue or task identified
+- dedicated branch confirmed
+- focused validation run and recorded
+- coherent commit history prepared
+- PR created when repository access allows it
+- merge completed when approved
+- linked issue closed
+- merged branch cleaned locally and remotely when appropriate
+
+Do not leave dangling WIP branches, stale remote branches, or unclear local commit stacks unless the user explicitly asks to pause there or the repository state blocks the next step.

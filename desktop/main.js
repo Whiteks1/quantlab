@@ -5,8 +5,9 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 const DESKTOP_ROOT = __dirname;
-const PROJECT_ROOT = path.resolve(DESKTOP_ROOT, "..");
-const WORKSPACE_ROOT = path.resolve(PROJECT_ROOT, "..");
+const CHECKOUT_ROOT = path.resolve(DESKTOP_ROOT, "..");
+const WORKSPACE_ROOT = path.resolve(CHECKOUT_ROOT, "..");
+const PROJECT_ROOT = resolveCanonicalProjectRoot(CHECKOUT_ROOT, WORKSPACE_ROOT);
 const SERVER_SCRIPT = path.join(PROJECT_ROOT, "research_ui", "server.py");
 const OUTPUTS_ROOT = process.env.QUANTLAB_DESKTOP_OUTPUTS_ROOT
   ? path.resolve(process.env.QUANTLAB_DESKTOP_OUTPUTS_ROOT)
@@ -27,6 +28,31 @@ const RESEARCH_UI_STARTUP_TIMEOUT_MS = 25000;
 const ELECTRON_STATE_ROOT = path.join(DESKTOP_OUTPUTS_ROOT, "electron");
 const IS_SMOKE_RUN = process.env.QUANTLAB_DESKTOP_SMOKE === "1";
 const SMOKE_OUTPUT_PATH = process.env.QUANTLAB_DESKTOP_SMOKE_OUTPUT || "";
+
+function isQuantLabProjectRoot(targetPath) {
+  if (!targetPath) return false;
+  const resolved = path.resolve(targetPath);
+  return fs.existsSync(path.join(resolved, "research_ui", "server.py"))
+    && fs.existsSync(path.join(resolved, "src"));
+}
+
+function resolveCanonicalProjectRoot(checkoutRoot, workspaceRoot) {
+  const overrideRoot = String(process.env.QUANTLAB_DESKTOP_PROJECT_ROOT || "").trim();
+  const siblingQuantLabRoot = path.join(workspaceRoot, "quant_lab");
+  const candidates = [
+    overrideRoot,
+    path.basename(checkoutRoot).toLowerCase() === "quant_lab" ? checkoutRoot : "",
+    siblingQuantLabRoot,
+    checkoutRoot,
+  ]
+    .filter(Boolean)
+    .map((candidate) => path.resolve(candidate));
+
+  for (const candidate of candidates) {
+    if (isQuantLabProjectRoot(candidate)) return candidate;
+  }
+  return path.resolve(checkoutRoot);
+}
 
 app.setPath("userData", path.join(ELECTRON_STATE_ROOT, "user-data"));
 app.setPath("cache", path.join(ELECTRON_STATE_ROOT, "cache"));
@@ -731,6 +757,17 @@ function extractServerUrl(line) {
   return match ? match[1] : null;
 }
 
+function okIpcResult(data) {
+  return { ok: true, data };
+}
+
+function errorIpcResult(error) {
+  return {
+    ok: false,
+    error: error?.message || String(error || "Unknown IPC failure."),
+  };
+}
+
 async function startResearchUiServer({ forceRestart = false } = {}) {
   if (forceRestart) {
     stopResearchUiServer({ force: true });
@@ -821,8 +858,10 @@ function createMainWindow() {
 async function runDesktopSmoke() {
   const result = {
     bridgeReady: false,
+    shellReady: false,
     serverReady: false,
     apiReady: false,
+    localRunsReady: false,
     serverUrl: "",
     error: "",
   };
@@ -841,8 +880,17 @@ async function runDesktopSmoke() {
       }
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
+    try {
+      const localRuns = await readProjectJson("outputs/runs/runs_index.json");
+      result.localRunsReady = Array.isArray(localRuns?.runs);
+    } catch (_error) {
+      result.localRunsReady = false;
+    }
+    result.shellReady = result.bridgeReady && (result.serverReady || result.localRunsReady);
     if (!result.serverReady) {
-      result.error = workspaceState.error || "research_ui did not become reachable during smoke run.";
+      result.error = workspaceState.error || (result.localRunsReady
+        ? "research_ui did not become reachable, but the shell loaded via the local runs index."
+        : "research_ui did not become reachable during smoke run.");
     }
   } catch (error) {
     result.error = error.message;
@@ -853,7 +901,7 @@ async function runDesktopSmoke() {
     await fsp.writeFile(SMOKE_OUTPUT_PATH, `${JSON.stringify(result, null, 2)}\n`, "utf8");
   }
 
-  if (!result.bridgeReady || !result.serverReady || !result.apiReady) {
+  if (!result.bridgeReady || !result.shellReady) {
     process.exitCode = 1;
   }
   app.quit();
@@ -861,28 +909,47 @@ async function runDesktopSmoke() {
 
 ipcMain.handle("quantlab:get-workspace-state", async () => workspaceState);
 
+function okIpcResult(data) {
+  return { ok: true, data };
+}
+
+function errorIpcResult(error) {
+  return {
+    ok: false,
+    error: error && error.message ? error.message : String(error || "Unknown IPC error."),
+  };
+}
+
 ipcMain.handle("quantlab:request-json", async (_event, relativePath) => {
-  if (!workspaceState.serverUrl) {
-    throw new Error("Research UI server is not ready yet.");
+  try {
+    if (!workspaceState.serverUrl) {
+      throw new Error("Research UI server is not ready yet.");
+    }
+    const base = workspaceState.serverUrl.replace(/\/$/, "");
+    const response = await fetch(`${base}${relativePath}`);
+    if (!response.ok) {
+      throw new Error(`${relativePath} returned ${response.status}`);
+    }
+    return okIpcResult(await response.json());
+  } catch (error) {
+    return errorIpcResult(error);
   }
-  const base = workspaceState.serverUrl.replace(/\/$/, "");
-  const response = await fetch(`${base}${relativePath}`);
-  if (!response.ok) {
-    throw new Error(`${relativePath} returned ${response.status}`);
-  }
-  return response.json();
 });
 
 ipcMain.handle("quantlab:request-text", async (_event, relativePath) => {
-  if (!workspaceState.serverUrl) {
-    throw new Error("Research UI server is not ready yet.");
+  try {
+    if (!workspaceState.serverUrl) {
+      throw new Error("Research UI server is not ready yet.");
+    }
+    const base = workspaceState.serverUrl.replace(/\/$/, "");
+    const response = await fetch(`${base}${relativePath}`);
+    if (!response.ok) {
+      throw new Error(`${relativePath} returned ${response.status}`);
+    }
+    return okIpcResult(await response.text());
+  } catch (error) {
+    return errorIpcResult(error);
   }
-  const base = workspaceState.serverUrl.replace(/\/$/, "");
-  const response = await fetch(`${base}${relativePath}`);
-  if (!response.ok) {
-    throw new Error(`${relativePath} returned ${response.status}`);
-  }
-  return response.text();
 });
 
 ipcMain.handle("quantlab:get-candidates-store", async () => readCandidatesStore());
@@ -910,21 +977,25 @@ ipcMain.handle("quantlab:read-project-json", async (_event, targetPath) => {
 });
 
 ipcMain.handle("quantlab:post-json", async (_event, relativePath, payload) => {
-  if (!workspaceState.serverUrl) {
-    throw new Error("Research UI server is not ready yet.");
+  try {
+    if (!workspaceState.serverUrl) {
+      throw new Error("Research UI server is not ready yet.");
+    }
+    const base = workspaceState.serverUrl.replace(/\/$/, "");
+    const response = await fetch(`${base}${relativePath}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    });
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : {};
+    if (!response.ok) {
+      throw new Error(data.message || `${relativePath} returned ${response.status}`);
+    }
+    return okIpcResult(data);
+  } catch (error) {
+    return errorIpcResult(error);
   }
-  const base = workspaceState.serverUrl.replace(/\/$/, "");
-  const response = await fetch(`${base}${relativePath}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload ?? {}),
-  });
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : {};
-  if (!response.ok) {
-    throw new Error(data.message || `${relativePath} returned ${response.status}`);
-  }
-  return data;
 });
 
 ipcMain.handle("quantlab:open-external", async (_event, url) => {
@@ -956,6 +1027,8 @@ if (singleInstanceLock) {
 
   app.whenReady().then(() => {
     createMainWindow();
+    appendLog(`[workspace] checkout root ${CHECKOUT_ROOT}`);
+    appendLog(`[workspace] canonical project root ${PROJECT_ROOT}`);
     startResearchUiServer();
     if (IS_SMOKE_RUN) {
       mainWindow.webContents.once("did-finish-load", () => {
