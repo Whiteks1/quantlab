@@ -52,7 +52,7 @@ The result is:
 ## Product Principles
 
 - one app, one main entry point
-- chat is central, but not the only interaction surface
+- focused work surfaces lead, with assistant support always available
 - tabs are contextual and task-driven
 - actions should be explicit and auditable
 - the shell must supervise local services instead of assuming they are healthy
@@ -126,13 +126,13 @@ A user-issued command or request handled through the QuantLab assistant.
 
 ## Interaction Model
 
-QuantLab Desktop v1 should not be "chat only".
+QuantLab Desktop v1 should not be assistant-only.
 
-It should combine four interaction modes:
+It should combine focused workstation surfaces with four interaction modes:
 
-### 1. Specialized QuantLab Chat
+### 1. Specialized QuantLab Assistant
 
-The main conversational surface.
+A specialized assistant support surface.
 
 Use it for:
 
@@ -144,7 +144,7 @@ Use it for:
 - comparisons
 - next-step suggestions
 
-The chat should speak QuantLab objects, not generic assistant language.
+The assistant should speak QuantLab objects, not generic assistant language.
 
 Example intents:
 
@@ -457,7 +457,7 @@ Add bounded Stepbit augmentation:
 ## Acceptance Criteria For v1
 
 - the operator opens one desktop app instead of several browser tools
-- chat can trigger real QuantLab work through stable contracts
+- the assistant can trigger real QuantLab work through stable contracts
 - repeated actions are available through palette or panels, not only chat
 - runs, comparisons, and artifacts open in tabs
 - runtime health is visible and honest
@@ -468,7 +468,7 @@ Add bounded Stepbit augmentation:
 QuantLab Desktop v1 should be:
 
 - a single work surface
-- centered on a QuantLab-specialized chat
+- workstation-first, with a QuantLab-specialized assistant support lane
 - supported by palette, panels, and tabs
 - powered by Stepbit where useful
 - governed by QuantLab's own authority and contracts

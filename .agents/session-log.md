@@ -1,132 +1,5 @@
 # Session Log - QuantLab
 
-## 2026-04-09 — Single-Scope Merge Discipline Rule (Issue #277)
-- **Session Focus**: Add the minimum written rule needed to stop multi-scope technical branches from becoming normal practice.
-- **Tasks Completed**:
-  - Updated `AGENTS.md` to state that one branch should carry one technical story and that mixed-scope PRs are not accepted by default.
-  - Updated `CONTRIBUTING.md` to define the same rule at PR level and require explicit written justification for any core/desktop/docs/CI/cleanup mix.
-- **Key Decisions**:
-  - This slice adds only a minimal governance rule in existing authoritative workflow surfaces.
-  - The goal is not process overhead; it is to make unjustified multi-scope PRs visibly out of policy.
-- **Validation Notes**:
-  - Verified by checking that the rule is now present in both `AGENTS.md` and `CONTRIBUTING.md`.
-
-## 2026-04-09 — D.2 State Alignment and Stale Governance Cleanup (Issue #307)
-- **Session Focus**: Bring `.agents/current-state.md` back into sync with the Hyperliquid D.2 work already merged into `main`, and clear stale governance noise.
-- **Tasks Completed**:
-  - Updated `.agents/current-state.md` to reflect the April D.2 slices already merged for idempotency, ambiguous-submit labeling, reconciliation precedence, aggregate visibility, aggregate alert priority, and critical-priority regression coverage.
-  - Removed the stale `strategy_research.md` debt note because that duplicate workflow file no longer exists in the tree.
-  - Reframed Stage D.2 as residual hardening-by-evidence rather than broad execution expansion by default.
-  - Closed stale governance issue #284 because the referenced `broker_preflight` blocker was already resolved by later merged Motor/Core work.
-- **Key Decisions**:
-  - This is a state/governance cleanup slice only; it does not change runtime, contracts, or desktop behavior.
-  - D.2 remains the active execution-safety stage, but new slices now require a demonstrated operator-safety gap instead of roadmap inertia alone.
-- **Validation Notes**:
-  - Verified by comparing `.agents/current-state.md` and `.agents/session-log.md` against the merged April D.2 history on `main`.
-
-## 2026-04-09 — Hyperliquid Critical Alert Precedence Coverage (Issue #305)
-- **Session Focus**: Lock the aggregate Hyperliquid alert-priority policy with focused regressions for critical post-submit states.
-- **Tasks Completed**:
-  - Added helper fixtures in `test/test_hyperliquid_submit_sessions.py` for reconciliation and cancel-response artifacts.
-  - Added regression coverage proving aggregate health prefers `HYPERLIQUID_ORDER_REJECTED` over a newer `HYPERLIQUID_CANCEL_REQUEST_FAILED`.
-  - Added regression coverage proving aggregate alerts prefer `HYPERLIQUID_CANCEL_REQUEST_FAILED` over a newer `HYPERLIQUID_SUBMIT_REQUEST_FAILED`.
-- **Key Decisions**:
-  - This slice changes no runtime behavior; it locks the explicit priority map already present in the Hyperliquid aggregate alert surface.
-  - Coverage targets representative critical states across reconciliation, cancel, and submit branches to catch recency regressions and priority drift.
-- **Validation Notes**:
-  - Verified with `PYTHONPATH=<worktree>/src python -m pytest -q test/test_hyperliquid_submit_sessions.py`.
-
-## 2026-04-09 — Hyperliquid Aggregate Alert Priority (Issue #303)
-- **Session Focus**: Make aggregate Hyperliquid submit alerts surface operator urgency instead of picking the newest alert by timestamp alone.
-- **Tasks Completed**:
-  - Updated `src/quantlab/cli/hyperliquid_submit_sessions.py` so aggregate `latest_alert_*` selection uses explicit alert priority plus severity before recency.
-  - Added focused regression tests proving a critical identifier-missing acknowledgement outranks a newer warning and a newer generic unknown-status alert in aggregate surfaces.
-- **Key Decisions**:
-  - This slice changes only aggregate alert prioritization; it does not alter per-session alert emission or the underlying D.2 state machine.
-  - Priority is encoded explicitly for known Hyperliquid submit alert codes so operator-facing aggregate surfaces reflect urgency deterministically.
-- **Validation Notes**:
-  - Verified with `PYTHONPATH=<worktree>/src python -m pytest -q test/test_hyperliquid_submit_sessions.py`.
-
-## 2026-04-09 — Hyperliquid Aggregate Ambiguity Visibility (Issue #300)
-- **Session Focus**: Make aggregate Hyperliquid submit visibility call out the new D.2 ambiguity states explicitly instead of burying them in generic counts.
-- **Tasks Completed**:
-  - Updated `src/quantlab/cli/hyperliquid_submit_sessions.py` health output to expose explicit counts for `reconciliation_required` sessions and `submitted_remote_identifier_missing` submits.
-  - Updated `src/quantlab/reporting/hyperliquid_submit_index.py` to expose the same counts in JSON and to render them in the Markdown summary.
-  - Added focused tests covering the new aggregate counts in both health and index surfaces.
-- **Key Decisions**:
-  - This slice is visibility-only; it does not change any per-session state machine.
-  - The new counts are additive and explicit, so operators do not need to infer D.2 ambiguity from raw maps alone.
-- **Validation Notes**:
-  - Verified with `python -m pytest -q test/test_hyperliquid_submit_sessions.py`.
-
-## 2026-04-09 — Hyperliquid Status Refresh Reconciliation Precedence (Issue #298)
-- **Session Focus**: Prevent `--hyperliquid-submit-sessions-status` from degrading canonical session status when a prior reconciliation already knows the effective remote order state.
-- **Tasks Completed**:
-  - Updated `src/quantlab/cli/hyperliquid_submit_sessions.py` so status refresh preserves the reconciled effective state and alert posture when the fresh order-status probe is still `unknown`.
-  - Added a regression test proving `session_status.json` stays aligned with the known reconciliation instead of regressing to `unknown`.
-- **Key Decisions**:
-  - The fresh `order_status` artifact is still written as-is; only the effective session summary and alerts keep reconciliation precedence.
-  - This slice does not redesign reporting or remove the raw order-status signal; it only prevents misleading regression in the canonical session status file.
-- **Validation Notes**:
-  - Verified with `python -m pytest -q test/test_hyperliquid_submit_sessions.py`.
-
-## 2026-04-09 — Hyperliquid Unreconcilable Submit Acknowledgement Labeling (Issue #295)
-- **Session Focus**: Tighten Stage D.2 submit safety by making ambiguous successful Hyperliquid submit acknowledgements explicit when they cannot be reconciled immediately.
-- **Tasks Completed**:
-  - Updated `src/quantlab/brokers/hyperliquid.py` so a remote `status: ok` response without both `oid` and `cloid` is labeled `submitted_remote_identifier_missing` instead of looking like a normal `submitted_remote`.
-  - Updated `src/quantlab/cli/broker_preflight.py` so canonical submit sessions route that state to `reconciliation_required`.
-  - Updated `src/quantlab/cli/hyperliquid_submit_sessions.py` to emit a dedicated critical alert for the missing-identifier case.
-  - Added focused adapter, broker-preflight, and session-alert tests for the new behavior.
-- **Key Decisions**:
-  - The slice preserves the fact that remote submit was called and may have succeeded; it only removes the false sense of normal post-submit traceability.
-  - The ambiguous case is treated as an operator-visible reconciliation problem, not as a generic rejection.
-- **Validation Notes**:
-  - Verified with `PYTHONPATH=<worktree>/src python -m pytest -q test/test_hyperliquid_broker_adapter.py test/test_cli_broker_preflight.py test/test_hyperliquid_submit_sessions.py`.
-
-- 2026-04-09: Created the Desktop/UI UX remediation issue block after consolidating desktop findings into three root problems: workstation containment, right-rail support-lane clarity, and decision guidance across runs surfaces. Opened GitHub issues #286, #287, and #288 to map the next implementation sequence before touching renderer behavior.
-- 2026-04-09: Created a Desktop/UI issue block for the right-rail support lane after confirming that the upper quick-entry box and the lower assistant panel currently share the same output log and therefore duplicate semantics. Added issues #218–#221 to separate quick commands from assistant history, clarify Stepbit routing, and reduce right-rail noise before touching renderer behavior.
-## 2026-04-09 — CLI Health Worktree-Safe Check (Issue #293)
-- **Session Focus**: Remove a false negative in CLI health validation so `--check` remains trustworthy across non-canonical worktree names.
-- **Tasks Completed**:
-  - Updated `test/test_cli_health.py` to assert stable path invariants from `--check` instead of assuming the checkout folder must be named `quant_lab` or `quantlab`.
-  - Kept the runtime health payload unchanged because it already exposes the correct machine-facing fields: `project_root`, `main_path`, and `src_root`.
-- **Key Decisions**:
-  - The health surface should report the real filesystem path; tests should validate truthfulness, not enforce a naming convention on checkouts.
-  - This slice stays test-only and does not change CLI behavior.
-- **Validation Notes**:
-  - Verified with `python -m pytest -q test/test_cli_health.py`.
-
-- 2026-04-09: Started issue #275 in a clean Desktop/UI worktree from `main`. Scope is limited to desktop validation semantics: explicit fallback smoke, explicit real-path smoke, and CI wiring that makes the distinction visible without mixing in renderer or core changes.
-- 2026-04-09: Expanded issue #275 scope minimally to include `desktop/preload.js` because current `main` still carries the known preload bridge syntax regression. Without that blocker fix, both fallback and real-path smoke stop at `bridgeReady: false`, so the desktop validation slice cannot be validated.
-- 2026-04-09: Completed local validation for issue #275. `desktop/package.json` now exposes explicit `smoke:fallback` and `smoke:real-path` scripts, `desktop/scripts/smoke.js` and `desktop/main.js` distinguish the two semantics, and both modes passed locally after restoring the preload bridge blocker fix. CI wiring was updated in `.github/workflows/ci.yml` to add a dedicated `desktop-real-path` job.
-
-## 2026-04-09 — Hyperliquid Canonical Submit Replay Guard (Issue #291)
-- **Session Focus**: Tighten Stage D.2 idempotency on the first supervised Hyperliquid submit path by blocking duplicate canonical session replays.
-- **Tasks Completed**:
-  - Added a canonical-session guard in `src/quantlab/cli/broker_preflight.py` so `--hyperliquid-submit-session` now fails early if the derived session already has `hyperliquid_submit_response.json`.
-  - Kept the scope narrow to the canonical session path; the sibling one-off artifact path was left unchanged.
-  - Added targeted pytest coverage to prove the duplicate replay is rejected and does not re-call the adapter submit path.
-- **Key Decisions**:
-  - The canonical session identity remains the existing derived `session_id`; this slice does not introduce a new replay token or override flag.
-  - Once a canonical session already has a persisted submit response, the safe operator path is inspect/reconcile, not blind resubmit.
-  - This is an idempotency-safety guard, not a broader retry policy.
-- **Validation Notes**:
-  - Verified with `PYTHONPATH=<worktree>/src python -m pytest -q test/test_cli_broker_preflight.py test/test_hyperliquid_broker_adapter.py test/test_hyperliquid_submit_sessions.py`.
-
-## 2026-04-09 — Stepbit External-Provider Compatibility Smoke (Issue #281)
-- **Session Focus**: Consolidate a QuantLab-owned smoke for the external Stepbit provider boundary without widening the runtime surface.
-- **Tasks Completed**:
-  - Added `test/test_stepbit_external_provider_compat.py` to cover external-consumer success paths for `run` and `sweep`.
-  - Added a deterministic failure-path assertion for `sweep` when the canonical `report.json` is missing.
-  - Fixed session signalling so `SESSION_COMPLETED.mode` remains the public command type instead of being overwritten by narrower artifact modes such as `grid`.
-- **Key Decisions**:
-  - The external boundary remains the existing CLI contract: `--json-request`, optional `--signal-file`, and canonical `report.json.machine_contract`.
-  - The public signal `mode` field must stay stable as the command type (`run`, `sweep`, etc.); internal artifact modes stay available inside `report.json.machine_contract.mode`.
-  - This slice stays test-first and contract-oriented; no new integration surface was introduced.
-- **Validation Notes**:
-  - Verified with `python -m pytest -q test/test_stepbit_external_provider_compat.py test/test_machine_sweep_smoke.py test/test_signals.py test/test_cli_run.py test/test_sweep_contract.py`
-  - Verified broader local compatibility with `python -m pytest -q -k "not test_check"`; local `test_check` remains worktree-path-sensitive because this checkout lives under `quant_lab-issue-281/`.
-
 ## 2026-03-24 — Canonical Run Machine Contract (Issue #62)
 - **Session Focus**: Reduce the remaining contract asymmetry between plain `run` and `sweep` inside canonical `report.json`.
 - **Tasks Completed**:
@@ -326,17 +199,6 @@
 - **Key Decisions**: `.agents` will serve as the lightweight project memory and workflow coordination layer for QuantLab.
 - **Next Steps**: Continue aligning documentation and workflow files with the real project structure and stage progression.
 
-- 2026-04-08: Started issue #215 renderer tab dispatch registry in a clean Desktop/UI worktree from `main`. Scope is limited to `desktop/renderer/app.js` plus `.agents` continuity, replacing the `renderTabs()` tab-kind conditional chain with a local render registry while preserving the existing fallback placeholder behavior.
-- 2026-04-08: Completed issue #215 renderer tab dispatch registry. `renderTabs()` now dispatches through a local `TAB_RENDERERS` registry with the same fallback placeholder behavior, and validation passed against both desktop smoke and a live `research_ui` surface at `http://127.0.0.1:8000/research_ui/index.html`.
-- 2026-04-09: Tightened both workflow documents so real diffs now default to the full closeout path: issue or task, branch, checks, coherent commit, PR, merge, issue closure, and local/remote cleanup unless the user explicitly pauses or repository state blocks the next step.
-- 2026-04-09: Hardened issue #275 after the first CI run exposed an early-exit gap in desktop smoke. `desktop/main.js` now writes a smoke failure result for normal early shutdown paths, and `desktop/scripts/smoke.js` now reports a missing result artifact with child exit context instead of failing with a raw `ENOENT`.
-- 2026-04-09: Kept issue #275 open after the next CI run exposed a Linux-only Electron sandbox abort on GitHub-hosted runners. `desktop/scripts/smoke.js` now adds the standard CI-only `--no-sandbox` flag for Linux smoke runs without changing local desktop behavior.
-- 2026-04-09: Started and completed issue #286 workstation containment in a clean Desktop/UI worktree from `main`. The desktop shell now keeps one primary surface at a time, bounds context-tab accumulation, restores old workspace state into a single preserved primary surface, and tightens scroll containment across sidebar, workbench, workflow, and command palette. Validation passed with `npm run smoke:fallback` and `npm run smoke:real-path` from `desktop/`.
-- 2026-04-09: Started and completed issue #287 right-rail support lane semantics in a clean Desktop/UI worktree from `main`. The upper support entry now behaves as `Quick commands` with deterministic feedback, the lower panel is the single assistant/history locus, Stepbit routing is explicit, and sidebar suggested actions no longer masquerade as a second assistant input. Validation passed with `npm run smoke:fallback` and `npm run smoke:real-path` from `desktop/`.
-- 2026-04-09: Started and completed issue #288 decision clarity in a clean Desktop/UI worktree from `main`. `Runs`, `Run Detail`, `Artifacts`, `Compare`, and `Candidates` now expose evidence state, decision state, next-step guidance, compare readiness, and visible decision feedback after candidate/shortlist/baseline changes. Validation passed with `npm run smoke:fallback` and `npm run smoke:real-path` from `desktop/`.
-- 2026-04-09: Started issue #313 after a clean `origin/main` review showed `real-path` still failing. Root cause was project-root precedence in worktrees: desktop bootstrap and smoke resolved the sibling `quant_lab` checkout before the actual current worktree. The fix now prefers the current checkout whenever it is a valid QuantLab project root.
-- 2026-04-09: Completed issue #313 root-cause isolation and validation. `research_ui/server.py` can auto-increment from port `8000` to `8001+`, but `desktop/main.js` only probed `8000`. Desktop reachability probes now cover the retry range, and sequential validation passed with `npm run smoke:real-path` via `http://127.0.0.1:8001` and `npm run smoke:fallback` via the same live server. Parallel smoke runs were rejected as invalid because both modes contend for the same desktop and `research_ui` boot path.
-
 ---
 
 ## Template for New Sessions
@@ -349,5 +211,177 @@
   - [Task 2]
 - **Key Decisions**: [Logic, scope, or architecture changes]
 - **Next Steps**: [Planned work for the next session]
+```
 
+## 2026-04-07 — Desktop Workstation UI Direction
+- **Session Focus**: Define a workstation-oriented desktop UI issue block and implement the first high-impact slice in QuantLab Desktop.
+- **Tasks Completed**:
+  - Added a proposed desktop UI workstation issue block under `.agents/tasks/`.
+  - Created issue packets #201 to #205 covering shell hierarchy, runs home, run detail evidence rail, compare/candidates density, and assistant demotion.
+  - Implemented default desktop startup behavior so the shell now prefers `Runs` when indexed run data is available and falls back to `System` otherwise.
+  - Redesigned the native `Runs` tab into a denser workbench with summary cards, central table, and an evidence/context rail.
+  - Verified the desktop with `npm run smoke` in `desktop/`.
+- **Key Decisions**:
+  - The UI reference should guide layout maturity and hierarchy, not trading semantics or portfolio-monitoring language.
+  - `Runs` is the correct primary desktop surface because it best expresses QuantLab's research, artifact, and decision identity.
+  - The remaining workstation redesign should proceed as incremental slices instead of a full renderer rewrite.
+- **Next Steps**:
+  - Implement Issue #203 to harden `Run Detail` into a stronger evidence rail.
+  - Implement Issue #204 to align `Compare` and `Candidates` with the new workstation density.
 
+## 2026-04-07 — Run Detail Evidence Rail
+- **Session Focus**: Implement Issue #203 so `Run Detail` matches the workstation direction established in `Runs`.
+- **Tasks Completed**:
+  - Reworked `Run Detail` into a two-column workstation layout with a primary evidence stack and a persistent right-side rail.
+  - Moved result evidence, config provenance, launch review linkage, and sweep linkage into the primary evidence column.
+  - Hardened the right-side rail around run decision context, artifact continuity, and workspace linkage.
+- **Key Decisions**:
+  - `Run Detail` should prioritize evidence review and operational continuity over a flat sequence of panels.
+  - The right rail should remain stable and summary-oriented while the main column carries the denser inspection blocks.
+- **Next Steps**:
+  - Implement Issue #204 to bring `Compare` and `Candidates` up to the same workstation density and hierarchy.
+
+## 2026-04-07 — Compare and Candidates Workbench Density
+- **Session Focus**: Implement Issue #204 so comparison and decision-queue surfaces match the workstation grammar already established in `Runs` and `Run Detail`.
+- **Tasks Completed**:
+  - Rebuilt `Compare` around a dense ranking matrix with a stable right-side decision rail.
+  - Reworked `Candidates` into a queue-oriented workstation with persistent filters, baseline visibility, shortlist readiness, and recency-aware ordering.
+  - Hardened candidate cards to expose decision-relevant metrics, continuity metadata, and actions directly in the queue.
+- **Key Decisions**:
+  - `Compare` should optimize for operator ranking speed, so the center of gravity moved from loose cards to a sortable matrix.
+  - `Candidates` should behave like explicit local decision memory, so baseline and shortlist state must remain visible even while filtering.
+- **Next Steps**:
+  - Implement Issue #205 to demote the assistant and command surface behind the workstation-first shell hierarchy.
+
+## 2026-04-07 — Assistant and Command Surface Demotion
+- **Session Focus**: Implement Issue #205 so the desktop reads workstation-first while retaining the assistant as support tooling.
+- **Tasks Completed**:
+  - Reordered the main shell layout so focused work surfaces and workflow blocks lead the page, with assistant support moved into a dedicated lateral column.
+  - Moved the quick command entry into the support lane and reduced the visual weight of browser/assistant controls.
+  - Changed assistant focus behavior so opening the assistant no longer clears the active work surface.
+  - Trimmed sidebar suggested actions to a smaller workstation-oriented set.
+- **Key Decisions**:
+  - The assistant remains always available, but it should not reset or replace the active investigation surface.
+  - The command palette stays global, while the inline support command becomes secondary to tabs, runs, compare, and workflow.
+- **Next Steps**:
+  - Use the next slice to polish visual density and product-brand alignment now that the shell hierarchy is workstation-first.
+
+## 2026-04-07 — Desktop Visual Polish and Renderer Cleanup
+- **Session Focus**: Complete the next ordered tranche after the workstation issue block: visual polish first, then renderer cleanup.
+- **Tasks Completed**:
+  - Polished the desktop workstation palette, surface treatments, and brand mark in `desktop/renderer/index.html` and `desktop/renderer/styles.css` so the shell reads closer to a QuantLab research instrument than a generic dashboard.
+  - Standardized dense workstation surfaces across run detail, runs, compare, candidates, system, workflow, and assistant support panels by removing leftover older panel treatments and fixing a stray CSS brace.
+  - Extracted shell chrome copy, nav mapping, and command palette metadata into `desktop/renderer/modules/shell-chrome.js` so `desktop/renderer/app.js` is more focused on state, events, and rendering.
+  - Validated `research_ui` reachability and reran desktop smoke until it passed cleanly.
+- **Key Decisions**:
+  - Desktop branding stays local to the renderer for now; the immediate goal is workstation coherence, not a cross-repo asset package.
+  - Static shell chrome and action definitions are now treated as renderer configuration, not inline app-state logic.
+- **Next Steps**:
+  - If the desktop continues to evolve, the next cleanup slice should target renderer module boundaries and shared surface primitives rather than more copy accretion in `app.js`.
+
+## 2026-04-07 — Renderer Surface Primitives
+- **Session Focus**: Execute the next renderer cleanup slice by extracting repeated HTML primitives used across dense workstation tabs.
+- **Tasks Completed**:
+  - Added `desktop/renderer/modules/view-primitives.js` for reusable action buttons, action rows, empty states, and metric-list rendering.
+  - Repointed key workstation surfaces in `desktop/renderer/modules/tab-renderers.js` to the shared primitives, especially runs, run detail, artifacts, candidates, sweep handoff, and system.
+  - Removed dead `renderSummaryCard` / `compareMetric` pass-through wrappers from `desktop/renderer/app.js`.
+  - Revalidated the desktop with `npm run smoke`.
+- **Key Decisions**:
+  - Shared surface helpers belong beside the renderer modules, not back in `app.js`.
+  - The immediate goal is reducing markup duplication while preserving the existing `data-*` event contract used by the shell bindings.
+- **Next Steps**:
+  - The next renderer slice should target event-binding consolidation for repeated `data-*` actions so `app.js` keeps shrinking without changing shell behavior.
+
+## 2026-04-07 — Renderer Data-Action Binding Consolidation
+- **Session Focus**: Execute the next hardening slice by consolidating repeated `data-*` event bindings in the desktop renderer.
+- **Tasks Completed**:
+  - Added generic binding helpers in `desktop/renderer/app.js` for `data-*` click/change handlers plus shared external-URL and local-path actions.
+  - Replaced repeated manual selector loops in workflow lists, tab content binding, and run context actions with the new helpers.
+  - Preserved the existing `data-*` contract so `tab-renderers.js` and `view-primitives.js` continue to interoperate without markup changes.
+  - Revalidated the desktop with `npm run smoke`.
+- **Key Decisions**:
+  - This slice stays inside `app.js`; no event contract or tab payload shape was changed.
+  - The correct cleanup axis is to centralize binding mechanics first, then consider reducing the number of action variants later.
+- **Next Steps**:
+  - The next renderer slice should target common tab-action maps so each `tab.kind` block carries less inline binding code.
+
+## 2026-04-07 — Tab Action Map Cleanup
+- **Session Focus**: Continue renderer hardening by making `bindTabContentEvents` more declarative while preserving the existing desktop behavior.
+- **Tasks Completed**:
+  - Added batched action helpers in `desktop/renderer/app.js` for grouped `data-*`, external-link, and path bindings.
+  - Rewrote the `tab.kind` branches in `bindTabContentEvents` to use grouped action specs instead of long runs of individual binding calls.
+  - Kept the same `data-*` event contract used by `tab-renderers.js` and the workstation surfaces.
+  - Revalidated the desktop with `npm run smoke`.
+- **Key Decisions**:
+  - The hardening path remains incremental: reduce binding boilerplate before attempting broader tab-dispatch abstraction.
+  - No action names, tab ids, or renderer payload shapes were changed in this slice.
+- **Next Steps**:
+  - The next cleanup slice should extract per-tab binding maps or registries so `bindTabContentEvents` becomes a dispatcher rather than a large conditional block.
+
+## 2026-04-07 — Issue #206 Topbar and Global Chrome Maturity
+- **Session Focus**: Start the visual-maturity block by improving desktop topbar hierarchy and shell-level context without changing tab behavior.
+- **Tasks Completed**:
+  - Strengthened the shell topbar in `desktop/renderer/index.html` with clearer workstation framing, global-action copy, and visible runtime/server/surface chips.
+  - Added topbar chrome styling in `desktop/renderer/styles.css` so the header reads as a deliberate workstation control band rather than a minimal shell row.
+  - Extended `desktop/renderer/modules/shell-chrome.js` with topbar defaults and updated `desktop/renderer/app.js` to keep topbar runtime, server, and surface context synchronized with live state.
+  - Revalidated the desktop with `npm run smoke`.
+- **Key Decisions**:
+  - This issue stays strictly shell-level: no tab payloads, no backend contracts, and no changes to workstation content surfaces.
+  - Topbar maturity is handled through visible context chips rather than adding decorative controls or generic dashboard chrome.
+- **Next Steps**:
+  - Move to Issue #207 and focus specifically on `Runs` table semantics, row scanning speed, and visual state clarity.
+
+## 2026-04-07 — Issue #207 Runs Table Visual Semantics and Density Polish
+- **Session Focus**: Improve the primary `Runs` surface so row scanning is faster and operational state is more legible without changing data contracts.
+- **Tasks Completed**:
+  - Reworked the `Runs` table in `desktop/renderer/modules/tab-renderers.js` so run identity, metadata, window, metrics, and state are grouped more clearly by row.
+  - Added per-row state summaries for decision memory, launch continuity, and artifact readiness using lightweight dot signaling rather than extra prose.
+  - Polished table density and scanability in `desktop/renderer/styles.css`, including primary-cell hierarchy, inline mode chips, compact actions, and clearer state rows.
+  - Revalidated the desktop with `npm run smoke`.
+- **Key Decisions**:
+  - The slice stays inside existing run data and local continuity context; no new backend metrics or contracts were introduced.
+  - State signaling is kept sober and workstation-oriented rather than chart-heavy or trading-dashboard styled.
+- **Next Steps**:
+  - Move to Issue #208 and strengthen the right rail so the selected-context panels reach the same maturity level as the `Runs` table.
+
+## 2026-04-07 — Current-State Debt Cleanup
+- **Session Focus**: Remove stale technical debt from `.agents/current-state.md` so the repo state remains trustworthy.
+- **Tasks Completed**:
+  - Verified that the previously referenced duplicate workflow file `strategy_research.md` no longer exists under `.agents/workflows/`.
+  - Removed the stale known-issue entry from `.agents/current-state.md`.
+- **Key Decisions**:
+  - `current-state.md` should only track active debt that still exists in the tree.
+- **Next Steps**:
+  - Keep future `.agents` debt items tied to verifiable repository state before carrying them forward.
+
+## 2026-04-07 — Desktop Smoke CI and Positioning Alignment
+- **Session Focus**: Close the next two follow-up blocks after the runtime hotfix: desktop smoke coverage in CI and minimal public positioning cleanup for the desktop shell.
+- **Tasks Completed**:
+  - Added a dedicated `desktop-smoke` GitHub Actions job that sets up Python and Node, installs desktop dependencies, and runs `npm run smoke` under `xvfb`.
+  - Updated public desktop descriptions in `README.md` and `desktop/README.md` so the shell is described as workstation-first with assistant support, not chat-centered.
+  - Updated `docs/quantlab-desktop-v1.md` so its top-level framing now reflects workstation-first hierarchy with a specialized assistant support lane.
+- **Key Decisions**:
+  - Desktop validation is now treated as a first-class CI concern rather than a local-only manual check.
+  - The positioning cleanup stays narrow: align the shell hierarchy language without reopening broader product-brand or desktop roadmap debates.
+- **Next Steps**:
+  - Verify the new GitHub Actions desktop-smoke job on the next remote run and adjust only if the hosted runner needs extra Electron runtime packages.
+
+## 2026-04-08 — Restore Desktop Boot Decoupling
+- **Session Focus**: Resolve the semantic regression around `fix(desktop): decouple shell from research_ui boot` without overwriting the newer workstation renderer work.
+- **Tasks Completed**:
+  - Restored IPC response envelopes in `desktop/main.js` and matching unwrap logic in `desktop/preload.js` for `request-json`, `request-text`, and `post-json`.
+  - Reinstated smoke semantics in `desktop/scripts/smoke.js` and `desktop/main.js` so the desktop passes when the shell boots from a local runs index even if `research_ui` does not become reachable.
+  - Added a smoke-only environment flag so desktop smoke now exercises the local-fallback boot path deterministically instead of silently passing through a live `research_ui` server.
+  - Ported local fallback loading back into `desktop/renderer/app.js` for runs registry refresh, run detail artifact reads, and optional text/log reads while keeping the current workstation layout intact.
+  - Updated runtime messaging so the desktop explicitly reports when it is running from local artifacts rather than a live `research_ui` server.
+- **Key Decisions**:
+  - The port is surgical: preserve the current renderer chrome, tabs, and hardening work, and only reintroduce the pieces required for true boot decoupling.
+  - Local fallback remains shell-first: native surfaces stay usable without `research_ui`, while browser-backed surfaces still wait for a live server.
+- **Next Steps**:
+  - Revalidate `npm run smoke` and then continue the visual maturity block starting with Issue #208.
+- 2026-04-08: Completed issue #208 right-rail evidence panel maturity. Runs now prioritizes selected/baseline/latest context in a sticky evidence rail, and Run Detail exposes stronger artifact posture, continuity, and local file context without adding new runtime endpoints.
+- 2026-04-08: Completed issue #209 status language and state signaling refinement. Desktop surfaces now reuse the same tone vocabulary for ready, pending or review, and degraded states across runs, run detail, system, paper ops, launch review, and topbar chrome.
+- 2026-04-08: Completed issue #210 typography, spacing, and panel polish pass. The desktop chrome now uses a tighter mono label system, more consistent panel padding and hierarchy, and updated topbar defaults so the workstation reads as one cohesive product surface without changing runtime behavior.
+- 2026-04-08: Updated `.agents/workflow.md` so chat ownership is now a constant repo rule. The workflow file now defines stable Engine versus Desktop/UI ownership, cross-boundary stop rules, branch and dirty-tree preflight checks, and a requirement to record the validation actually run.
+- 2026-04-08: Started issue #214 renderer tab binding registry hardening. This slice is limited to `desktop/renderer/app.js` plus `.agents` continuity, and replaces the long `bindTabContentEvents` conditional chain with a local handler registry without changing renderer behavior.
+- 2026-04-08: Completed issue #214 renderer tab binding registry hardening. `bindTabContentEvents` now dispatches through a local `TAB_CONTENT_EVENT_BINDERS` registry in `desktop/renderer/app.js`, and `npm run smoke` still passes via local runs fallback.
