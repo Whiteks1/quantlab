@@ -490,11 +490,14 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
 
 
 def _derive_hyperliquid_submit_status(report: dict[str, object]) -> str:
+    submit_state = str(report.get("submit_state") or "submit_not_ready")
+    if submit_state == "submitted_remote_identifier_missing":
+        return "reconciliation_required"
     if bool(report.get("submitted")):
         return "submitted"
     if bool(report.get("remote_submit_called")):
         return "submit_rejected"
-    return str(report.get("submit_state") or "submit_not_ready")
+    return submit_state
 
 
 def _load_existing_hyperliquid_submit_response(

@@ -1012,6 +1012,8 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
         remote_submit_called = False
         submitted = False
         submit_state = "submit_not_ready"
+        oid = None
+        cloid = _extract_hyperliquid_submit_cloid(signed_action_artifact) if isinstance(signed_action_artifact, dict) else None
 
         if not isinstance(signed_action_artifact, dict):
             errors.append("invalid_signed_action_artifact")
@@ -1027,8 +1029,8 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
                 remote_submit_called=False,
                 submitted=False,
                 response_type=None,
-                oid=None,
-                cloid=None,
+                oid=oid,
+                cloid=cloid,
                 exchange_response=None,
                 reviewer=reviewer,
                 note=note,
@@ -1067,7 +1069,7 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
                 submitted=False,
                 response_type=None,
                 oid=None,
-                cloid=_extract_hyperliquid_submit_cloid(signed_action_artifact),
+                cloid=cloid,
                 exchange_response=None,
                 reviewer=reviewer,
                 note=note,
@@ -1088,7 +1090,7 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
                 submitted=False,
                 response_type=None,
                 oid=None,
-                cloid=_extract_hyperliquid_submit_cloid(signed_action_artifact),
+                cloid=cloid,
                 exchange_response=None,
                 reviewer=reviewer,
                 note=note,
@@ -1105,7 +1107,11 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             response_type = _extract_hyperliquid_response_type(exchange_response)
             submitted, response_errors = _classify_hyperliquid_submit_response(exchange_response)
             errors.extend(response_errors)
+            oid = _extract_hyperliquid_submit_oid(exchange_response)
             submit_state = "submitted_remote" if submitted else "submit_rejected"
+            if submitted and oid is None and cloid is None:
+                submit_state = "submitted_remote_identifier_missing"
+                errors.append("missing_reconciliation_identifiers")
         except Exception as exc:  # noqa: BLE001
             remote_submit_called = True
             submit_state = "submit_request_failed"
@@ -1123,8 +1129,8 @@ class HyperliquidBrokerAdapter(BrokerAdapter):
             remote_submit_called=remote_submit_called,
             submitted=submitted,
             response_type=response_type,
-            oid=_extract_hyperliquid_submit_oid(exchange_response),
-            cloid=_extract_hyperliquid_submit_cloid(signed_action_artifact),
+            oid=oid,
+            cloid=cloid,
             exchange_response=exchange_response,
             reviewer=reviewer,
             note=note,
