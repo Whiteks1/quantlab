@@ -4,6 +4,19 @@
 - 2026-04-09: Expanded issue #275 scope minimally to include `desktop/preload.js` because current `main` still carries the known preload bridge syntax regression. Without that blocker fix, both fallback and real-path smoke stop at `bridgeReady: false`, so the desktop validation slice cannot be validated.
 - 2026-04-09: Completed local validation for issue #275. `desktop/package.json` now exposes explicit `smoke:fallback` and `smoke:real-path` scripts, `desktop/scripts/smoke.js` and `desktop/main.js` distinguish the two semantics, and both modes passed locally after restoring the preload bridge blocker fix. CI wiring was updated in `.github/workflows/ci.yml` to add a dedicated `desktop-real-path` job.
 
+## 2026-04-09 — Hyperliquid Canonical Submit Replay Guard (Issue #291)
+- **Session Focus**: Tighten Stage D.2 idempotency on the first supervised Hyperliquid submit path by blocking duplicate canonical session replays.
+- **Tasks Completed**:
+  - Added a canonical-session guard in `src/quantlab/cli/broker_preflight.py` so `--hyperliquid-submit-session` now fails early if the derived session already has `hyperliquid_submit_response.json`.
+  - Kept the scope narrow to the canonical session path; the sibling one-off artifact path was left unchanged.
+  - Added targeted pytest coverage to prove the duplicate replay is rejected and does not re-call the adapter submit path.
+- **Key Decisions**:
+  - The canonical session identity remains the existing derived `session_id`; this slice does not introduce a new replay token or override flag.
+  - Once a canonical session already has a persisted submit response, the safe operator path is inspect/reconcile, not blind resubmit.
+  - This is an idempotency-safety guard, not a broader retry policy.
+- **Validation Notes**:
+  - Verified with `PYTHONPATH=<worktree>/src python -m pytest -q test/test_cli_broker_preflight.py test/test_hyperliquid_broker_adapter.py test/test_hyperliquid_submit_sessions.py`.
+
 ## 2026-04-09 — Stepbit External-Provider Compatibility Smoke (Issue #281)
 - **Session Focus**: Consolidate a QuantLab-owned smoke for the external Stepbit provider boundary without widening the runtime surface.
 - **Tasks Completed**:
