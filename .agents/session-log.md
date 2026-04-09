@@ -199,6 +199,8 @@
 - **Key Decisions**: `.agents` will serve as the lightweight project memory and workflow coordination layer for QuantLab.
 - **Next Steps**: Continue aligning documentation and workflow files with the real project structure and stage progression.
 
+- 2026-04-09: Tightened both workflow documents so real diffs now default to the full closeout path: issue or task, branch, checks, coherent commit, PR, merge, issue closure, and local/remote cleanup unless the user explicitly pauses or repository state blocks the next step.
+
 ---
 
 ## Template for New Sessions

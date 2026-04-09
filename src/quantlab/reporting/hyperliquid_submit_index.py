@@ -12,6 +12,7 @@ from typing import Any
 
 HYPERLIQUID_SUBMITS_INDEX_JSON_FILENAME = "hyperliquid_submits_index.json"
 HYPERLIQUID_SUBMITS_INDEX_CSV_FILENAME = "hyperliquid_submits_index.csv"
+HYPERLIQUID_SUBMITS_INDEX_MD_FILENAME = "hyperliquid_submits_index.md"
 
 _INDEX_FIELDS = [
     "session_id",
@@ -74,7 +75,49 @@ def build_hyperliquid_submits_index(root_dir: str | Path) -> dict[str, Any]:
     }
 
 
-def write_hyperliquid_submits_index(root_dir: str | Path) -> tuple[str, str]:
+def render_hyperliquid_submits_index_md(payload: dict[str, Any]) -> str:
+    sessions = payload.get("sessions", [])
+    lines = [
+        "# Hyperliquid Submits Index",
+        "",
+        "## Summary",
+        "",
+        f"- **Root directory:** `{payload.get('root_dir')}`",
+        f"- **Generated at:** {payload.get('generated_at')}",
+        f"- **Total sessions found:** {payload.get('n_sessions', len(sessions))}",
+        "",
+        "## Sessions",
+        "",
+    ]
+
+    if not sessions:
+        lines.append("_No valid Hyperliquid submit sessions found._")
+        return "\n".join(lines)
+
+    columns = [
+        "session_id",
+        "status",
+        "submit_state",
+        "alert_status",
+        "latest_alert_code",
+        "effective_order_state",
+        "path",
+    ]
+    lines.append("| " + " | ".join(columns) + " |")
+    lines.append("| " + " | ".join(["---"] * len(columns)) + " |")
+    for row in sessions:
+        values = []
+        for column in columns:
+            value = row.get(column)
+            if value is None:
+                values.append("")
+            else:
+                values.append(str(value))
+        lines.append("| " + " | ".join(values) + " |")
+    return "\n".join(lines)
+
+
+def write_hyperliquid_submits_index(root_dir: str | Path) -> tuple[str, str, str]:
     root = Path(root_dir)
     root.mkdir(parents=True, exist_ok=True)
 
@@ -83,6 +126,7 @@ def write_hyperliquid_submits_index(root_dir: str | Path) -> tuple[str, str]:
 
     csv_path = root / HYPERLIQUID_SUBMITS_INDEX_CSV_FILENAME
     json_path = root / HYPERLIQUID_SUBMITS_INDEX_JSON_FILENAME
+    md_path = root / HYPERLIQUID_SUBMITS_INDEX_MD_FILENAME
 
     with open(csv_path, "w", encoding="utf-8", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=_INDEX_FIELDS)
@@ -93,4 +137,7 @@ def write_hyperliquid_submits_index(root_dir: str | Path) -> tuple[str, str]:
     with open(json_path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2, ensure_ascii=False)
 
-    return str(csv_path), str(json_path)
+    with open(md_path, "w", encoding="utf-8") as fh:
+        fh.write(render_hyperliquid_submits_index_md(payload))
+
+    return str(csv_path), str(json_path), str(md_path)

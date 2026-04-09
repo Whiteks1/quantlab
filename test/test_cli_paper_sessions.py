@@ -258,6 +258,31 @@ class TestPaperSessionsPromotion:
         assert '"promotion_ready_count"' in out
         assert '"paper_001"' in out
 
+
+class TestPaperSessionsIndex:
+    def test_builds_index_artifacts(self, paper_sessions_root: Path, capsys):
+        args = _make_args(paper_sessions_index=str(paper_sessions_root))
+        result = handle_paper_session_commands(args)
+        assert result is True
+
+        out = capsys.readouterr().out
+        assert "Paper session index refreshed" in out
+        assert "md_path" in out
+
+        csv_path = paper_sessions_root / "paper_sessions_index.csv"
+        json_path = paper_sessions_root / "paper_sessions_index.json"
+        md_path = paper_sessions_root / "paper_sessions_index.md"
+        assert csv_path.exists()
+        assert json_path.exists()
+        assert md_path.exists()
+
+        payload = json.loads(json_path.read_text(encoding="utf-8"))
+        assert payload["n_sessions"] == 4
+        md_content = md_path.read_text(encoding="utf-8")
+        assert "# Paper Sessions Index" in md_content
+        assert "## Summary" in md_content
+        assert "## Sessions" in md_content
+
     def test_invalid_root_raises_config_error(self, tmp_path: Path):
         args = _make_args(paper_sessions_promotion=str(tmp_path / "missing"))
         with pytest.raises(ConfigError):

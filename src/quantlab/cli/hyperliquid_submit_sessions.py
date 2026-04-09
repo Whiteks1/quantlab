@@ -594,10 +594,11 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
         from quantlab.reporting.hyperliquid_submit_index import write_hyperliquid_submits_index
 
         root_dir = _require_directory(args.hyperliquid_submit_sessions_index, "Hyperliquid submit sessions root")
-        csv_path, json_path = write_hyperliquid_submits_index(root_dir)
+        csv_path, json_path, md_path = write_hyperliquid_submits_index(root_dir)
         print("\nHyperliquid submit index refreshed:\n")
         print(f"  csv_path : {csv_path}")
         print(f"  json_path: {json_path}")
+        print(f"  md_path  : {md_path}")
         return True
 
     return False

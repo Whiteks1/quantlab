@@ -107,10 +107,11 @@ def handle_paper_session_commands(args) -> bool:
         from quantlab.reporting.paper_session_index import write_paper_sessions_index
 
         root_dir = _require_directory(args.paper_sessions_index, "Paper sessions root")
-        csv_path, json_path = write_paper_sessions_index(root_dir)
+        csv_path, json_path, md_path = write_paper_sessions_index(root_dir)
         print("\nPaper session index refreshed:\n")
         print(f"  csv_path : {csv_path}")
         print(f"  json_path: {json_path}")
+        print(f"  md_path  : {md_path}")
         return True
 
     return False
