@@ -276,6 +276,23 @@ def _load_runtime_dependencies() -> None:
         write_mode_comparison_report = _write_mode_comparison_report
 
 
+def _build_completion_context(
+    session_metadata: dict[str, object],
+    extra_ctx: object,
+) -> dict[str, object]:
+    payload = dict(session_metadata)
+    if isinstance(extra_ctx, dict):
+        payload.update(extra_ctx)
+
+    # Session signalling keeps the public command mode stable even when the
+    # produced artifact carries a narrower internal mode such as "grid".
+    payload["mode"] = session_metadata["mode"]
+    payload["request_id"] = session_metadata["request_id"]
+    payload.pop("status", None)
+    payload.pop("event", None)
+    return payload
+
+
 def _build_argument_parser() -> argparse.ArgumentParser:
     return _build_argument_parser_impl()
 
@@ -377,10 +394,7 @@ def main() -> None:
                 result_ctx=result_ctx,
             )
         )
-        completion_ctx = dict(session_metadata)
-        completion_ctx.update(extra_ctx)
-        completion_ctx.pop("status", None)
-        completion_ctx.pop("event", None)
+        completion_ctx = _build_completion_context(session_metadata, extra_ctx)
         emitter.emit(
             "SESSION_COMPLETED",
             "success",

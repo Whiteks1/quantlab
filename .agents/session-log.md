@@ -1,5 +1,19 @@
 # Session Log - QuantLab
 
+## 2026-04-09 — Stepbit External-Provider Compatibility Smoke (Issue #281)
+- **Session Focus**: Consolidate a QuantLab-owned smoke for the external Stepbit provider boundary without widening the runtime surface.
+- **Tasks Completed**:
+  - Added `test/test_stepbit_external_provider_compat.py` to cover external-consumer success paths for `run` and `sweep`.
+  - Added a deterministic failure-path assertion for `sweep` when the canonical `report.json` is missing.
+  - Fixed session signalling so `SESSION_COMPLETED.mode` remains the public command type instead of being overwritten by narrower artifact modes such as `grid`.
+- **Key Decisions**:
+  - The external boundary remains the existing CLI contract: `--json-request`, optional `--signal-file`, and canonical `report.json.machine_contract`.
+  - The public signal `mode` field must stay stable as the command type (`run`, `sweep`, etc.); internal artifact modes stay available inside `report.json.machine_contract.mode`.
+  - This slice stays test-first and contract-oriented; no new integration surface was introduced.
+- **Validation Notes**:
+  - Verified with `python -m pytest -q test/test_stepbit_external_provider_compat.py test/test_machine_sweep_smoke.py test/test_signals.py test/test_cli_run.py test/test_sweep_contract.py`
+  - Verified broader local compatibility with `python -m pytest -q -k "not test_check"`; local `test_check` remains worktree-path-sensitive because this checkout lives under `quant_lab-issue-281/`.
+
 ## 2026-03-24 — Canonical Run Machine Contract (Issue #62)
 - **Session Focus**: Reduce the remaining contract asymmetry between plain `run` and `sweep` inside canonical `report.json`.
 - **Tasks Completed**:
