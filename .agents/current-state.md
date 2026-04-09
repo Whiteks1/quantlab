@@ -2,8 +2,8 @@
 
 ## Active Stage
 - **Stage**: Stage D.2 — Supervised Broker Submit Safety
-- **Last Updated**: 2026-03-27
-- **Focus**: Stage D.2 is centered on closing ambiguity around supervised Hyperliquid submit, especially idempotency, reconciliation, and post-submit operator safety.
+- **Last Updated**: 2026-04-09
+- **Focus**: Stage D.2 has now closed the main ambiguity around supervised Hyperliquid submit, especially idempotency, reconciliation, and post-submit operator safety. The remaining posture is residual hardening by evidence, not broadening execution by default.
 - **Authority Note**: Stepbit-facing integration remains a secondary boundary track. QuantLab stays autonomous and external consumer needs do not override QuantLab-owned priorities.
 - **Signal Intake Note**: Quant Pulse is an upstream signal layer, not a controller. QuantLab should only consume Quant Pulse output when it can be translated into a research intent, risk filter, or product priority.
 - **Product Identity Note**: Publicly, QuantLab should now be described as a `web3 app` in direction, but still as a supervised and safety-first execution system in current maturity.
@@ -31,12 +31,9 @@
 | O | Stepbit Automation Readiness (I/O & CLI Stability) | 🟨 In Progress |
 
 ## Active Work
-- **Stage Open**: Stage D.2 is now the primary execution-safety focus.
-- **Current Priority**: Close ambiguous-submit risk before widening broker execution beyond the first supervised Hyperliquid submit path.
+- **Stage Open**: Stage D.2 remains the active execution-safety stage, but it has moved from broad ambiguity closure into residual hardening and monitoring.
+- **Current Priority**: Hold the first supervised Hyperliquid submit path narrow and auditable; only open new D.2 slices when a concrete operator-safety gap is demonstrated.
 - **Active Focus Areas**:
-  - make the first supervised broker submit path idempotency-safer
-  - reconcile ambiguous submit states against real Hyperliquid order state
-  - add aggregate health and alert visibility over canonical broker submission sessions
   - keep broker execution auditable before any broader live routing or retry logic
   - preserve paper-session discipline as a prerequisite, not the current bottleneck
   - keep Hyperliquid as the active execution boundary while positioning Kraken as legacy compatibility and Hyperliquid as the first next venue intended for personal connection
@@ -44,7 +41,7 @@
   - Quant Pulse intake is valid only when it improves research, validation, or product priorities
   - review whether the current boundary can express Hyperliquid signer, wallet, routing, and websocket semantics without ad hoc adapter leaks
   - keep the first Hyperliquid supervised submit path intentionally narrow and auditable before adding richer session, status, or websocket execution work
-  - add local operator visibility over canonical Hyperliquid submit sessions before widening execution further
+  - prefer operator-visible hardening and regression coverage over new execution breadth
 - **Implemented Direction**:
   - canonical run artifacts now center on `metadata.json`, `config.json`, `metrics.json`, and `report.json`
   - successful plain `run` executions now write that canonical artifact pack under `outputs/runs/<run_id>/`
@@ -87,12 +84,17 @@
   - Hyperliquid signer backend integration can now produce a real local L1 action signature while still leaving submit for a later slice
   - Hyperliquid signed-action artifacts can now also drive a first supervised submit path that materializes `hyperliquid_submit_response.json` with explicit reviewer confirmation and exchange response capture
   - Hyperliquid supervised submit can now also materialize canonical local submit sessions and a shared index under `outputs/hyperliquid_submits/`
+  - canonical Hyperliquid submit sessions now reject duplicate replay once a persisted submit response already exists
   - Hyperliquid submit sessions can now also materialize `hyperliquid_order_status.json` with normalized post-submit state from direct `orderStatus` queries
   - Hyperliquid submit sessions can now also materialize `hyperliquid_reconciliation.json` so ambiguous post-submit states can be reconciled against direct status, historical-order, open-order, and fill surfaces with richer fill/close-state detail
   - Hyperliquid submit sessions can now also materialize `hyperliquid_fill_summary.json` for richer post-submit fill accounting, fee totals, and closed-PnL visibility as a separate artifact beside broader supervision
   - Hyperliquid submit sessions can now also materialize `hyperliquid_supervision.json` for bounded continuous supervision with websocket-aware monitoring metadata plus refreshed status, reconciliation, and fill-summary artifacts
   - Hyperliquid submit sessions can now also materialize `hyperliquid_cancel_response.json` as a first supervised cancel boundary with explicit reviewer confirmation
   - Hyperliquid submit sessions now also support aggregate health summaries and deterministic alert snapshots for operator visibility
+  - ambiguous Hyperliquid submit acknowledgements that return no `oid` and no `cloid` now escalate explicitly to `reconciliation_required` with a dedicated critical alert instead of looking like normal `submitted_remote`
+  - Hyperliquid status refresh now preserves known reconciliation truth instead of degrading canonical session state when a fresh `orderStatus` probe is still `unknown`
+  - aggregate Hyperliquid health and submit indexes now surface `reconciliation_required` sessions and `submitted_remote_identifier_missing` counts explicitly
+  - aggregate Hyperliquid `latest_alert_*` selection now uses explicit urgency precedence, with regression coverage locking representative critical-state ordering across reconciliation, cancel, and submit branches
   - Hyperliquid boundary review now documents the main contract gaps around signer identity, API wallets, subaccounts/vaults, and websocket-first venue interaction
   - native acceleration strategy now documents `Numba` as the first acceleration experiment and the backtest engine as the first realistic hotspot candidate before any broader `C++` or `Rust` move
   - a local backtest profiling surface now exists to measure the Python engine before any `Numba` or native extraction work
@@ -103,5 +105,4 @@
 
 
 ## Known Issues / Technical Debt
-- Duplicate workflow files in `.agents/workflows/`: `strategy-research.md` vs `strategy_research.md` — the underscore version is stale.
 - The canonical machine-facing contract is now shared by `run` and `sweep`, but downstream consumers may still carry old assumptions about `run` using only top-level `summary` / `kpi_summary`.
