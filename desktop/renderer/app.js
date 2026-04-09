@@ -78,6 +78,7 @@ const state = {
     tone: "neutral",
     text: "Use quick commands for open runs, compare selected, show artifacts, or show runtime status.",
   },
+  decisionFeedback: null,
   refreshTimer: null,
   isStepbitSubmitting: false,
   snapshotStatus: {
@@ -451,6 +452,17 @@ function renderCommandFeedback() {
   if (state.quickCommandFeedback.tone === "success") {
     elements.commandFeedback.classList.add("is-success");
   }
+}
+
+function setDecisionFeedback(text, tone = "neutral", runIds = []) {
+  state.decisionFeedback = {
+    text,
+    tone,
+    runIds: Array.isArray(runIds) ? runIds.filter(Boolean) : [],
+    updatedAt: new Date().toISOString(),
+  };
+  renderWorkflow();
+  rerenderContextualTabs();
 }
 
 function defaultShellWorkspaceStore() {
@@ -1338,6 +1350,12 @@ function bindTabContentEvents(tab) {
     elements.tabContent.querySelectorAll("[data-open-runs-legacy]").forEach((button) => {
       button.addEventListener("click", () => openResearchTab("runs", "Runs (legacy)", "#/"));
     });
+    elements.tabContent.querySelectorAll("[data-open-candidates]").forEach((button) => {
+      button.addEventListener("click", () => openCandidatesTab());
+    });
+    elements.tabContent.querySelectorAll("[data-open-shortlist-compare]").forEach((button) => {
+      button.addEventListener("click", () => openShortlistCompareTab());
+    });
   }
   if (tab.kind === "compare") {
     elements.tabContent.querySelectorAll("[data-open-run]").forEach((button) => {
@@ -1901,6 +1919,7 @@ async function openRunDetailTab(runId) {
 async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabel = "selected runs", options = {}) {
   const selectedRuns = uniqueRunIds(runIds).map(findRun).filter(Boolean);
   if (selectedRuns.length < 2) {
+    setDecisionFeedback("Compare needs 2 to 4 indexed runs. Select more runs or build the shortlist and baseline queue first.", "warning", runIds);
     pushMessage("assistant", "Select 2 to 4 runs in the worklist before opening compare.");
     return;
   }
@@ -1982,6 +2001,7 @@ function openBaselineRunTab() {
 function openShortlistCompareTab() {
   const runIds = getDecisionCompareRunIds();
   if (runIds.length < 2) {
+    setDecisionFeedback("Decision compare is not ready yet. Pin a baseline and shortlist at least one more run.", "warning", runIds);
     pushMessage("assistant", "Shortlist compare needs at least two decision runs across shortlist and baseline.");
     return;
   }
@@ -2507,6 +2527,8 @@ function getRendererContext() {
     getSweepDecisionEntriesResolved,
     getSweepDecisionEntriesForRun,
     getSweepDecisionCompareEntries,
+    decisionFeedback: state.decisionFeedback,
+    selectedRunIds: state.selectedRunIds,
     sweepDecision: {
       getEntry: (store, entryId) => sweepDecisionStore.getSweepDecisionEntry(store, entryId),
       getEntriesResolved: (store, findRowFn) => sweepDecisionStore.getSweepDecisionEntriesResolved(store, findRowFn),
@@ -2775,11 +2797,12 @@ function findSweepDecisionRow(entryId) {
   return null;
 }
 
-async function saveCandidatesStore(nextStore, message = "") {
+async function saveCandidatesStore(nextStore, message = "", feedback = null) {
   try {
     state.candidatesStore = normalizeCandidatesStore(await window.quantlabDesktop.saveCandidatesStore(nextStore));
     renderWorkflow();
     rerenderContextualTabs();
+    if (feedback?.text) setDecisionFeedback(feedback.text, feedback.tone || "success", feedback.runIds || []);
     if (message) pushMessage("assistant", message);
   } catch (error) {
     pushMessage("assistant", error.message || "Could not persist the candidates store.");
@@ -2819,7 +2842,17 @@ async function toggleCandidate(runId, forceValue = null) {
     entries,
     baseline_run_id: shouldExist || state.candidatesStore.baseline_run_id !== runId ? state.candidatesStore.baseline_run_id : null,
   };
-  await saveCandidatesStore(nextStore, shouldExist ? `Marked ${runId} as a candidate.` : `Removed ${runId} from candidates.`);
+  await saveCandidatesStore(
+    nextStore,
+    shouldExist ? `Marked ${runId} as a candidate.` : `Removed ${runId} from candidates.`,
+    {
+      text: shouldExist
+        ? `${runId} is now tracked as candidate. Review evidence and decide whether to shortlist it or clear it.`
+        : `${runId} was removed from the candidate queue.`,
+      tone: shouldExist ? "success" : "warning",
+      runIds: [runId],
+    },
+  );
 }
 
 async function toggleShortlist(runId) {
@@ -2844,6 +2877,13 @@ async function toggleShortlist(runId) {
       entries,
     },
     nextEntry.shortlisted ? `Added ${runId} to the shortlist.` : `Removed ${runId} from the shortlist.`,
+    {
+      text: nextEntry.shortlisted
+        ? `${runId} is now shortlisted. Compare it against the current baseline or promote it to baseline if warranted.`
+        : `${runId} was removed from the shortlist.`,
+      tone: nextEntry.shortlisted ? "success" : "warning",
+      runIds: [runId],
+    },
   );
 }
 
@@ -2874,6 +2914,13 @@ async function setBaseline(runId) {
       entries,
     },
     nextBaseline ? `Pinned ${runId} as the current baseline.` : `Cleared the baseline reference.`,
+    {
+      text: nextBaseline
+        ? `${runId} is now the baseline. Use decision compare to test shortlisted peers against it.`
+        : "The baseline reference was cleared. Pin a new baseline before relying on decision compare.",
+      tone: nextBaseline ? "success" : "warning",
+      runIds: nextBaseline ? [runId] : [],
+    },
   );
 }
 
@@ -2900,6 +2947,13 @@ async function editCandidateNote(runId) {
       entries,
     },
     nextNote.trim() ? `Updated the note for ${runId}.` : `Cleared the note for ${runId}.`,
+    {
+      text: nextNote.trim()
+        ? `Decision note updated for ${runId}.`
+        : `Decision note cleared for ${runId}.`,
+      tone: "success",
+      runIds: [runId],
+    },
   );
 }
 
@@ -3046,6 +3100,7 @@ function summarizeCandidateState(runId) {
 function openRunDecisionCompare(runId) {
   const relatedRunIds = uniqueRunIds([runId, ...getDecisionCompareRunIds().filter((candidateId) => candidateId !== runId)]);
   if (relatedRunIds.length < 2) {
+    setDecisionFeedback(`${runId} cannot enter compare yet. Add a baseline or shortlist one more peer first.`, "warning", [runId]);
     pushMessage("assistant", "Run compare needs this run plus at least one baseline or shortlisted peer.");
     return;
   }
