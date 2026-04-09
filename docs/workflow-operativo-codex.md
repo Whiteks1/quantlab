@@ -104,6 +104,33 @@ Convención:
 
 - las ramas nuevas deben usar el prefijo `codex/`
 
+## 7.1 Flujo obligatorio cuando hay diff real
+
+Si una tarea deja un diff real, el flujo por defecto no termina en “cambio local hecho”.
+
+La secuencia esperada es:
+
+1. issue o task en alcance
+2. rama dedicada
+3. implementación acotada
+4. comprobaciones correctas y focalizadas
+5. commit o commits coherentes
+6. PR real
+7. merge
+8. cierre del issue vinculado
+9. limpieza de ramas y restos locales/remotos
+
+Regla:
+
+- no preguntar otra vez por cada paso rutinario si el usuario ya encargó la ejecución completa
+- solo detenerse antes del siguiente paso si el usuario lo pide explícitamente o si el estado del repo/permisos lo bloquea
+
+Esto incluye:
+
+- no dejar ramas de trabajo abiertas sin motivo
+- no dejar commits locales sueltos o historia confusa si la tanda ya está lista
+- no dejar ramas remotas mergeadas sin limpiar cuando el flujo permita cerrarlas
+
 ## 8. Verificar siempre
 
 Después de implementar:
@@ -119,15 +146,24 @@ Tipos típicos de verificación:
 - diff de contrato
 - revisión de artefactos reales
 
+Regla adicional:
+
+- antes de commit, PR o merge, debe quedar claro qué comprobaciones se ejecutaron y si fueron suficientes para la surface tocada
+- si no se pudo validar una surface crítica, no se presenta como cerrado sin decirlo explícitamente
+
 ## 9. Preparar salida profesional
 
 Al cerrar una tanda:
 
 - dejar la rama limpia
 - preparar commit o commits coherentes
-- hacer push solo si se pide
-- entregar texto de PR
+- hacer push y abrir PR cuando el flujo normal no esté bloqueado
+- entregar texto de PR cuando aporte claridad
 - si hay impacto en otros repos, redactar issues bien formuladas y con `labels`
+
+Regla:
+
+- no dar por terminado un slice con diff real si todavía falta el paso rutinario de commit, push o PR y no hay bloqueo real
 
 ## 10. Cerrar y dejar base limpia
 
@@ -137,6 +173,13 @@ Al final:
 - limpiar ramas mergeadas si toca
 - no arrastrar archivos no relacionados
 - dejar claro cuál es el siguiente bloque lógico
+
+Esto incluye, cuando aplique:
+
+- cerrar el issue vinculado después del merge
+- eliminar la rama local mergeada
+- eliminar la rama remota mergeada
+- evitar que queden commits o ramas “temporales” sin contexto claro en local o remoto
 
 ## Orden estratégico actual de `quant_lab`
 
