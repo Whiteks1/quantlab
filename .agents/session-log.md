@@ -1,5 +1,16 @@
 # Session Log - QuantLab
 
+## 2026-04-09 — Hyperliquid Status Refresh Reconciliation Precedence (Issue #298)
+- **Session Focus**: Prevent `--hyperliquid-submit-sessions-status` from degrading canonical session status when a prior reconciliation already knows the effective remote order state.
+- **Tasks Completed**:
+  - Updated `src/quantlab/cli/hyperliquid_submit_sessions.py` so status refresh preserves the reconciled effective state and alert posture when the fresh order-status probe is still `unknown`.
+  - Added a regression test proving `session_status.json` stays aligned with the known reconciliation instead of regressing to `unknown`.
+- **Key Decisions**:
+  - The fresh `order_status` artifact is still written as-is; only the effective session summary and alerts keep reconciliation precedence.
+  - This slice does not redesign reporting or remove the raw order-status signal; it only prevents misleading regression in the canonical session status file.
+- **Validation Notes**:
+  - Verified with `python -m pytest -q test/test_hyperliquid_submit_sessions.py`.
+
 ## 2026-04-09 — Hyperliquid Unreconcilable Submit Acknowledgement Labeling (Issue #295)
 - **Session Focus**: Tighten Stage D.2 submit safety by making ambiguous successful Hyperliquid submit acknowledgements explicit when they cannot be reconciled immediately.
 - **Tasks Completed**:

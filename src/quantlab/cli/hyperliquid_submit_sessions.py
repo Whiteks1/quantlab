@@ -511,14 +511,21 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
 
         store = HyperliquidSubmitStore(summary["session_id"], base_dir=str(session_dir.parent))
         store.write_order_status(report)
+        effective_status_known, effective_status_state = _resolve_effective_order_status_for_refresh(
+            summary,
+            report,
+        )
         status = {
-            "status": _derive_hyperliquid_submit_session_status(report),
+            "status": effective_status_state if effective_status_known else _derive_hyperliquid_submit_session_status(report),
             "updated_at": report["generated_at"],
             "submit_state": summary.get("submit_state"),
             "remote_submit_called": summary.get("remote_submit_called"),
             "submitted": summary.get("submitted"),
             "order_status_known": report["status_known"],
             "order_status_state": report["normalized_state"],
+            "reconciliation_known": summary.get("reconciliation_known"),
+            "reconciliation_state": summary.get("latest_reconciliation_state"),
+            "reconciliation_source": summary.get("reconciliation_source"),
         }
         status.update(
             _derive_hyperliquid_submission_alert_summary(
@@ -534,12 +541,12 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
                     "supervision_present": False,
                     "supervision_attention_required": False,
                     "supervision_errors": [],
-                    "effective_order_known": bool(report["status_known"]),
-                    "effective_order_state": report["normalized_state"],
+                    "effective_order_known": effective_status_known,
+                    "effective_order_state": effective_status_state,
                     "order_status_present": True,
-                    "reconciliation_present": False,
+                    "reconciliation_present": bool(summary.get("reconciliation_present")),
                     "order_status_errors": report.get("errors"),
-                    "reconciliation_errors": [],
+                    "reconciliation_errors": summary.get("reconciliation_errors"),
                     "submit_errors": summary.get("submit_errors"),
                 }
             )
@@ -980,6 +987,17 @@ def _derive_hyperliquid_submit_session_status(order_status: dict[str, Any]) -> s
     if bool(order_status.get("status_known")):
         return str(order_status.get("normalized_state") or "submitted")
     return str(order_status.get("normalized_state") or "unknown")
+
+
+def _resolve_effective_order_status_for_refresh(
+    summary: dict[str, Any],
+    order_status_report: dict[str, Any],
+) -> tuple[bool, str]:
+    if bool(order_status_report.get("status_known")):
+        return True, str(order_status_report.get("normalized_state") or "submitted")
+    if bool(summary.get("reconciliation_known")):
+        return True, str(summary.get("latest_reconciliation_state") or "submitted")
+    return False, str(order_status_report.get("normalized_state") or "unknown")
 
 
 def _derive_hyperliquid_cancel_session_status(summary: dict[str, Any], cancel_report: dict[str, Any]) -> str:
