@@ -105,6 +105,7 @@ async function main() {
     });
     let stdout = "";
     let stderr = "";
+    let timedOut = false;
     child.stdout.on("data", (chunk) => {
       stdout += String(chunk || "");
     });
@@ -113,6 +114,7 @@ async function main() {
     });
 
     const timeout = setTimeout(() => {
+      timedOut = true;
       child.kill();
     }, 45000);
 
@@ -122,7 +124,20 @@ async function main() {
     });
     clearTimeout(timeout);
 
-    const raw = await fs.readFile(outputPath, "utf8");
+    let raw = "";
+    try {
+      raw = await fs.readFile(outputPath, "utf8");
+    } catch (error) {
+      if (stdout.trim()) console.error(stdout.trim());
+      if (stderr.trim()) console.error(stderr.trim());
+      if (error && error.code === "ENOENT") {
+        const timeoutSuffix = timedOut ? " The Electron child was killed after the smoke timeout." : "";
+        throw new Error(
+          `Desktop ${mode} smoke exited before writing ${outputPath} (exit=${exitCode}).${timeoutSuffix}`,
+        );
+      }
+      throw error;
+    }
     const result = JSON.parse(raw);
 
     const smokeFailed = exitCode !== 0

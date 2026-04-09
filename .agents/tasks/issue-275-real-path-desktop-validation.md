@@ -49,3 +49,9 @@ An explicit fallback smoke, an explicit real-path desktop validation, and CI cov
 - real-path smoke fails if `research_ui` does not become reachable
 - CI runs the real-path desktop validation explicitly
 - script and CI naming make the semantics obvious
+
+---
+
+## Continuation note
+
+After the first PR pass, GitHub Actions exposed a CI-only weakness: the smoke runner assumed `result.json` always existed, but Electron could exit before `did-finish-load` and leave no smoke artifact behind. The issue scope remains unchanged; the fix is to make the smoke result write resilient on early exits and to surface a meaningful smoke failure when the artifact is missing.
