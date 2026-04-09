@@ -118,6 +118,9 @@
   - Implemented explicit command dispatch for JSON requests, ensuring predictable routing regardless of flag fallthrough.
   - Added 8 unit tests in `test/test_json_request.py`.
 - **Key Decisions**: Forced `command` field in JSON requests as hard required. Treated missing command as invalid input (exit 2).
+
+- 2026-04-09: Started issue #217 in a clean Desktop/UI worktree from `main` after issue #216 exposed a pre-existing preload bridge failure. Scope is limited to `desktop/preload.js` plus `.agents` continuity, fixing the syntax regression that prevents `window.quantlabDesktop` from being exposed and blocks desktop smoke at `bridgeReady: false`.
+- 2026-04-09: Completed issue #217. Restored the missing close in `desktop/preload.js` so the preload bridge exposes `window.quantlabDesktop` again. Validation passed with `node --check desktop/preload.js`, `npm run smoke`, and a live `research_ui` check returning HTTP `200` at `http://127.0.0.1:8000/research_ui/index.html`.
 - **Next Steps**: Proceed to Issue #22 for consistent `report.json` and artifact production.
 
 ## 2026-03-20 — Stepbit I/O Contract (Issue #20)
