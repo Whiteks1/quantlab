@@ -249,7 +249,7 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
         store.write_status(status)
         store.write_signed_action(signed_action_artifact)
         store.write_submit_response(report)
-        csv_path, json_path = write_hyperliquid_submits_index(root_dir)
+        csv_path, json_path, md_path = write_hyperliquid_submits_index(root_dir)
 
         print("\nHyperliquid submit session generated:\n")
         print(f"  session_path         : {session_path}")
@@ -257,6 +257,7 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
         print(f"  remote_submit_called : {report['remote_submit_called']}")
         print(f"  index_csv            : {csv_path}")
         print(f"  index_json           : {json_path}")
+        print(f"  index_md             : {md_path}")
 
         return {
             "status": "success",
@@ -427,7 +428,7 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
             store.write_metadata(metadata)
             store.write_status(status)
             store.write_report(report)
-            csv_path, json_path = write_broker_order_validations_index(root_dir)
+            csv_path, json_path, md_path = write_broker_order_validations_index(root_dir)
 
             print("\nKraken order validation session generated:\n")
             print(f"  session_path            : {session_path}")
@@ -435,6 +436,7 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
             print(f"  remote_validation_called: {report['remote_validation_called']}")
             print(f"  index_csv               : {csv_path}")
             print(f"  index_json              : {json_path}")
+            print(f"  index_md                : {md_path}")
 
             return {
                 "status": "success",
