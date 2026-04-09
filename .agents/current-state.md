@@ -109,28 +109,50 @@
 - The canonical machine-facing contract is now shared by `run` and `sweep`, but downstream consumers may still carry old assumptions about `run` using only top-level `summary` / `kpi_summary`.
 - `codex/codex-workflow-prompt` remote branch has 5 unique commits not yet in main. Review and merge or close before next sanitation pass.
 
-## Repository Sanitation Status (2026-04-09)
+## Repository Sanitation Status (2026-04-09 — post-sprint)
 
-### Branches
-| Branch | Status |
-|--------|--------|
-| `codex/desktop-workstation-maturity` | 🟡 Active — ready to merge after #315 resolved |
-| `codex/hotfix-broker-index-unpack` | 🟡 PR #322 open — mergeable |
-| `codex/codex-workflow-prompt` | 🟠 5 unique commits — needs review or close |
-| `codex/quant-pulse-intake-boundary` | ✅ Deleted (0 unique commits vs main) |
-| `codex/fix-315-d2-coverage-restore` | ✅ Deleted (fix landed in main via other path) |
+### Main branch health
+- `pytest test/` — **all tests pass** (full suite, post all merges)
+- Working tree: **clean**
+
+### Merged and integrated in main
+| Branch | Merged via |
+|--------|-----------|
+| `codex/desktop-workstation-maturity` | PR #327 |
+| `codex/hotfix-broker-index-unpack` | PR #322 |
+| `codex/codex-workflow-prompt` | PR #329 (cheatsheet only; rest superseded) |
+| `codex/quant-pulse-intake-boundary` | Deleted (0 unique commits) |
+| `codex/fix-315-d2-coverage-restore` | Deleted (fix in main via other path) |
+| `codex/issue-316/317/318/319` | Merged via individual PRs #324–#327 |
+
+### Local branches with pending work (not yet PRd)
+| Branch | Unique commits | Scope |
+|--------|---------------|-------|
+| `codex/bitget-roadmap-note` | 1 | docs: Bitget as optional venue |
+| `codex/broker-evidence-readiness` | 1 | feat: broker evidence readiness check |
+| `codex/cursor-mcp-integration` | 2 | feat: Cursor MCP integration |
+| `codex/desktop-runtime-hardening` | 1 | fix: startup and workspace persistence |
+| `codex/landing-github-pages` | 1 | feat: GitHub Pages landing |
+| `codex/mcp-outputs-artifacts` | 4 | feat: MCP outputs/artifacts surface |
+| `codex/pretrade-intake-artifact-links` | 1 | feat: pretrade artifact paths |
+| `codex/supervised-broker-runbook` | 1 | docs: supervised broker runbook |
+| `codex/desktop-tab-state-hardening` | — | Active worktree (quant_lab-desktop-216) |
+
+> These branches carry real work. Each needs an issue + PR before merge.
+> Priority order: `desktop-runtime-hardening` > `mcp-outputs-artifacts` > rest.
 
 ### Root artifacts
-- `out.txt`, `output.txt`, `out_full.txt`, `out_k3.txt`, `out_k3_full.txt` — untracked, covered by `.gitignore` (`out*.txt`). No action required.
+- `out*.txt` — untracked, covered by `.gitignore`. No action required.
 
 ### Coverage
 | Module | Status |
 |--------|--------|
-| `features/indicators.py` | ✅ 11 real tests (`test_indicators.py`) |
-| `strategies/rsi_ma_atr.py` | ✅ 12 real tests (`test_strategy_rsi_ma_atr.py`) |
-| `brokers/hyperliquid.py` | ✅ D.2 contract tests restored |
-| `reporting/hyperliquid_submit_index.py` | ✅ D.2 counter tests restored |
+| `features/indicators.py` | ✅ 11 real tests |
+| `strategies/rsi_ma_atr.py` | ✅ 12 real tests |
+| `brokers/hyperliquid.py` | ✅ D.2 contract tests |
+| `reporting/hyperliquid_submit_index.py` | ✅ D.2 counter tests |
 
 ### Governance
-- High-control modules declared in `implementation-rules.md` (#318 ✅)
-- D.2 contract (`submitted_remote_identifier_missing`, index counters) locked in main (#315 ✅)
+- High-control modules declared in `implementation-rules.md` ✅
+- D.2 contract locked in main ✅
+- Desktop workstation maturity merged ✅
