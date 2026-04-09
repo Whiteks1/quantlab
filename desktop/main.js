@@ -19,10 +19,15 @@ const WORKSPACE_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "workspace_state.js
 const STEPBIT_APP_ROOT = path.join(WORKSPACE_ROOT, "stepbit-app");
 const STEPBIT_APP_CONFIG_PATH = path.join(STEPBIT_APP_ROOT, "config.yaml");
 const MAX_DIRECTORY_ENTRIES = 240;
-const RESEARCH_UI_URLS = [
-  "http://127.0.0.1:8000",
-  "http://localhost:8000",
-];
+const RESEARCH_UI_PORT = 8000;
+const RESEARCH_UI_PORT_RETRY_LIMIT = 6;
+const RESEARCH_UI_URLS = Array.from({ length: RESEARCH_UI_PORT_RETRY_LIMIT }, (_unused, offset) => {
+  const port = RESEARCH_UI_PORT + offset;
+  return [
+    `http://127.0.0.1:${port}`,
+    `http://localhost:${port}`,
+  ];
+}).flat();
 const RESEARCH_UI_HEALTH_PATH = "/api/paper-sessions-health";
 const RESEARCH_UI_STARTUP_TIMEOUT_MS = 25000;
 const ELECTRON_STATE_ROOT = path.join(DESKTOP_OUTPUTS_ROOT, "electron");
@@ -81,9 +86,8 @@ function resolveCanonicalProjectRoot(checkoutRoot, workspaceRoot) {
   const siblingQuantLabRoot = path.join(workspaceRoot, "quant_lab");
   const candidates = [
     overrideRoot,
-    path.basename(checkoutRoot).toLowerCase() === "quant_lab" ? checkoutRoot : "",
-    siblingQuantLabRoot,
     checkoutRoot,
+    siblingQuantLabRoot,
   ]
     .filter(Boolean)
     .map((candidate) => path.resolve(candidate));

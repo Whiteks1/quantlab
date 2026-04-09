@@ -18,9 +18,12 @@ async function main() {
   const checkoutRoot = path.resolve(desktopRoot, "..");
   const workspaceRoot = path.resolve(checkoutRoot, "..");
   const canonicalProjectRoot = path.join(workspaceRoot, "quant_lab");
-  const projectRoot = await fs.access(path.join(canonicalProjectRoot, "research_ui", "server.py"))
-    .then(() => canonicalProjectRoot)
-    .catch(() => checkoutRoot);
+  const checkoutServerPath = path.join(checkoutRoot, "research_ui", "server.py");
+  const projectRoot = await fs.access(checkoutServerPath)
+    .then(() => checkoutRoot)
+    .catch(() => fs.access(path.join(canonicalProjectRoot, "research_ui", "server.py"))
+      .then(() => canonicalProjectRoot)
+      .catch(() => checkoutRoot));
   const electronBinary = require("electron");
   const electronArgs = ["."];
   if (process.platform === "linux" && String(process.env.CI || "").toLowerCase() === "true") {
