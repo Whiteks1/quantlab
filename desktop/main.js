@@ -28,6 +28,8 @@ const RESEARCH_UI_STARTUP_TIMEOUT_MS = 25000;
 const ELECTRON_STATE_ROOT = path.join(DESKTOP_OUTPUTS_ROOT, "electron");
 const IS_SMOKE_RUN = process.env.QUANTLAB_DESKTOP_SMOKE === "1";
 const SMOKE_OUTPUT_PATH = process.env.QUANTLAB_DESKTOP_SMOKE_OUTPUT || "";
+const SMOKE_MODE = process.env.QUANTLAB_DESKTOP_SMOKE_MODE === "real-path" ? "real-path" : "fallback";
+const SMOKE_REQUIRE_SERVER = process.env.QUANTLAB_DESKTOP_SMOKE_REQUIRE_SERVER === "1";
 
 function isQuantLabProjectRoot(targetPath) {
   if (!targetPath) return false;
@@ -857,6 +859,7 @@ function createMainWindow() {
 
 async function runDesktopSmoke() {
   const result = {
+    mode: SMOKE_MODE,
     bridgeReady: false,
     shellReady: false,
     serverReady: false,
@@ -886,7 +889,7 @@ async function runDesktopSmoke() {
     } catch (_error) {
       result.localRunsReady = false;
     }
-    result.shellReady = result.bridgeReady && (result.serverReady || result.localRunsReady);
+    result.shellReady = result.bridgeReady && (SMOKE_REQUIRE_SERVER ? result.serverReady : (result.serverReady || result.localRunsReady));
     if (!result.serverReady) {
       result.error = workspaceState.error || (result.localRunsReady
         ? "research_ui did not become reachable, but the shell loaded via the local runs index."
@@ -901,7 +904,7 @@ async function runDesktopSmoke() {
     await fsp.writeFile(SMOKE_OUTPUT_PATH, `${JSON.stringify(result, null, 2)}\n`, "utf8");
   }
 
-  if (!result.bridgeReady || !result.shellReady) {
+  if (!result.bridgeReady || !result.shellReady || (SMOKE_REQUIRE_SERVER && (!result.serverReady || !result.apiReady))) {
     process.exitCode = 1;
   }
   app.quit();
