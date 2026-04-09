@@ -6,13 +6,15 @@ It is built on QuantLab Core, the internal engine that makes hypotheses, configu
 
 Brand architecture:
 
-- QuantLab Research is the public-facing product name
+- QuantLab is the umbrella ecosystem
+- QuantLab Research is the public-facing research product
 - QuantLab Core is the internal engine and validation layer
-- Quant Pulse is the upstream signal layer that feeds prioritized research intents
+- QuantPulse is a sibling signal product in the same ecosystem
 
-Today, the product should be read as:
+Today, the ecosystem should be read as:
 
 - a sovereign QuantLab Research app for research, paper ops, and execution discipline
+- a distinct QuantPulse product for signal, context, and prioritization
 - moving toward practical onchain and broker-connected trading operation
 - still intentionally supervised, not yet broad autonomous live routing
 
@@ -27,7 +29,7 @@ The architectural rule is simple:
 - Stepbit does not govern QuantLab
 - QuantLab Research may consume Stepbit capabilities through a narrow, reversible boundary
 
-Quant Pulse is a separate upstream signal layer:
+QuantPulse is a separate sibling product:
 
 - it can feed QuantLab Research with prioritized research intents, regime filters, and product hints
 - QuantLab Research should only consume those signals when they improve research, validation, risk control, or product priorities
@@ -62,7 +64,7 @@ A secondary boundary track remains active:
 
 External integration work remains subordinate to QuantLab Research-owned priorities.
 Stepbit-facing hardening is valid when it reduces real boundary friction, but it does not set the product roadmap.
-Quant Pulse-facing intake is also subordinate to QuantLab Research-owned priorities and should only be used when it produces testable research or clear product value.
+QuantPulse-facing intake is also subordinate to QuantLab Research-owned priorities and should only be used when it produces testable research or clear product value.
 
 ## Brand
 
