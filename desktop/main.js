@@ -28,6 +28,46 @@ const RESEARCH_UI_STARTUP_TIMEOUT_MS = 25000;
 const ELECTRON_STATE_ROOT = path.join(DESKTOP_OUTPUTS_ROOT, "electron");
 const IS_SMOKE_RUN = process.env.QUANTLAB_DESKTOP_SMOKE === "1";
 const SMOKE_OUTPUT_PATH = process.env.QUANTLAB_DESKTOP_SMOKE_OUTPUT || "";
+const SMOKE_MODE = process.env.QUANTLAB_DESKTOP_SMOKE_MODE === "real-path" ? "real-path" : "fallback";
+const SMOKE_REQUIRE_SERVER = process.env.QUANTLAB_DESKTOP_SMOKE_REQUIRE_SERVER === "1";
+let smokeResultWritten = false;
+
+function createSmokeResult(overrides = {}) {
+  return {
+    mode: SMOKE_MODE,
+    bridgeReady: false,
+    shellReady: false,
+    serverReady: false,
+    apiReady: false,
+    localRunsReady: false,
+    serverUrl: workspaceState.serverUrl || "",
+    error: "",
+    ...overrides,
+  };
+}
+
+async function writeSmokeResult(result) {
+  if (!IS_SMOKE_RUN || !SMOKE_OUTPUT_PATH || smokeResultWritten) return;
+  smokeResultWritten = true;
+  await fsp.mkdir(path.dirname(SMOKE_OUTPUT_PATH), { recursive: true });
+  await fsp.writeFile(SMOKE_OUTPUT_PATH, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+}
+
+function writeSmokeResultSync(result) {
+  if (!IS_SMOKE_RUN || !SMOKE_OUTPUT_PATH || smokeResultWritten) return;
+  smokeResultWritten = true;
+  fs.mkdirSync(path.dirname(SMOKE_OUTPUT_PATH), { recursive: true });
+  fs.writeFileSync(SMOKE_OUTPUT_PATH, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+}
+
+async function failSmokeEarly(errorMessage, overrides = {}) {
+  await writeSmokeResult(createSmokeResult({
+    error: errorMessage,
+    ...overrides,
+  }));
+  process.exitCode = 1;
+  app.quit();
+}
 
 function isQuantLabProjectRoot(targetPath) {
   if (!targetPath) return false;
@@ -59,8 +99,12 @@ app.setPath("cache", path.join(ELECTRON_STATE_ROOT, "cache"));
 
 const singleInstanceLock = app.requestSingleInstanceLock();
 if (!singleInstanceLock) {
+  writeSmokeResultSync(createSmokeResult({
+    error: "Another QuantLab Desktop instance is already running.",
+  }));
+  process.exitCode = 1;
   app.quit();
-  process.exit(0);
+  process.exit(process.exitCode || 1);
 }
 
 let mainWindow = null;
@@ -843,6 +887,21 @@ function createMainWindow() {
     },
   });
 
+  if (IS_SMOKE_RUN) {
+    mainWindow.webContents.once("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (!isMainFrame || smokeResultWritten) return;
+      failSmokeEarly(`Smoke renderer failed to load (${errorCode}): ${errorDescription}`, {
+        serverUrl: validatedURL || "",
+      }).catch(() => {});
+    });
+    mainWindow.webContents.on("render-process-gone", (_event, details) => {
+      if (smokeResultWritten) return;
+      failSmokeEarly(`Smoke renderer exited before validation (${details?.reason || "unknown"}).`, {
+        error: `Smoke renderer exited before validation (${details?.reason || "unknown"}).`,
+      }).catch(() => {});
+    });
+  }
+
   mainWindow.loadFile(path.join(DESKTOP_ROOT, "renderer", "index.html"));
   if (!IS_SMOKE_RUN) {
     mainWindow.once("ready-to-show", () => {
@@ -856,15 +915,7 @@ function createMainWindow() {
 }
 
 async function runDesktopSmoke() {
-  const result = {
-    bridgeReady: false,
-    shellReady: false,
-    serverReady: false,
-    apiReady: false,
-    localRunsReady: false,
-    serverUrl: "",
-    error: "",
-  };
+  const result = createSmokeResult();
   try {
     result.bridgeReady = await mainWindow.webContents.executeJavaScript(
       "Boolean(window.quantlabDesktop && typeof window.quantlabDesktop.getWorkspaceState === 'function')",
@@ -886,7 +937,7 @@ async function runDesktopSmoke() {
     } catch (_error) {
       result.localRunsReady = false;
     }
-    result.shellReady = result.bridgeReady && (result.serverReady || result.localRunsReady);
+    result.shellReady = result.bridgeReady && (SMOKE_REQUIRE_SERVER ? result.serverReady : (result.serverReady || result.localRunsReady));
     if (!result.serverReady) {
       result.error = workspaceState.error || (result.localRunsReady
         ? "research_ui did not become reachable, but the shell loaded via the local runs index."
@@ -896,12 +947,9 @@ async function runDesktopSmoke() {
     result.error = error.message;
   }
 
-  if (SMOKE_OUTPUT_PATH) {
-    await fsp.mkdir(path.dirname(SMOKE_OUTPUT_PATH), { recursive: true });
-    await fsp.writeFile(SMOKE_OUTPUT_PATH, `${JSON.stringify(result, null, 2)}\n`, "utf8");
-  }
+  await writeSmokeResult(result);
 
-  if (!result.bridgeReady || !result.shellReady) {
+  if (!result.bridgeReady || !result.shellReady || (SMOKE_REQUIRE_SERVER && (!result.serverReady || !result.apiReady))) {
     process.exitCode = 1;
   }
   app.quit();
@@ -1033,17 +1081,12 @@ if (singleInstanceLock) {
     if (IS_SMOKE_RUN) {
       mainWindow.webContents.once("did-finish-load", () => {
         runDesktopSmoke().catch((error) => {
-          if (SMOKE_OUTPUT_PATH) {
-            fsp.mkdir(path.dirname(SMOKE_OUTPUT_PATH), { recursive: true })
-              .then(() => fsp.writeFile(SMOKE_OUTPUT_PATH, `${JSON.stringify({ bridgeReady: false, serverReady: false, apiReady: false, error: error.message }, null, 2)}\n`, "utf8"))
-              .finally(() => {
-                process.exitCode = 1;
-                app.quit();
-              });
-          } else {
-            process.exitCode = 1;
-            app.quit();
-          }
+          failSmokeEarly(error.message, {
+            bridgeReady: false,
+            shellReady: false,
+            serverReady: false,
+            apiReady: false,
+          }).catch(() => {});
         });
       });
     }
@@ -1057,8 +1100,23 @@ if (singleInstanceLock) {
 }
 
 app.on("window-all-closed", () => {
+  if (IS_SMOKE_RUN && !smokeResultWritten) {
+    writeSmokeResultSync(createSmokeResult({
+      error: "Smoke window closed before validation completed.",
+    }));
+    process.exitCode = 1;
+  }
   if (process.platform !== "darwin") {
     app.quit();
+  }
+});
+
+app.on("will-quit", () => {
+  if (IS_SMOKE_RUN && !smokeResultWritten) {
+    writeSmokeResultSync(createSmokeResult({
+      error: "Electron quit before smoke validation wrote a result.",
+    }));
+    process.exitCode = 1;
   }
 });
 
