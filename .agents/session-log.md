@@ -1,5 +1,17 @@
 # Session Log - QuantLab
 
+## 2026-04-09 — Hyperliquid Critical Alert Precedence Coverage (Issue #305)
+- **Session Focus**: Lock the aggregate Hyperliquid alert-priority policy with focused regressions for critical post-submit states.
+- **Tasks Completed**:
+  - Added helper fixtures in `test/test_hyperliquid_submit_sessions.py` for reconciliation and cancel-response artifacts.
+  - Added regression coverage proving aggregate health prefers `HYPERLIQUID_ORDER_REJECTED` over a newer `HYPERLIQUID_CANCEL_REQUEST_FAILED`.
+  - Added regression coverage proving aggregate alerts prefer `HYPERLIQUID_CANCEL_REQUEST_FAILED` over a newer `HYPERLIQUID_SUBMIT_REQUEST_FAILED`.
+- **Key Decisions**:
+  - This slice changes no runtime behavior; it locks the explicit priority map already present in the Hyperliquid aggregate alert surface.
+  - Coverage targets representative critical states across reconciliation, cancel, and submit branches to catch recency regressions and priority drift.
+- **Validation Notes**:
+  - Verified with `PYTHONPATH=<worktree>/src python -m pytest -q test/test_hyperliquid_submit_sessions.py`.
+
 ## 2026-04-09 — Hyperliquid Aggregate Alert Priority (Issue #303)
 - **Session Focus**: Make aggregate Hyperliquid submit alerts surface operator urgency instead of picking the newest alert by timestamp alone.
 - **Tasks Completed**:
