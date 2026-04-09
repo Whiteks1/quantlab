@@ -248,6 +248,7 @@
 - 2026-04-09: Tightened both workflow documents so real diffs now default to the full closeout path: issue or task, branch, checks, coherent commit, PR, merge, issue closure, and local/remote cleanup unless the user explicitly pauses or repository state blocks the next step.
 - 2026-04-09: Hardened issue #275 after the first CI run exposed an early-exit gap in desktop smoke. `desktop/main.js` now writes a smoke failure result for normal early shutdown paths, and `desktop/scripts/smoke.js` now reports a missing result artifact with child exit context instead of failing with a raw `ENOENT`.
 - 2026-04-09: Kept issue #275 open after the next CI run exposed a Linux-only Electron sandbox abort on GitHub-hosted runners. `desktop/scripts/smoke.js` now adds the standard CI-only `--no-sandbox` flag for Linux smoke runs without changing local desktop behavior.
+- 2026-04-09: Started and completed issue #286 workstation containment in a clean Desktop/UI worktree from `main`. The desktop shell now keeps one primary surface at a time, bounds context-tab accumulation, restores old workspace state into a single preserved primary surface, and tightens scroll containment across sidebar, workbench, workflow, and command palette. Validation passed with `npm run smoke:fallback` and `npm run smoke:real-path` from `desktop/`.
 
 ---
 
