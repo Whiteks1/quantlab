@@ -768,13 +768,11 @@ function renderRunsTable(runs, ctx) {
         <thead>
           <tr>
             <th>Run</th>
-            <th>Window</th>
+            <th>Hypothesis / Window</th>
             <th>Return</th>
             <th>Sharpe</th>
             <th>Drawdown</th>
-            <th>Trades</th>
             <th>State</th>
-            <th>Flags</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -809,13 +807,18 @@ function renderRunsRow(run, ctx) {
             <span>${escapeHtml(formatDateTime(run?.created_at))}</span>
             <span class="mono-cell">${escapeHtml(commitLabel)}</span>
           </div>
+          <div class="run-flags-cell" style="margin-top:6px;">${renderCandidateFlags(store, runId, decision)}</div>
         </div>
       </td>
-      <td class="mono-cell">${escapeHtml(`${run?.start || "-"} -> ${run?.end || "-"}`)}</td>
+      <td>
+        <div class="run-primary-meta">
+          <span class="mono-cell">${escapeHtml(`${run?.start || "-"} -> ${run?.end || "-"}`)}</span>
+          <span class="run-posture-label">Trades: ${escapeHtml(formatCount(run?.trades))}</span>
+        </div>
+      </td>
       <td class="${escapeHtml(toneClass(run?.total_return, true))}">${escapeHtml(formatPercent(run?.total_return))}</td>
       <td>${escapeHtml(formatNumber(run?.sharpe_simple))}</td>
       <td class="${escapeHtml(toneClass(run?.max_drawdown, false))}">${escapeHtml(formatPercent(run?.max_drawdown))}</td>
-      <td>${escapeHtml(formatCount(run?.trades))}</td>
       <td>
         <div class="run-state-stack">
           ${renderRunsStateRow("Decision", decisionSignal.label, decisionSignal.tone)}
@@ -823,11 +826,11 @@ function renderRunsRow(run, ctx) {
           ${renderRunsStateRow("Evidence", evidenceSignal.label, evidenceSignal.tone)}
         </div>
       </td>
-      <td><div class="run-flags-cell">${renderCandidateFlags(store, runId, decision)}</div></td>
       <td>
         <div class="runs-row-actions">
-          ${renderActionButton({ label: "Open run", dataset: { openRun: runId } })}
+          ${renderActionButton({ label: "Inspect", dataset: { openRun: runId } })}
           ${renderActionButton({ label: "Artifacts", dataset: { openArtifacts: runId } })}
+          ${renderActionButton({ label: "Compare", dataset: { openDecisionCompare: runId } })}
           ${renderActionButton({ label: candidateLabel, dataset: { markCandidate: runId } })}
         </div>
       </td>

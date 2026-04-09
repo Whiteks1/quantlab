@@ -60,6 +60,7 @@ const CONFIG = {
   persistDebounceMs: 400,
   maxDetailCacheEntries: 50,
   maxConsecutiveRefreshErrors: 3,
+  maxSurfaceTabs: 7,
 };
 
 let unsubscribeWorkspaceState = null;
@@ -1698,16 +1699,8 @@ function maybeOpenDefaultSurface() {
     state.initialSurfaceResolved = true;
     return;
   }
-  const runs = getRuns();
-  if (runs.length) {
-    state.initialSurfaceResolved = true;
-    openRunsNativeTab();
-    return;
-  }
-  if (state.workspace.serverUrl || state.workspace.status === "ready") {
-    state.initialSurfaceResolved = true;
-    openSystemTab();
-  }
+  state.initialSurfaceResolved = true;
+  openRunsNativeTab();
 }
 
 function openResearchTab(navKind, title, hash) {
@@ -2405,8 +2398,18 @@ function getRendererContext() {
 
 function upsertTab(nextTab) {
   const index = state.tabs.findIndex((tab) => tab.id === nextTab.id);
-  if (index >= 0) state.tabs[index] = { ...state.tabs[index], ...nextTab };
-  else state.tabs.push(nextTab);
+  if (index >= 0) {
+    state.tabs[index] = { ...state.tabs[index], ...nextTab };
+  } else {
+    state.tabs.push(nextTab);
+    if (state.tabs.length > CONFIG.maxSurfaceTabs) {
+      // Find oldest tab that isn't the one we just added (or active)
+      const evictIndex = state.tabs.findIndex((tab) => tab.id !== nextTab.id && tab.id !== state.activeTabId);
+      if (evictIndex >= 0) {
+        state.tabs.splice(evictIndex, 1);
+      }
+    }
+  }
   state.activeTabId = nextTab.id;
   renderTabs();
   scheduleShellWorkspacePersist();
