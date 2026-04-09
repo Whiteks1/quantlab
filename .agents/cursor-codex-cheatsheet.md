@@ -8,15 +8,23 @@ Guía rápida para el flujo de trabajo en este repo. No sustituye a `AGENTS.md`,
 - Codex propone plan mínimo, ejecuta y valida.
 - No uses ambos editando el mismo archivo a la vez.
 - En broker, execution, submit o tooling de seguridad: plan primero, scope mínimo.
+- Cursor hace scoping y review.
+- Codex hace implementación y validación.
+- Conflictos, commit y PR se manejan con criterio activo; no se delegan completos al inicio.
 
 ## Prompt canónico
 
 Para trabajo directo en el repo, usa:
 
 - `.agents/prompts/codex-master-prompt.md`
-- `docs/quant-pulse-quantlab-contract.md` cuando la tarea toque la frontera Quant Pulse → QuantLab
 
 Ese prompt define la versión larga del flujo de dos fases.
+
+## Reparto operativo
+
+- Cursor: alcance, riesgos, revisión final.
+- Codex: cambios concretos, tests, resumen de diff.
+- Tú: aprobación final, decisiones delicadas y cierre si el caso lo requiere.
 
 ## 1. Cursor: análisis
 
@@ -27,7 +35,6 @@ Read AGENTS.md and the relevant .agents files first:
 - .agents/current-state.md
 - .agents/cursor-codex-cheatsheet.md
 - .agents/prompts/codex-master-prompt.md
-- docs/quant-pulse-quantlab-contract.md when upstream intake boundaries are involved
 - .cursor/rules/ and .cursor/mcp.json if relevant
 
 Task:
@@ -125,4 +132,3 @@ Do not make edits.
 - 1 issue = 1 branch = 1 PR
 - PR breve: Summary | Scope | Validation | Notes
 - Evita `git add .`
-
