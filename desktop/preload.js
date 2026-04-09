@@ -1,9 +1,18 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+async function unwrapInvokeResult(channel, ...args) {
+  const result = await ipcRenderer.invoke(channel, ...args);
+  if (result && typeof result === "object" && Object.prototype.hasOwnProperty.call(result, "ok")) {
+    if (result.ok) return result.data;
+    throw new Error(result.error || `IPC request failed for ${channel}.`);
+  }
+  return result;
+}
+
 contextBridge.exposeInMainWorld("quantlabDesktop", {
   getWorkspaceState: () => ipcRenderer.invoke("quantlab:get-workspace-state"),
-  requestJson: (relativePath) => ipcRenderer.invoke("quantlab:request-json", relativePath),
-  requestText: (relativePath) => ipcRenderer.invoke("quantlab:request-text", relativePath),
+  requestJson: (relativePath) => unwrapInvokeResult("quantlab:request-json", relativePath),
+  requestText: (relativePath) => unwrapInvokeResult("quantlab:request-text", relativePath),
   getCandidatesStore: () => ipcRenderer.invoke("quantlab:get-candidates-store"),
   saveCandidatesStore: (store) => ipcRenderer.invoke("quantlab:save-candidates-store", store),
   getSweepDecisionStore: () => ipcRenderer.invoke("quantlab:get-sweep-decision-store"),
@@ -13,7 +22,7 @@ contextBridge.exposeInMainWorld("quantlabDesktop", {
   listDirectory: (targetPath, maxDepth) => ipcRenderer.invoke("quantlab:list-directory", targetPath, maxDepth),
   readProjectText: (targetPath) => ipcRenderer.invoke("quantlab:read-project-text", targetPath),
   readProjectJson: (targetPath) => ipcRenderer.invoke("quantlab:read-project-json", targetPath),
-  postJson: (relativePath, payload) => ipcRenderer.invoke("quantlab:post-json", relativePath, payload),
+  postJson: (relativePath, payload) => unwrapInvokeResult("quantlab:post-json", relativePath, payload),
   restartWorkspaceServer: () => ipcRenderer.invoke("quantlab:restart-workspace-server"),
   askStepbitChat: (payload) => ipcRenderer.invoke("quantlab:ask-stepbit-chat", payload),
   openExternal: (url) => ipcRenderer.invoke("quantlab:open-external", url),

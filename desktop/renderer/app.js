@@ -36,6 +36,7 @@ import {
 
 const CONFIG = {
   runsIndexPath: "/outputs/runs/runs_index.json",
+  localRunsIndexPath: "outputs/runs/runs_index.json",
   launchControlPath: "/api/launch-control",
   paperHealthPath: "/api/paper-sessions-health",
   brokerHealthPath: "/api/broker-submissions-health",
@@ -46,6 +47,7 @@ const CONFIG = {
   refreshIntervalMs: 15000,
   maxWorklistRuns: 8,
   maxRecentJobs: 4,
+  maxContextTabs: 6,
   maxLogPreviewChars: 5000,
   maxCandidateCompare: 4,
   maxExperimentsConfigs: 12,
@@ -72,11 +74,17 @@ const state = {
   experimentConfigPreviewCache: new Map(),
   isSubmittingLaunch: false,
   launchFeedback: "Use deterministic inputs or ask from chat.",
+  quickCommandFeedback: {
+    tone: "neutral",
+    text: "Use quick commands for open runs, compare selected, show artifacts, or show runtime status.",
+  },
+  decisionFeedback: null,
   refreshTimer: null,
   isStepbitSubmitting: false,
   snapshotStatus: {
     status: "idle",
     error: null,
+    source: "none",
     lastSuccessAt: null,
     consecutiveErrors: 0,
     refreshPaused: false,
@@ -115,6 +123,7 @@ const elements = {
   paletteSearch: document.getElementById("palette-search"),
   paletteInput: document.getElementById("palette-input"),
   runCommand: document.getElementById("run-command"),
+  commandFeedback: document.getElementById("command-feedback"),
   commandPaletteTrigger: document.getElementById("command-palette-trigger"),
   openBrowserRuns: document.getElementById("open-browser-runs"),
   paletteOverlay: document.getElementById("palette-overlay"),
@@ -140,17 +149,28 @@ const elements = {
   workflowRunsList: document.getElementById("workflow-runs-list"),
   workflowOpenCompare: document.getElementById("workflow-open-compare"),
   workflowClearSelection: document.getElementById("workflow-clear-selection"),
+  topbarSurfaceMeta: document.getElementById("topbar-surface-meta"),
+  workbenchMeta: document.getElementById("workbench-meta"),
 };
 
+const PRIMARY_SURFACE_IDS = new Set([
+  "experiments",
+  "iframe:#/launch",
+  "runs-native",
+  "compare:selected",
+  "candidates",
+  "paper-ops",
+]);
+
 const paletteActions = [
-  ["chat", "Open Chat", "Return focus to the command bus.", () => focusChat()],
+  ["chat", "Open Assistant", "Return focus to the assistant history and input.", () => focusChat()],
   ["experiments", "Open Experiments", "Open the native experiments and sweeps workspace.", () => openExperimentsTab()],
   ["sweep-handoff", "Open Sweep Handoff", "Open the local sweep decision handoff compare.", () => openSweepDecisionTab()],
-  ["launch", "Open Launch", "Open the QuantLab launch surface.", () => openResearchTab("launch", "Launch", "#/launch")],
+  ["launch", "Open Launch", "Open the QuantLab launch surface.", () => openResearchTab("launch", "Launch", "#/launch", { replacePrimary: true })],
   ["runs", "Open Runs", "Open the native run explorer.", () => openRunsNativeTab()],
   ["runs-legacy", "Open Runs (Legacy)", "Open the browser-based run explorer.", () => openResearchTab("runs", "Runs (legacy)", "#/")],
   ["candidates", "Open Candidates", "Open the shortlist and baseline surface.", () => openCandidatesTab()],
-  ["compare", "Open Compare", "Open a compare tab from selected runs.", () => openCompareSelectionTab()],
+  ["compare", "Open Compare", "Open a compare tab from selected runs.", () => openCompareSelectionTab(state.selectedRunIds, "selected runs", { replacePrimary: true })],
   ["shortlist-compare", "Open Shortlist Compare", "Compare the current shortlist or baseline set.", () => openShortlistCompareTab()],
   ["baseline-run", "Open Baseline Run", "Open the current baseline run workspace.", () => openBaselineRunTab()],
   ["ops", "Open Paper Ops", "Open the native operational surface.", () => openPaperOpsTab()],
@@ -188,6 +208,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   const initialState = await window.quantlabDesktop.getWorkspaceState();
   state.workspace = initialState;
+  await refreshSnapshot();
   renderWorkspaceState();
   renderWorkflow();
   unsubscribeWorkspaceState = window.quantlabDesktop.onWorkspaceState((payload) => {
@@ -216,25 +237,24 @@ function bindEvents() {
       const action = button.dataset.action;
       if (action === "open-chat") focusChat();
       if (action === "open-experiments") openExperimentsTab();
-      if (action === "open-launch") openResearchTab("launch", "Launch", "#/launch");
+      if (action === "open-launch") openResearchTab("launch", "Launch", "#/launch", { replacePrimary: true });
       if (action === "open-runs") openRunsNativeTab();
       if (action === "open-candidates") openCandidatesTab();
-      if (action === "open-compare") openCompareSelectionTab();
+      if (action === "open-compare") openCompareSelectionTab(state.selectedRunIds, "selected runs", { replacePrimary: true });
       if (action === "open-ops") openPaperOpsTab();
     });
   });
   document.querySelectorAll("[data-prompt]").forEach((button) => {
     button.addEventListener("click", () => {
       const prompt = button.dataset.prompt || "";
-      elements.chatInput.value = prompt;
-      handleChatPrompt(prompt);
+      handleSupportShortcut(prompt);
     });
   });
   elements.chatForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const prompt = elements.chatInput.value.trim();
     if (!prompt) return;
-    handleChatPrompt(prompt);
+    handleChatPrompt(prompt, { source: "assistant", echoUser: true });
     elements.chatInput.value = "";
   });
   elements.chatStepbit.addEventListener("click", () => {
@@ -246,7 +266,14 @@ function bindEvents() {
   elements.runCommand.addEventListener("click", () => {
     const prompt = elements.paletteInput.value.trim();
     if (!prompt) return;
-    handleChatPrompt(prompt);
+    handleQuickCommand(prompt);
+  });
+  elements.paletteInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    const prompt = elements.paletteInput.value.trim();
+    if (!prompt) return;
+    handleQuickCommand(prompt);
   });
   elements.commandPaletteTrigger.addEventListener("click", () => {
     state.paletteOpen = true;
@@ -326,29 +353,38 @@ function stopRefreshLoop() {
 }
 
 async function refreshSnapshot() {
-  if (!state.workspace.serverUrl) {
-    stopRefreshLoop();
-    return;
-  }
   try {
-    const runsRegistry = await window.quantlabDesktop.requestJson(CONFIG.runsIndexPath);
+    const { runsRegistry, source, primaryError } = await loadRunsRegistrySnapshot();
+    if (!state.workspace.serverUrl) stopRefreshLoop();
     state.detailCache.clear();
-    const extra = await Promise.allSettled([
-      window.quantlabDesktop.requestJson(CONFIG.launchControlPath),
-      window.quantlabDesktop.requestJson(CONFIG.paperHealthPath),
-      window.quantlabDesktop.requestJson(CONFIG.brokerHealthPath),
-      window.quantlabDesktop.requestJson(CONFIG.stepbitWorkspacePath),
-    ]);
+    const optionalErrors = [];
+    if (primaryError?.message) optionalErrors.push(primaryError.message);
+    const extra = state.workspace.serverUrl
+      ? await Promise.allSettled([
+        window.quantlabDesktop.requestJson(CONFIG.launchControlPath),
+        window.quantlabDesktop.requestJson(CONFIG.paperHealthPath),
+        window.quantlabDesktop.requestJson(CONFIG.brokerHealthPath),
+        window.quantlabDesktop.requestJson(CONFIG.stepbitWorkspacePath),
+      ])
+      : [];
+    extra.forEach((result) => {
+      if (result.status === "rejected" && result.reason?.message) optionalErrors.push(result.reason.message);
+    });
+    const launchControlResult = extra[0];
+    const paperHealthResult = extra[1];
+    const brokerHealthResult = extra[2];
+    const stepbitWorkspaceResult = extra[3];
     state.snapshot = {
       runsRegistry,
-      launchControl: extra[0].status === "fulfilled" ? extra[0].value : state.snapshot?.launchControl || null,
-      paperHealth: extra[1].status === "fulfilled" ? extra[1].value : state.snapshot?.paperHealth || null,
-      brokerHealth: extra[2].status === "fulfilled" ? extra[2].value : state.snapshot?.brokerHealth || null,
-      stepbitWorkspace: extra[3].status === "fulfilled" ? extra[3].value : state.snapshot?.stepbitWorkspace || null,
+      launchControl: launchControlResult?.status === "fulfilled" ? launchControlResult.value : state.snapshot?.launchControl || null,
+      paperHealth: paperHealthResult?.status === "fulfilled" ? paperHealthResult.value : state.snapshot?.paperHealth || null,
+      brokerHealth: brokerHealthResult?.status === "fulfilled" ? brokerHealthResult.value : state.snapshot?.brokerHealth || null,
+      stepbitWorkspace: stepbitWorkspaceResult?.status === "fulfilled" ? stepbitWorkspaceResult.value : state.snapshot?.stepbitWorkspace || null,
     };
     state.snapshotStatus = {
-      status: "ok",
-      error: null,
+      status: optionalErrors.length || source === "local" ? "degraded" : "ok",
+      error: optionalErrors[0] || null,
+      source,
       lastSuccessAt: new Date().toISOString(),
       consecutiveErrors: 0,
       refreshPaused: false,
@@ -374,6 +410,7 @@ async function refreshSnapshot() {
     state.snapshotStatus = {
       status: "error",
       error: error?.message || "The local API is unavailable.",
+      source: "none",
       lastSuccessAt: state.snapshotStatus.lastSuccessAt,
       consecutiveErrors,
       refreshPaused,
@@ -383,12 +420,49 @@ async function refreshSnapshot() {
   }
 }
 
+async function loadRunsRegistrySnapshot() {
+  let primaryError = null;
+  if (state.workspace.serverUrl) {
+    try {
+      const runsRegistry = await window.quantlabDesktop.requestJson(CONFIG.runsIndexPath);
+      return { runsRegistry, source: "api", primaryError: null };
+    } catch (error) {
+      primaryError = error;
+    }
+  }
+  const runsRegistry = await window.quantlabDesktop.readProjectJson(CONFIG.localRunsIndexPath);
+  return { runsRegistry, source: "local", primaryError };
+}
+
 function renderAll() {
+  renderCommandFeedback();
   renderChat();
   renderTabs();
   renderPalette();
   renderWorkflow();
   renderChatAdapterStatus();
+}
+
+function renderCommandFeedback() {
+  elements.commandFeedback.textContent = state.quickCommandFeedback.text;
+  elements.commandFeedback.className = "command-feedback";
+  if (state.quickCommandFeedback.tone === "warning") {
+    elements.commandFeedback.classList.add("is-warning");
+  }
+  if (state.quickCommandFeedback.tone === "success") {
+    elements.commandFeedback.classList.add("is-success");
+  }
+}
+
+function setDecisionFeedback(text, tone = "neutral", runIds = []) {
+  state.decisionFeedback = {
+    text,
+    tone,
+    runIds: Array.isArray(runIds) ? runIds.filter(Boolean) : [],
+    updatedAt: new Date().toISOString(),
+  };
+  renderWorkflow();
+  rerenderContextualTabs();
 }
 
 function defaultShellWorkspaceStore() {
@@ -527,8 +601,10 @@ function serializeShellWorkspaceStore() {
 
 function restoreShellWorkspaceStore(store) {
   const restored = normalizeShellWorkspaceStore(store);
-  state.tabs = restored.tabs;
-  state.activeTabId = restored.active_tab_id;
+  state.tabs = collapsePrimarySurfaceTabs(restored.tabs, restored.active_tab_id);
+  state.activeTabId = state.tabs.some((tab) => tab.id === restored.active_tab_id)
+    ? restored.active_tab_id
+    : state.tabs[0]?.id || null;
   state.selectedRunIds = restored.selected_run_ids;
   applyLaunchFormState(restored.launch_form);
 }
@@ -559,7 +635,7 @@ function reconcileWorkspaceTabs() {
   const experimentsReady = state.experimentsWorkspace.status === "ready";
   let changed = false;
 
-  const nextTabs = state.tabs
+  let nextTabs = state.tabs
     .map((tab) => {
       if (tab.kind === "run" || tab.kind === "artifacts") {
         if (!validRunIds.has(tab.runId)) {
@@ -609,6 +685,8 @@ function reconcileWorkspaceTabs() {
       return tab;
     })
     .filter(Boolean);
+
+  nextTabs = collapsePrimarySurfaceTabs(pruneContextTabs(nextTabs), state.activeTabId);
 
   const nextActiveTabId = nextTabs.some((tab) => tab.id === state.activeTabId) ? state.activeTabId : nextTabs[0]?.id || null;
   if (!changed && nextActiveTabId === state.activeTabId) return false;
@@ -696,6 +774,8 @@ function renderWorkspaceState() {
     ? error
     : serverUrl
     ? `${serverUrl}/research_ui/index.html${source === "external" ? " · external server" : ""}`
+    : state.snapshotStatus.source === "local"
+    ? "research_ui unavailable · using local runs index"
     : "Waiting for localhost server URL.";
   const runtimeAlert = buildRuntimeAlert();
   elements.runtimeAlert.textContent = runtimeAlert.message;
@@ -711,7 +791,19 @@ function renderWorkspaceState() {
     createRuntimeChipNode("Runs", `${runs.length} indexed`, runs.length ? "up" : "warn"),
     createRuntimeChipNode("Paper", String(paperCount), paperCount ? "up" : "warn"),
     createRuntimeChipNode("Broker", String(brokerCount), brokerCount ? "up" : "warn"),
-    createRuntimeChipNode("API", state.snapshotStatus.status === "error" ? "degraded" : state.snapshotStatus.lastSuccessAt ? "ok" : "pending", state.snapshotStatus.status === "error" ? "down" : state.snapshotStatus.lastSuccessAt ? "up" : "warn"),
+    createRuntimeChipNode(
+      "API",
+      state.snapshotStatus.status === "error"
+        ? "down"
+        : state.snapshotStatus.status === "degraded"
+        ? state.snapshotStatus.source === "local" ? "local fallback" : "degraded"
+        : state.snapshotStatus.lastSuccessAt ? "ok" : "pending",
+      state.snapshotStatus.status === "error"
+        ? "down"
+        : state.snapshotStatus.status === "degraded"
+        ? "warn"
+        : state.snapshotStatus.lastSuccessAt ? "up" : "warn",
+    ),
     createRuntimeChipNode("Stepbit app", stepbit.frontend_reachable ? "up" : "down", stepbit.frontend_reachable ? "up" : "down"),
     createRuntimeChipNode("Stepbit core", stepbit.core_ready ? "ready" : stepbit.core_reachable ? "up" : "down", stepbit.core_ready ? "up" : stepbit.core_reachable ? "warn" : "down"),
   );
@@ -719,12 +811,20 @@ function renderWorkspaceState() {
 }
 
 function buildRuntimeAlert() {
+  const localRunsAvailable = getRuns().length > 0;
   if (state.workspace.status === "error" || state.workspace.status === "stopped") {
     const recentLogs = (state.workspace.logs || []).slice(-4).join("\n");
     return {
-      tone: "down",
+      tone: localRunsAvailable ? "warn" : "down",
       actionLabel: "Retry boot",
-      message: `${state.workspace.status === "error" ? "Boot failed" : "Runtime stopped"}${state.workspace.error ? `: ${state.workspace.error}` : "."}${recentLogs ? `\n\nRecent log:\n${recentLogs}` : ""}`,
+      message: `${state.workspace.status === "error" ? "Boot failed" : "Runtime stopped"}${state.workspace.error ? `: ${state.workspace.error}` : "."}${localRunsAvailable ? "\n\nLocal runs and native tabs remain available without research_ui." : ""}${recentLogs ? `\n\nRecent log:\n${recentLogs}` : ""}`,
+    };
+  }
+  if (state.snapshotStatus.status === "degraded") {
+    return {
+      tone: "warn",
+      actionLabel: state.workspace.serverUrl ? "Retry API" : "Retry boot",
+      message: `Desktop is running with degraded connectivity. ${state.snapshotStatus.source === "local" ? "Native surfaces are using the local runs index." : "Some local API surfaces are unavailable."}${state.snapshotStatus.error ? `\n\nLatest issue: ${state.snapshotStatus.error}` : ""}`,
     };
   }
   if (state.snapshotStatus.status === "error") {
@@ -741,7 +841,9 @@ function buildRuntimeAlert() {
     return {
       tone: "warn",
       actionLabel: "",
-      message: "QuantLab Desktop is waiting for the local research surface to become reachable.",
+      message: localRunsAvailable
+        ? "QuantLab Desktop is waiting for the local research surface to become reachable. Native surfaces are already using the local runs index."
+        : "QuantLab Desktop is waiting for the local research surface to become reachable.",
     };
   }
   return { tone: "", actionLabel: "", message: "" };
@@ -809,6 +911,67 @@ function renderChatAdapterStatus() {
     : "Stepbit adapter offline.";
 }
 
+function isPrimarySurfaceTab(tab) {
+  return Boolean(tab?.id && PRIMARY_SURFACE_IDS.has(tab.id));
+}
+
+function getPrimarySurfaceTabs(tabs = state.tabs) {
+  return tabs.filter((tab) => isPrimarySurfaceTab(tab));
+}
+
+function getContextTabs(tabs = state.tabs) {
+  return tabs.filter((tab) => !isPrimarySurfaceTab(tab));
+}
+
+function collapsePrimarySurfaceTabs(tabs, preferredActiveId = null) {
+  const primaryTabs = getPrimarySurfaceTabs(tabs);
+  if (primaryTabs.length <= 1) return tabs;
+  const keepId = primaryTabs.find((tab) => tab.id === preferredActiveId)?.id || primaryTabs[primaryTabs.length - 1]?.id;
+  return tabs.filter((tab) => !isPrimarySurfaceTab(tab) || tab.id === keepId);
+}
+
+function pruneContextTabs(tabs, preferredActiveId = null) {
+  const contextTabs = getContextTabs(tabs);
+  if (contextTabs.length <= CONFIG.maxContextTabs) return tabs;
+  const protectedIds = new Set([preferredActiveId, state.activeTabId].filter(Boolean));
+  const overflow = contextTabs.length - CONFIG.maxContextTabs;
+  const dropIds = new Set();
+
+  for (const tab of contextTabs) {
+    if (dropIds.size >= overflow) break;
+    if (protectedIds.has(tab.id)) continue;
+    dropIds.add(tab.id);
+  }
+
+  for (const tab of contextTabs) {
+    if (dropIds.size >= overflow) break;
+    if (!dropIds.has(tab.id)) dropIds.add(tab.id);
+  }
+
+  return tabs.filter((tab) => !dropIds.has(tab.id));
+}
+
+function renderActiveSurfaceMeta(activeTab = null) {
+  const primaryCount = getPrimarySurfaceTabs().length;
+  const contextCount = getContextTabs().length;
+  const surfaceMode = !activeTab ? "support" : isPrimarySurfaceTab(activeTab) ? "primary" : "context";
+  const surfaceLabel = !activeTab ? "Support lane" : surfaceMode === "primary" ? "Primary surface" : "Context tab";
+  const focusLabel = activeTab?.title || "Assistant support";
+
+  appendChildren(
+    elements.topbarSurfaceMeta,
+    createElementNode("span", { className: `surface-meta-chip ${surfaceMode}`, text: surfaceLabel }),
+    createElementNode("span", { className: "surface-meta-chip", text: `Focus ${focusLabel}` }),
+    createElementNode("span", { className: "surface-meta-chip", text: `${primaryCount} primary · ${contextCount} context` }),
+  );
+
+  elements.workbenchMeta.textContent = !activeTab
+    ? "Sidebar navigation opens one primary surface at a time. Context tabs stay bounded until you need them."
+    : isPrimarySurfaceTab(activeTab)
+      ? `Primary surface active. ${contextCount} context tab${contextCount === 1 ? "" : "s"} remain available without displacing the workbench.`
+      : `Context tab active. The current primary surface stays preserved behind this review path.`;
+}
+
 function renderTabs() {
   if (!state.tabs.length) {
     clearElement(elements.tabsBar);
@@ -818,11 +981,12 @@ function renderTabs() {
         "div",
         {
           className: "tab-placeholder",
-          text: "No context tab is open yet.\n\nUse chat, quick command, or the workflow panel to launch work, open runs, compare candidates, or inspect artifacts.",
+          text: "No context tab is open yet.\n\nUse quick commands, assistant, or the workflow panel to launch work, open runs, compare candidates, or inspect artifacts.",
         },
       ),
     );
     elements.topbarTitle.textContent = "Chat";
+    renderActiveSurfaceMeta(null);
     syncNav("chat");
     return;
   }
@@ -832,12 +996,15 @@ function renderTabs() {
       createElementNode(
         "button",
         {
-          className: `tab-pill ${tab.id === state.activeTabId ? "is-active" : ""}`,
+          className: `tab-pill ${tab.id === state.activeTabId ? "is-active" : ""} ${isPrimarySurfaceTab(tab) ? "is-primary" : "is-context"}`,
           dataset: { tabId: tab.id },
           type: "button",
         },
         [
-          createElementNode("span", { text: tab.title }),
+          createElementNode("span", { className: "tab-pill-label" }, [
+            createElementNode("span", { text: tab.title }),
+            createElementNode("span", { className: "tab-pill-meta", text: isPrimarySurfaceTab(tab) ? "Primary" : "Context" }),
+          ]),
           createElementNode("span", { className: "tab-close", text: "×", dataset: { closeTab: tab.id } }),
         ],
       ),
@@ -846,36 +1013,10 @@ function renderTabs() {
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) || state.tabs[0];
   state.activeTabId = activeTab.id;
   elements.topbarTitle.textContent = activeTab.title;
+  renderActiveSurfaceMeta(activeTab);
   syncNav(activeTab.navKind || activeTab.kind);
-  if (activeTab.kind === "iframe") {
-    appendChildren(
-      elements.tabContent,
-      createElementNode("iframe", {
-        className: "tab-frame",
-        attrs: { src: activeTab.url, title: activeTab.title },
-      }),
-    );
-  } else if (activeTab.kind === "experiments") {
-    renderMarkupInto(elements.tabContent, renderExperimentsTab(activeTab));
-  } else if (activeTab.kind === "sweep-decision") {
-    renderMarkupInto(elements.tabContent, renderSweepDecisionTab(activeTab));
-  } else if (activeTab.kind === "runs") {
-    renderMarkupInto(elements.tabContent, renderRunsTab(activeTab));
-  } else if (activeTab.kind === "run") {
-    renderMarkupInto(elements.tabContent, renderRunTab(activeTab));
-  } else if (activeTab.kind === "compare") {
-    renderMarkupInto(elements.tabContent, renderCompareTab(activeTab));
-  } else if (activeTab.kind === "artifacts") {
-    renderMarkupInto(elements.tabContent, renderArtifactsTab(activeTab));
-  } else if (activeTab.kind === "candidates") {
-    renderMarkupInto(elements.tabContent, renderCandidatesTab(activeTab));
-  } else if (activeTab.kind === "paper") {
-    renderMarkupInto(elements.tabContent, renderPaperOpsTab(activeTab));
-  } else if (activeTab.kind === "job") {
-    renderMarkupInto(elements.tabContent, renderJobTab(activeTab));
-  } else {
-    appendChildren(elements.tabContent, createElementNode("div", { className: "tab-placeholder", text: activeTab.content || "" }));
-  }
+  const renderTab = TAB_RENDERERS[activeTab.kind] || renderTabFallback;
+  renderTab(activeTab);
   bindTabChromeEvents();
   bindTabContentEvents(activeTab);
 }
@@ -1088,6 +1229,49 @@ function bindTabChromeEvents() {
   });
 }
 
+const TAB_RENDERERS = {
+  iframe(activeTab) {
+    appendChildren(
+      elements.tabContent,
+      createElementNode("iframe", {
+        className: "tab-frame",
+        attrs: { src: activeTab.url, title: activeTab.title },
+      }),
+    );
+  },
+  experiments(activeTab) {
+    renderMarkupInto(elements.tabContent, renderExperimentsTab(activeTab));
+  },
+  "sweep-decision"(activeTab) {
+    renderMarkupInto(elements.tabContent, renderSweepDecisionTab(activeTab));
+  },
+  runs(activeTab) {
+    renderMarkupInto(elements.tabContent, renderRunsTab(activeTab));
+  },
+  run(activeTab) {
+    renderMarkupInto(elements.tabContent, renderRunTab(activeTab));
+  },
+  compare(activeTab) {
+    renderMarkupInto(elements.tabContent, renderCompareTab(activeTab));
+  },
+  artifacts(activeTab) {
+    renderMarkupInto(elements.tabContent, renderArtifactsTab(activeTab));
+  },
+  candidates(activeTab) {
+    renderMarkupInto(elements.tabContent, renderCandidatesTab(activeTab));
+  },
+  paper(activeTab) {
+    renderMarkupInto(elements.tabContent, renderPaperOpsTab(activeTab));
+  },
+  job(activeTab) {
+    renderMarkupInto(elements.tabContent, renderJobTab(activeTab));
+  },
+};
+
+function renderTabFallback(activeTab) {
+  appendChildren(elements.tabContent, createElementNode("div", { className: "tab-placeholder", text: activeTab.content || "" }));
+}
+
 function bindTabContentEvents(tab) {
   if (tab.kind === "experiments") {
     elements.tabContent.querySelectorAll("[data-experiments-refresh]").forEach((button) => {
@@ -1165,6 +1349,12 @@ function bindTabContentEvents(tab) {
     });
     elements.tabContent.querySelectorAll("[data-open-runs-legacy]").forEach((button) => {
       button.addEventListener("click", () => openResearchTab("runs", "Runs (legacy)", "#/"));
+    });
+    elements.tabContent.querySelectorAll("[data-open-candidates]").forEach((button) => {
+      button.addEventListener("click", () => openCandidatesTab());
+    });
+    elements.tabContent.querySelectorAll("[data-open-shortlist-compare]").forEach((button) => {
+      button.addEventListener("click", () => openShortlistCompareTab());
     });
   }
   if (tab.kind === "compare") {
@@ -1404,6 +1594,7 @@ function handleStepbitPrompt(prompt) {
   const trimmedPrompt = String(prompt || "").trim();
   if (!trimmedPrompt) return;
   pushMessage("user", trimmedPrompt);
+  setQuickCommandFeedback("Stepbit routing is active in Assistant history below.", "neutral");
   void submitStepbitPrompt(trimmedPrompt, "chat");
 }
 
@@ -1418,111 +1609,187 @@ function askStepbitAboutLatestFailure() {
   void submitStepbitPrompt(prompt, "palette");
 }
 
-async function handleChatPrompt(prompt) {
+function setQuickCommandFeedback(text, tone = "neutral") {
+  state.quickCommandFeedback = {
+    tone,
+    text,
+  };
+  renderCommandFeedback();
+}
+
+function handleSupportShortcut(prompt) {
   const trimmedPrompt = String(prompt || "").trim();
   if (!trimmedPrompt) return;
-  pushMessage("user", trimmedPrompt);
+  if (trimmedPrompt.toLowerCase().startsWith("ask stepbit")) {
+    const stepbitPrompt = trimmedPrompt.replace(/^ask stepbit\s*/i, "").trim();
+    elements.chatInput.value = stepbitPrompt || trimmedPrompt;
+    focusChat();
+    setQuickCommandFeedback("Stepbit requests belong in Assistant. The prompt draft was moved below.", "warning");
+    return;
+  }
+  elements.paletteInput.value = trimmedPrompt;
+  handleQuickCommand(trimmedPrompt);
+}
+
+function handleQuickCommand(prompt) {
+  const trimmedPrompt = String(prompt || "").trim();
+  if (!trimmedPrompt) return;
+  elements.paletteInput.value = "";
+  void handleChatPrompt(trimmedPrompt, { source: "quick-command", echoUser: false });
+}
+
+async function handleChatPrompt(prompt, options = {}) {
+  const trimmedPrompt = String(prompt || "").trim();
+  if (!trimmedPrompt) return;
+  const { source = "assistant", echoUser = true } = options;
+  const isQuickCommand = source === "quick-command";
+  if (echoUser) pushMessage("user", trimmedPrompt);
   const stepbitPrompt = extractStepbitPrompt(trimmedPrompt);
   if (stepbitPrompt) {
+    if (isQuickCommand) {
+      elements.chatInput.value = stepbitPrompt;
+      focusChat();
+      setQuickCommandFeedback("Stepbit prompts belong in Assistant. The prompt draft was moved below.", "warning");
+      return;
+    }
     await submitStepbitPrompt(stepbitPrompt, "chat");
     return;
   }
   const normalized = trimmedPrompt.toLowerCase();
   if (normalized.includes("open experiments") || normalized.includes("open sweeps") || normalized === "experiments") {
     openExperimentsTab();
-    pushMessage("assistant", "Opened the native experiments workspace.");
+    if (isQuickCommand) {
+      setQuickCommandFeedback("Opened Experiments in the primary workbench.", "success");
+    } else {
+      pushMessage("assistant", "Opened the native experiments workspace.");
+    }
     return;
   }
   if (normalized.includes("open sweep handoff") || normalized.includes("open sweep decision")) {
     openSweepDecisionTab();
+    if (isQuickCommand) setQuickCommandFeedback("Opened Sweep Handoff in the workbench.", "success");
     return;
   }
   if (normalized.includes("refresh experiments") || normalized.includes("refresh sweeps")) {
     refreshExperimentsWorkspace({ focusTab: true, silent: false });
+    if (isQuickCommand) setQuickCommandFeedback("Refreshing experiments workspace.", "success");
     return;
   }
   if (normalized.includes("open launch") || normalized === "launch") {
-    openResearchTab("launch", "Launch", "#/launch");
-    pushMessage("assistant", "Opened the Launch surface inside a desktop tab.");
+    openResearchTab("launch", "Launch", "#/launch", { replacePrimary: true });
+    if (isQuickCommand) {
+      setQuickCommandFeedback("Opened Launch in the primary workbench.", "success");
+    } else {
+      pushMessage("assistant", "Opened the Launch surface inside a desktop tab.");
+    }
     return;
   }
   if (normalized.includes("open compare") || normalized === "compare" || normalized.includes("compare selected")) {
-    openCompareSelectionTab();
+    openCompareSelectionTab(state.selectedRunIds, "selected runs", { replacePrimary: true });
+    if (isQuickCommand) setQuickCommandFeedback("Opened Compare in the primary workbench.", "success");
     return;
   }
   if (normalized.includes("open shortlist compare")) {
     openShortlistCompareTab();
+    if (isQuickCommand) setQuickCommandFeedback("Opened shortlist compare in the workbench.", "success");
     return;
   }
   if (normalized.includes("open candidates") || normalized.includes("open shortlist")) {
     openCandidatesTab();
-    pushMessage("assistant", "Opened the candidates and shortlist surface.");
+    if (isQuickCommand) {
+      setQuickCommandFeedback("Opened Candidates in the primary workbench.", "success");
+    } else {
+      pushMessage("assistant", "Opened the candidates and shortlist surface.");
+    }
     return;
   }
   if (normalized.includes("open ops") || normalized.includes("paper ops")) {
     openPaperOpsTab();
-    pushMessage("assistant", "Opened the native Paper Ops surface.");
+    if (isQuickCommand) {
+      setQuickCommandFeedback("Opened Paper Ops in the primary workbench.", "success");
+    } else {
+      pushMessage("assistant", "Opened the native Paper Ops surface.");
+    }
     return;
   }
   if (normalized.includes("open runs") || normalized === "runs") {
     openRunsNativeTab();
-    pushMessage("assistant", "Opened the native run explorer.");
+    if (isQuickCommand) {
+      setQuickCommandFeedback("Opened Runs in the primary workbench.", "success");
+    } else {
+      pushMessage("assistant", "Opened the native run explorer.");
+    }
     return;
   }
   if (normalized.includes("open baseline")) {
     openBaselineRunTab();
+    if (isQuickCommand) setQuickCommandFeedback("Opened the current baseline run.", "success");
     return;
   }
   if (normalized.includes("latest run")) {
     openLatestRunTab();
+    if (isQuickCommand) setQuickCommandFeedback("Opened the latest indexed run.", "success");
     return;
   }
   if (normalized.includes("latest failed launch") || normalized.includes("latest failed job")) {
     openLatestFailedLaunchTab();
+    if (isQuickCommand) setQuickCommandFeedback("Opened the latest failed launch for review.", "success");
     return;
   }
   if (normalized.includes("explain latest failure") || normalized.includes("explain failure")) {
     explainLatestFailureInChat();
+    if (isQuickCommand) setQuickCommandFeedback("Failure explanation recorded in Assistant history below.", "success");
     return;
   }
   if (normalized.startsWith("show artifacts")) {
     const explicitRunId = extractRunIdAfterPrefix(prompt, "show artifacts for");
     explicitRunId ? openArtifactsTabForRun(explicitRunId) : openArtifactsForPreferredRun();
+    if (isQuickCommand) setQuickCommandFeedback("Opened artifacts in the workbench.", "success");
     return;
   }
   if (normalized.includes("show runtime status") || normalized === "status") {
     summarizeRuntimeInChat();
+    if (isQuickCommand) setQuickCommandFeedback("Runtime summary recorded in Assistant history below.", "success");
     return;
   }
   if (normalized.startsWith("mark candidate")) {
     const runId = extractRunIdAfterPrefix(trimmedPrompt, "mark candidate").trim();
     if (!runId) {
       pushMessage("assistant", "Use `mark candidate <run_id>` to promote a run into the shortlist workflow.");
+      if (isQuickCommand) setQuickCommandFeedback("Quick commands need a run id: `mark candidate <run_id>`.", "warning");
       return;
     }
     toggleCandidate(runId, true);
+    if (isQuickCommand) setQuickCommandFeedback(`Marked ${runId} as candidate. Confirmation appears in Assistant history.`, "success");
     return;
   }
   if (normalized.startsWith("mark baseline")) {
     const runId = extractRunIdAfterPrefix(trimmedPrompt, "mark baseline").trim();
     if (!runId) {
       pushMessage("assistant", "Use `mark baseline <run_id>` to pin the reference run.");
+      if (isQuickCommand) setQuickCommandFeedback("Quick commands need a run id: `mark baseline <run_id>`.", "warning");
       return;
     }
     setBaseline(runId);
+    if (isQuickCommand) setQuickCommandFeedback(`Updated baseline for ${runId}. Confirmation appears in Assistant history.`, "success");
     return;
   }
   const launchRunPayload = parseLaunchRunPrompt(trimmedPrompt);
   if (launchRunPayload) {
     submitLaunchRequest(launchRunPayload, "chat");
+    if (isQuickCommand) setQuickCommandFeedback("Submitted launch request. Progress appears in Assistant history and Launch.", "success");
     return;
   }
   const launchSweepPayload = parseLaunchSweepPrompt(trimmedPrompt);
   if (launchSweepPayload) {
     submitLaunchRequest(launchSweepPayload, "chat");
+    if (isQuickCommand) setQuickCommandFeedback("Submitted sweep request. Progress appears in Assistant history and Launch.", "success");
     return;
   }
   pushMessage("assistant", "This shell now supports real backend-backed actions. Try:\n- open experiments\n- open sweep handoff\n- launch run ticker ETH-USD start 2023-01-01 end 2024-01-01\n- launch sweep config configs/experiments/eth_2023_grid.yaml\n- open candidates\n- mark candidate <run_id>\n- mark baseline <run_id>\n- open latest run\n- compare selected\n- show artifacts\n- open latest failed launch\n- explain latest failure\n- ask stepbit explain the latest failed launch");
+  if (isQuickCommand) {
+    setQuickCommandFeedback("Command not recognized. Use deterministic verbs like open, show, compare, launch, or mark.", "warning");
+  }
 }
 
 async function submitLaunchRequest(payload, source) {
@@ -1533,7 +1800,7 @@ async function submitLaunchRequest(payload, source) {
     const result = await window.quantlabDesktop.postJson(CONFIG.launchControlPath, payload);
     state.launchFeedback = result.message || "Launch accepted.";
     await refreshSnapshot();
-    openResearchTab("launch", "Launch", "#/launch");
+    openResearchTab("launch", "Launch", "#/launch", { replacePrimary: true });
     pushMessage("assistant", `${result.message || "Launch accepted."}\n${summarizeLaunchPayload(payload)}`);
   } catch (error) {
     const message = error.message || "Launch failed.";
@@ -1551,6 +1818,7 @@ function summarizeRuntimeInChat() {
   pushMessage("assistant", [
     `QuantLab server: ${state.workspace.status}`,
     `Server URL: ${state.workspace.serverUrl || "pending"}`,
+    `Snapshot source: ${state.snapshotStatus.source || "none"}`,
     `Indexed runs: ${runs.length}`,
     `Selected runs: ${state.selectedRunIds.length}`,
     `Candidates: ${getCandidateEntries().length}`,
@@ -1563,9 +1831,8 @@ function summarizeRuntimeInChat() {
 }
 
 function focusChat() {
-  state.activeTabId = null;
-  renderTabs();
-  pushMessage("assistant", "Chat stays at the center of the shell. Use it to launch work, open runs, compare, or inspect artifacts.");
+  elements.chatInput.focus();
+  elements.chatInput.select();
 }
 
 async function openExperimentsTab() {
@@ -1577,7 +1844,7 @@ async function openExperimentsTab() {
     title: "Experiments",
     selectedConfigPath: current?.selectedConfigPath || state.experimentsWorkspace.configs[0]?.path || null,
     selectedSweepId: current?.selectedSweepId || state.experimentsWorkspace.sweeps[0]?.run_id || null,
-  });
+  }, { replacePrimary: true });
   await refreshExperimentsWorkspace({ focusTab: true, silent: true });
 }
 
@@ -1604,24 +1871,22 @@ function openRunsNativeTab() {
     kind: "runs",
     navKind: "runs",
     title: "Runs",
-  });
+  }, { replacePrimary: true });
 }
 
-function openResearchTab(navKind, title, hash) {
+function openResearchTab(navKind, title, hash, options = {}) {
   if (!state.workspace.serverUrl) {
-    pushMessage("assistant", "The local research surface is still starting. Wait a moment and retry.");
+    pushMessage("assistant", "research_ui is unavailable. Browser-based tabs are disabled, but native/local surfaces remain usable.");
     return;
   }
   const id = `iframe:${hash}`;
-  const existing = state.tabs.find((tab) => tab.id === id);
-  if (existing) {
-    state.activeTabId = existing.id;
-    renderTabs();
-    return;
-  }
-  state.tabs.push({ id, kind: "iframe", navKind, title, url: `${state.workspace.serverUrl}/research_ui/index.html${hash}` });
-  state.activeTabId = id;
-  renderTabs();
+  upsertTab({
+    id,
+    kind: "iframe",
+    navKind,
+    title,
+    url: `${state.workspace.serverUrl}/research_ui/index.html${hash}`,
+  }, { replacePrimary: Boolean(options.replacePrimary) });
 }
 
 function openLatestRunTab() {
@@ -1651,14 +1916,15 @@ async function openRunDetailTab(runId) {
   }
 }
 
-async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabel = "selected runs") {
+async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabel = "selected runs", options = {}) {
   const selectedRuns = uniqueRunIds(runIds).map(findRun).filter(Boolean);
   if (selectedRuns.length < 2) {
+    setDecisionFeedback("Compare needs 2 to 4 indexed runs. Select more runs or build the shortlist and baseline queue first.", "warning", runIds);
     pushMessage("assistant", "Select 2 to 4 runs in the worklist before opening compare.");
     return;
   }
   const compareSet = selectedRuns.slice(0, CONFIG.maxCandidateCompare);
-  const tabId = `compare:${compareSet.map((run) => run.run_id).join("|")}`;
+  const tabId = options.replacePrimary ? "compare:selected" : `compare:${compareSet.map((run) => run.run_id).join("|")}`;
   upsertTab({
     id: tabId,
     kind: "compare",
@@ -1668,7 +1934,7 @@ async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabe
     rankMetric: "sharpe_simple",
     status: "loading",
     detailMap: {},
-  });
+  }, { replacePrimary: Boolean(options.replacePrimary) });
   try {
     const details = await Promise.all(compareSet.map(async (run) => {
       try {
@@ -1687,7 +1953,7 @@ async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabe
       rankMetric: "sharpe_simple",
       status: "ready",
       detailMap: Object.fromEntries(details),
-    });
+    }, { replacePrimary: Boolean(options.replacePrimary) });
   } catch (_error) {
     upsertTab({
       id: tabId,
@@ -1698,7 +1964,7 @@ async function openCompareSelectionTab(runIds = state.selectedRunIds, sourceLabe
       rankMetric: "sharpe_simple",
       status: "ready",
       detailMap: {},
-    });
+    }, { replacePrimary: Boolean(options.replacePrimary) });
   }
   pushMessage("assistant", `Opened a compare tab for ${compareSet.length} ${sourceLabel}.`);
 }
@@ -1710,7 +1976,7 @@ function openCandidatesTab(filter = "all") {
     navKind: "candidates",
     title: "Candidates",
     filter,
-  });
+  }, { replacePrimary: true });
 }
 
 function openPaperOpsTab() {
@@ -1719,7 +1985,7 @@ function openPaperOpsTab() {
     kind: "paper",
     navKind: "ops",
     title: "Paper Ops",
-  });
+  }, { replacePrimary: true });
 }
 
 function openBaselineRunTab() {
@@ -1735,6 +2001,7 @@ function openBaselineRunTab() {
 function openShortlistCompareTab() {
   const runIds = getDecisionCompareRunIds();
   if (runIds.length < 2) {
+    setDecisionFeedback("Decision compare is not ready yet. Pin a baseline and shortlist at least one more run.", "warning", runIds);
     pushMessage("assistant", "Shortlist compare needs at least two decision runs across shortlist and baseline.");
     return;
   }
@@ -2094,7 +2361,10 @@ function buildSweepDecisionRows(sweepRunId, configPath, rows) {
 
 function closeTab(tabId) {
   state.tabs = state.tabs.filter((tab) => tab.id !== tabId);
-  if (state.activeTabId === tabId) state.activeTabId = state.tabs[0]?.id || null;
+  if (state.activeTabId === tabId) {
+    const nextPrimaryTab = getPrimarySurfaceTabs(state.tabs)[0] || null;
+    state.activeTabId = nextPrimaryTab?.id || state.tabs[0]?.id || null;
+  }
   renderTabs();
   scheduleShellWorkspacePersist();
 }
@@ -2257,6 +2527,8 @@ function getRendererContext() {
     getSweepDecisionEntriesResolved,
     getSweepDecisionEntriesForRun,
     getSweepDecisionCompareEntries,
+    decisionFeedback: state.decisionFeedback,
+    selectedRunIds: state.selectedRunIds,
     sweepDecision: {
       getEntry: (store, entryId) => sweepDecisionStore.getSweepDecisionEntry(store, entryId),
       getEntriesResolved: (store, findRowFn) => sweepDecisionStore.getSweepDecisionEntriesResolved(store, findRowFn),
@@ -2269,10 +2541,21 @@ function getRendererContext() {
   };
 }
 
-function upsertTab(nextTab) {
-  const index = state.tabs.findIndex((tab) => tab.id === nextTab.id);
-  if (index >= 0) state.tabs[index] = { ...state.tabs[index], ...nextTab };
-  else state.tabs.push(nextTab);
+function upsertTab(nextTab, options = {}) {
+  const replacePrimary = Boolean(options.replacePrimary) || isPrimarySurfaceTab(nextTab);
+  if (replacePrimary) {
+    const contextTabs = getContextTabs(state.tabs);
+    const existingPrimaryTab = state.tabs.find((tab) => tab.id === nextTab.id) || null;
+    state.tabs = [...contextTabs, existingPrimaryTab ? { ...existingPrimaryTab, ...nextTab } : nextTab];
+  } else {
+    const index = state.tabs.findIndex((tab) => tab.id === nextTab.id);
+    if (index >= 0) {
+      state.tabs[index] = { ...state.tabs[index], ...nextTab };
+    } else {
+      state.tabs.push(nextTab);
+    }
+    state.tabs = pruneContextTabs(state.tabs, nextTab.id);
+  }
   state.activeTabId = nextTab.id;
   renderTabs();
   scheduleShellWorkspacePersist();
@@ -2302,13 +2585,21 @@ async function loadRunDetail(runId) {
   if (!run?.path) throw new Error(`Run ${runId} has no accessible artifact path.`);
   let detail = { report: null, reportUrl: null, directoryEntries: [], directoryTruncated: false };
   for (const artifact of CONFIG.detailArtifacts) {
+    const localArtifactPath = joinProjectPath(run.path, artifact);
     const href = buildRunArtifactHref(run.path, artifact);
     try {
-      const report = await window.quantlabDesktop.requestJson(href);
-      detail = { ...detail, report, reportUrl: href };
+      const report = await window.quantlabDesktop.readProjectJson(localArtifactPath);
+      detail = { ...detail, report, reportUrl: href || localArtifactPath };
       break;
-    } catch (_error) {
-      // Keep trying the remaining artifact names.
+    } catch (_localError) {
+      if (!href) continue;
+      try {
+        const report = await window.quantlabDesktop.requestJson(href);
+        detail = { ...detail, report, reportUrl: href };
+        break;
+      } catch (_error) {
+        // Keep trying the remaining artifact names.
+      }
     }
   }
   try {
@@ -2506,11 +2797,12 @@ function findSweepDecisionRow(entryId) {
   return null;
 }
 
-async function saveCandidatesStore(nextStore, message = "") {
+async function saveCandidatesStore(nextStore, message = "", feedback = null) {
   try {
     state.candidatesStore = normalizeCandidatesStore(await window.quantlabDesktop.saveCandidatesStore(nextStore));
     renderWorkflow();
     rerenderContextualTabs();
+    if (feedback?.text) setDecisionFeedback(feedback.text, feedback.tone || "success", feedback.runIds || []);
     if (message) pushMessage("assistant", message);
   } catch (error) {
     pushMessage("assistant", error.message || "Could not persist the candidates store.");
@@ -2550,7 +2842,17 @@ async function toggleCandidate(runId, forceValue = null) {
     entries,
     baseline_run_id: shouldExist || state.candidatesStore.baseline_run_id !== runId ? state.candidatesStore.baseline_run_id : null,
   };
-  await saveCandidatesStore(nextStore, shouldExist ? `Marked ${runId} as a candidate.` : `Removed ${runId} from candidates.`);
+  await saveCandidatesStore(
+    nextStore,
+    shouldExist ? `Marked ${runId} as a candidate.` : `Removed ${runId} from candidates.`,
+    {
+      text: shouldExist
+        ? `${runId} is now tracked as candidate. Review evidence and decide whether to shortlist it or clear it.`
+        : `${runId} was removed from the candidate queue.`,
+      tone: shouldExist ? "success" : "warning",
+      runIds: [runId],
+    },
+  );
 }
 
 async function toggleShortlist(runId) {
@@ -2575,6 +2877,13 @@ async function toggleShortlist(runId) {
       entries,
     },
     nextEntry.shortlisted ? `Added ${runId} to the shortlist.` : `Removed ${runId} from the shortlist.`,
+    {
+      text: nextEntry.shortlisted
+        ? `${runId} is now shortlisted. Compare it against the current baseline or promote it to baseline if warranted.`
+        : `${runId} was removed from the shortlist.`,
+      tone: nextEntry.shortlisted ? "success" : "warning",
+      runIds: [runId],
+    },
   );
 }
 
@@ -2605,6 +2914,13 @@ async function setBaseline(runId) {
       entries,
     },
     nextBaseline ? `Pinned ${runId} as the current baseline.` : `Cleared the baseline reference.`,
+    {
+      text: nextBaseline
+        ? `${runId} is now the baseline. Use decision compare to test shortlisted peers against it.`
+        : "The baseline reference was cleared. Pin a new baseline before relying on decision compare.",
+      tone: nextBaseline ? "success" : "warning",
+      runIds: nextBaseline ? [runId] : [],
+    },
   );
 }
 
@@ -2631,6 +2947,13 @@ async function editCandidateNote(runId) {
       entries,
     },
     nextNote.trim() ? `Updated the note for ${runId}.` : `Cleared the note for ${runId}.`,
+    {
+      text: nextNote.trim()
+        ? `Decision note updated for ${runId}.`
+        : `Decision note cleared for ${runId}.`,
+      tone: "success",
+      runIds: [runId],
+    },
   );
 }
 
@@ -2777,6 +3100,7 @@ function summarizeCandidateState(runId) {
 function openRunDecisionCompare(runId) {
   const relatedRunIds = uniqueRunIds([runId, ...getDecisionCompareRunIds().filter((candidateId) => candidateId !== runId)]);
   if (relatedRunIds.length < 2) {
+    setDecisionFeedback(`${runId} cannot enter compare yet. Add a baseline or shortlist one more peer first.`, "warning", [runId]);
     pushMessage("assistant", "Run compare needs this run plus at least one baseline or shortlisted peer.");
     return;
   }
@@ -2855,10 +3179,38 @@ function absoluteUrl(relativeOrUrl) {
 async function loadOptionalText(relativePath) {
   if (!relativePath) return "";
   try {
-    return await window.quantlabDesktop.requestText(relativePath);
+    if (state.workspace.serverUrl) {
+      return await window.quantlabDesktop.requestText(relativePath);
+    }
+  } catch (_error) {
+    // Fall through to local file access.
+  }
+  const projectPath = projectPathFromHref(relativePath);
+  if (!projectPath) return "";
+  try {
+    return await window.quantlabDesktop.readProjectText(projectPath);
   } catch (_error) {
     return "";
   }
+}
+
+function joinProjectPath(basePath, leafName) {
+  return `${String(basePath || "").replace(/[\\/]+$/, "")}\\${leafName}`;
+}
+
+function projectPathFromHref(relativeOrUrl) {
+  const raw = String(relativeOrUrl || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      return projectPathFromHref(new URL(raw).pathname);
+    } catch (_error) {
+      return "";
+    }
+  }
+  const normalized = raw.replace(/^\/+/, "");
+  if (!normalized || normalized.startsWith("api/")) return "";
+  return normalized;
 }
 
 function buildFailureExplanation(job, stderrText) {

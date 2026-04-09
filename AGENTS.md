@@ -17,7 +17,9 @@ For public web work, also read:
 - Do not create parallel implementations for the same concept.
 - Treat existing docs, content files, and contracts as the source of truth before adding new ones.
 - Default workflow is issue -> branch -> PR -> merge.
+- One branch should carry one technical story with one clear dominant scope.
 - Do not start branch work without an issue unless the task is an urgent fix and the user explicitly says to skip it.
+- Multi-scope PRs that mix core, desktop, docs, CI, or auxiliary cleanup are not accepted by default; they require explicit written justification in the PR.
 - Preserve the repository architecture:
   - core logic in `src/quantlab/`
   - CLI routing in `src/quantlab/cli/`

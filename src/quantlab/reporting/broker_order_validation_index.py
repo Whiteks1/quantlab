@@ -64,7 +64,7 @@ def render_broker_order_validations_index_md(payload: dict[str, Any]) -> str:
     ]
 
     if not sessions:
-        lines.append("_No valid broker order validation sessions found._")
+        lines.append("_No valid broker order-validation sessions found._")
         return "\n".join(lines)
 
     columns = [
@@ -73,7 +73,6 @@ def render_broker_order_validations_index_md(payload: dict[str, Any]) -> str:
         "status",
         "validation_accepted",
         "remote_validation_called",
-        "request_id",
         "path",
     ]
     lines.append("| " + " | ".join(columns) + " |")

@@ -22,6 +22,12 @@ Prefer one narrow intention per branch, for example:
 - one UI slice
 - one documentation alignment step
 
+Rule of thumb:
+
+- one branch = one technical story
+- one PR = one dominant scope
+- if a PR mixes core, desktop, docs, CI, or cleanup, that mix must be explicitly justified; otherwise it should be split
+
 Avoid mixing:
 
 - feature work
@@ -90,6 +96,7 @@ Prefer:
 - one issue closure per PR when possible
 - integration PRs that summarize included slices instead of acting like changelogs
 - PRs that clearly name the issue they close or continue
+- PRs whose scope can be described without “and also”
 
 Avoid:
 
@@ -97,6 +104,7 @@ Avoid:
 - long lists of unrelated `Closes #...`
 - raw shell-escaped text
 - opening PRs from stale stacked branches after the real integration PR already exists
+- multi-scope PRs without an explicit reason for why the work could not be kept slice-sized
 
 ## Merge Style
 

@@ -67,10 +67,26 @@ def build_hyperliquid_submits_index(root_dir: str | Path) -> dict[str, Any]:
         summary = load_hyperliquid_submit_summary(session_dir)
         sessions.append({field: summary.get(field) for field in _INDEX_FIELDS})
 
+    status_counts: dict[str, int] = {}
+    submit_state_counts: dict[str, int] = {}
+    alert_status_counts: dict[str, int] = {}
+    for session in sessions:
+        status_key = str(session.get("status") or "unknown")
+        submit_state_key = str(session.get("submit_state") or "no_submit_response")
+        alert_status_key = str(session.get("alert_status") or "unknown")
+        status_counts[status_key] = status_counts.get(status_key, 0) + 1
+        submit_state_counts[submit_state_key] = submit_state_counts.get(submit_state_key, 0) + 1
+        alert_status_counts[alert_status_key] = alert_status_counts.get(alert_status_key, 0) + 1
+
     return {
         "generated_at": datetime.datetime.now().isoformat(),
         "root_dir": str(root),
         "n_sessions": len(sessions),
+        "status_counts": status_counts,
+        "submit_state_counts": submit_state_counts,
+        "alert_status_counts": alert_status_counts,
+        "reconciliation_required_sessions": status_counts.get("reconciliation_required", 0),
+        "identifier_missing_sessions": submit_state_counts.get("submitted_remote_identifier_missing", 0),
         "sessions": sessions,
     }
 
@@ -85,6 +101,8 @@ def render_hyperliquid_submits_index_md(payload: dict[str, Any]) -> str:
         f"- **Root directory:** `{payload.get('root_dir')}`",
         f"- **Generated at:** {payload.get('generated_at')}",
         f"- **Total sessions found:** {payload.get('n_sessions', len(sessions))}",
+        f"- **Reconciliation required sessions:** {payload.get('reconciliation_required_sessions', 0)}",
+        f"- **Identifier-missing submit acknowledgements:** {payload.get('identifier_missing_sessions', 0)}",
         "",
         "## Sessions",
         "",

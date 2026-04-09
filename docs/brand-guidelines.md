@@ -2,22 +2,29 @@
 
 ## Brand architecture
 
-- Public brand: QuantLab Research
+- Umbrella ecosystem: QuantLab
+- Research product: QuantLab Research
 - Internal engine: QuantLab Core
-- Upstream signal layer: Quant Pulse
+- Sibling signal product: QuantPulse
 
 ## Positioning
 
 QuantLab Research is a local-first quantitative lab for reproducible research, disciplined paper validation, and supervised execution.
 
-It is built on QuantLab Core, the internal engine that makes hypotheses, configurations, runs, artifacts, and outcomes explicit, traceable, and reviewable. The goal is not narrative polish, but research clarity, operational discipline, and controlled progression from validation to execution.
+It is built on QuantLab Core, the internal engine that makes hypotheses, configurations, runs, artifacts, and outcomes explicit, traceable, and reviewable. QuantPulse exists alongside it as a sibling signal product inside the QuantLab ecosystem. The goal is not narrative polish, but research clarity, operational discipline, and controlled progression from validation to execution.
 
 ## Taglines
 
 - Reproducible research. Supervised execution.
 - Explicit hypotheses. Traceable runs. Reviewable outcomes.
-- Quant Pulse proposes the hypothesis. QuantLab Core requires the evidence.
+- QuantPulse surfaces context. QuantLab Research requires the evidence.
 - Operational research, not market theater.
+
+## Architecture rule
+
+- Do not present QuantPulse as an internal submodule of QuantLab Research.
+- Do not collapse QuantLab Research, QuantLab Core, and QuantPulse into one vague product label.
+- Keep QuantLab Research as the primary product name on public research surfaces.
 
 ## Brand principles
 

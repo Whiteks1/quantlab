@@ -99,10 +99,207 @@ export function renderCandidateCard(entry, forceShow, ctx) {
   `;
 }
 
+function resolveDecisionFeedback(ctx, runIds = []) {
+  const feedback = ctx.decisionFeedback;
+  if (!feedback?.text) return null;
+  if (!feedback.runIds?.length || !runIds.length) return feedback;
+  const match = runIds.some((runId) => feedback.runIds.includes(runId));
+  return match ? feedback : null;
+}
+
+function renderDecisionFeedbackBanner(ctx, runIds = []) {
+  const feedback = resolveDecisionFeedback(ctx, runIds);
+  if (!feedback) return "";
+  return `
+    <section class="decision-banner tone-${escapeHtml(feedback.tone || "neutral")}">
+      <div class="section-label">Decision feedback</div>
+      <strong>${escapeHtml(feedback.text)}</strong>
+    </section>
+  `;
+}
+
+function buildRunDecisionSnapshot(run, detail, ctx) {
+  const primaryResult = detail ? selectPrimaryResult(run, detail.report) : null;
+  const artifactCount = Array.isArray(detail?.report?.artifacts) ? detail.report.artifacts.length : 0;
+  const workspaceFileCount = Array.isArray(detail?.directoryEntries) ? detail.directoryEntries.length : 0;
+  const latestRelatedJob = ctx.getRunRelatedJobs(run.run_id)[0] || null;
+  const isCandidate = ctx.decision.isCandidateRun(ctx.store, run.run_id);
+  const isShortlisted = ctx.decision.isShortlistedRun(ctx.store, run.run_id);
+  const isBaseline = ctx.decision.isBaselineRun(ctx.store, run.run_id);
+  const compareReadyIds = ctx.getDecisionCompareRunIds?.() || [];
+  const compareReady = compareReadyIds.length >= 2;
+
+  let evidence = {
+    tone: "warning",
+    label: "Needs inspection",
+    meta: "Open run detail or artifacts to confirm canonical report coverage and local outputs.",
+  };
+
+  if (detail) {
+    if (detail.report && primaryResult && (artifactCount || workspaceFileCount)) {
+      evidence = {
+        tone: "positive",
+        label: "Evidence ready",
+        meta: `Primary result visible · ${artifactCount || workspaceFileCount} output file${artifactCount + workspaceFileCount === 1 ? "" : "s"} discoverable.`,
+      };
+    } else if (detail.report && primaryResult) {
+      evidence = {
+        tone: "warning",
+        label: "Evidence partial",
+        meta: "Primary result exists, but artifact continuity is still thin.",
+      };
+    } else if (detail.report) {
+      evidence = {
+        tone: "warning",
+        label: "Report only",
+        meta: "Canonical report exists, but the primary decision result is not clearly structured.",
+      };
+    } else if (latestRelatedJob?.status === "succeeded") {
+      evidence = {
+        tone: "negative",
+        label: "Canonical report missing",
+        meta: "A launch succeeded, but this surface still cannot read report.json or run_report.json.",
+      };
+    } else {
+      evidence = {
+        tone: "warning",
+        label: "Artifacts pending",
+        meta: "Evidence continuity is not fully visible yet from the local workspace.",
+      };
+    }
+  }
+
+  let decision = {
+    tone: "neutral",
+    label: "Untracked",
+    meta: "This run is not in the decision queue yet.",
+  };
+
+  if (isBaseline) {
+    decision = {
+      tone: "positive",
+      label: "Baseline",
+      meta: "This run is the current reference for decision compare.",
+    };
+  } else if (isShortlisted) {
+    decision = {
+      tone: compareReady ? "positive" : "warning",
+      label: "Shortlisted",
+      meta: compareReady
+        ? "This run is ready to compare against the current baseline or shortlist peers."
+        : "This run is shortlisted, but compare still needs a pinned baseline or one more peer.",
+    };
+  } else if (isCandidate) {
+    decision = {
+      tone: "warning",
+      label: "Candidate",
+      meta: "Tracked locally, but not promoted into the shortlist yet.",
+    };
+  }
+
+  let next = {
+    tone: "warning",
+    label: "Inspect artifacts",
+    meta: "Confirm canonical evidence before promoting this run.",
+  };
+
+  if (detail && !detail.report) {
+    next = {
+      tone: "warning",
+      label: "Inspect artifacts",
+      meta: "Open artifacts and verify canonical outputs before treating this run as decision-ready.",
+    };
+  } else if (!isCandidate && !isShortlisted && !isBaseline) {
+    next = {
+      tone: "warning",
+      label: "Promote or discard",
+      meta: "Evidence is visible, but the run is not yet tracked in the local decision queue.",
+    };
+  } else if (isCandidate && !isShortlisted && !isBaseline) {
+    next = {
+      tone: "warning",
+      label: "Shortlist or clear",
+      meta: "Candidate memory exists. Promote it to shortlist when it deserves compare, or remove it.",
+    };
+  } else if (!compareReady && isBaseline) {
+    next = {
+      tone: "warning",
+      label: "Shortlist one more peer",
+      meta: "Decision compare needs another shortlisted run against this baseline.",
+    };
+  } else if (!compareReady && isShortlisted) {
+    next = {
+      tone: "warning",
+      label: "Set a baseline",
+      meta: "Shortlisted runs exist, but compare still needs a pinned baseline reference.",
+    };
+  } else if (compareReady) {
+    next = {
+      tone: "positive",
+      label: "Open decision compare",
+      meta: `${compareReadyIds.length} decision-linked runs are ready for compare now.`,
+    };
+  }
+
+  return { evidence, decision, next };
+}
+
+function renderDecisionStateCards(snapshot) {
+  return `
+    <div class="decision-state-grid">
+      ${[
+        ["Evidence", snapshot.evidence],
+        ["Decision", snapshot.decision],
+        ["Next", snapshot.next],
+      ].map(([label, item]) => `
+        <article class="decision-state-card tone-${escapeHtml(item.tone || "neutral")}">
+          <div class="section-label">${escapeHtml(label)}</div>
+          <strong>${escapeHtml(item.label)}</strong>
+          <p>${escapeHtml(item.meta)}</p>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderRunsDecisionReadiness(ctx) {
+  const candidateEntries = ctx.decision.getCandidateEntriesResolved(ctx.store, ctx.findRun);
+  const shortlistCount = candidateEntries.filter((entry) => entry.shortlisted && entry.run).length;
+  const baselineRunId = ctx.store?.baseline_run_id || "";
+  const compareReadyIds = ctx.getDecisionCompareRunIds?.() || [];
+  const selectedCount = ctx.selectedRunIds?.length || 0;
+  const readinessMessage = compareReadyIds.length >= 2
+    ? `${compareReadyIds.length} runs are ready for decision compare now.`
+    : baselineRunId
+      ? "Baseline is pinned, but compare still needs one more shortlisted peer."
+      : candidateEntries.length
+        ? "Decision memory exists, but no baseline is pinned yet."
+        : "No decision queue is built yet.";
+
+  return `
+    <section class="artifact-panel runs-readiness-panel">
+      <div class="section-label">Decision readiness</div>
+      <h3>What is ready before compare</h3>
+      <div class="artifact-meta">${escapeHtml(readinessMessage)}</div>
+      <div class="tab-summary-grid">
+        ${renderSummaryCard("Selected", String(selectedCount), selectedCount >= 2 ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Candidates", String(candidateEntries.length), candidateEntries.length ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Shortlisted", String(shortlistCount), shortlistCount ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Baseline", baselineRunId || "None", baselineRunId ? "tone-positive" : "tone-warning")}
+      </div>
+      <div class="workflow-actions">
+        <button class="ghost-btn" type="button" data-open-candidates="true">Open candidates</button>
+        <button class="ghost-btn" type="button" data-open-shortlist-compare="true" ${compareReadyIds.length >= 2 ? "" : "disabled"}>Open decision compare</button>
+      </div>
+    </section>
+  `;
+}
+
 export function renderRunsTab(_tab, ctx) {
   const runs = ctx.getRuns();
   return `
     <div class="tab-shell runs-tab">
+      ${renderDecisionFeedbackBanner(ctx)}
       <div class="artifact-top">
         <div>
           <div class="section-label">Run explorer</div>
@@ -113,6 +310,7 @@ export function renderRunsTab(_tab, ctx) {
           <button class="ghost-btn" type="button" data-open-runs-legacy="true">Open legacy view</button>
         </div>
       </div>
+      ${renderRunsDecisionReadiness(ctx)}
       ${renderRunsTable(runs, ctx.store, ctx.decision)}
     </div>
   `;
@@ -143,13 +341,15 @@ export function renderRunTab(tab, ctx) {
     ? `${titleCase(latestRelatedJob.status || "unknown")} · ${formatDateTime(latestRelatedJob.created_at)}`
     : "No linked launch job";
   const relatedJobTone = latestRelatedJob?.status === "failed" ? "tone-down" : latestRelatedJob?.status === "succeeded" ? "tone-up" : "";
+  const snapshot = buildRunDecisionSnapshot(run, detail, ctx);
   return `
     <div class="tab-shell run-detail-shell">
+      ${renderDecisionFeedbackBanner(ctx, [run.run_id])}
       ${renderRunIdentityHeader(run, ctx, latestRelatedJob, decisionState, continuityState)}
       ${renderRunMetricsSummary(run)}
       <div class="run-detail-grid">
         <div class="run-detail-main">
-          ${renderRunDecisionBlock(run, ctx, candidateEntry, decisionNote, hasDecisionPeers)}
+          ${renderRunDecisionBlock(run, ctx, candidateEntry, decisionNote, hasDecisionPeers, snapshot)}
           ${renderRunConfigProvenanceBlock(run, report)}
         </div>
         <div class="run-detail-side">
@@ -220,13 +420,13 @@ function renderRunMetricsSummary(run) {
   `;
 }
 
-function renderRunDecisionBlock(run, ctx, candidateEntry, decisionNote, hasDecisionPeers) {
+function renderRunDecisionBlock(run, ctx, candidateEntry, decisionNote, hasDecisionPeers, snapshot) {
   return `
     <section class="artifact-panel">
       <div class="section-label">Decision / validation</div>
-      <h3>What should happen next</h3>
+      <h3>What is ready and what should happen next</h3>
       <div class="run-row-flags">${renderCandidateFlags(ctx.store, run.run_id, ctx.decision)}</div>
-      <div class="artifact-meta">Current state: ${escapeHtml(ctx.decision.summarizeCandidateState(ctx.store, run.run_id))}</div>
+      ${renderDecisionStateCards(snapshot)}
       <div class="candidate-note">${decisionNote}</div>
       <div class="workflow-actions">
         <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(run.run_id)}">${ctx.decision.isCandidateRun(ctx.store, run.run_id) ? "Unmark candidate" : "Mark candidate"}</button>
@@ -399,7 +599,12 @@ function renderRunSweepLinkageBlock(ctx, sweepEntries) {
 export function renderCompareTab(tab, ctx) {
   const runs = (tab.runIds || []).map(ctx.findRun).filter(Boolean);
   if (runs.length < 2) {
-    return `<div class="tab-placeholder">The selected compare set is no longer available in the registry.</div>`;
+    return `
+      <div class="tab-shell">
+        ${renderDecisionFeedbackBanner(ctx, tab.runIds || [])}
+        <div class="tab-placeholder">The selected compare set is no longer available in the registry. Rebuild the compare set from selected runs or from the shortlist and baseline queue.</div>
+      </div>
+    `;
   }
   if (tab.status === "loading") {
     return `<div class="tab-placeholder">Preparing decision-oriented compare for ${runs.length} runs...</div>`;
@@ -413,6 +618,7 @@ export function renderCompareTab(tab, ctx) {
   const includedBaseline = runs.find((run) => ctx.decision.isBaselineRun(ctx.store, run.run_id)) || null;
   return `
     <div class="compare-shell">
+      ${renderDecisionFeedbackBanner(ctx, tab.runIds || [])}
       <div class="tab-summary-grid">
         ${renderSummaryCard("Compared runs", String(runs.length))}
         ${renderSummaryCard("Ranking metric", titleCase(rankMetric.replace("_", " ")))}
@@ -508,7 +714,9 @@ function renderRunsTable(runs, store, decision) {
             <th>Sharpe</th>
             <th>Drawdown</th>
             <th>Trades</th>
-            <th>Flags</th>
+            <th>Evidence</th>
+            <th>Decision</th>
+            <th>Next</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -524,6 +732,20 @@ function renderRunsRow(run, store, decision) {
   const runId = run?.run_id || "";
   const commitLabel = shortCommit(run?.git_commit) || "-";
   const candidateLabel = decision.isCandidateRun(store, runId) ? "Unmark candidate" : "Mark candidate";
+  const decisionState = decision.isBaselineRun(store, runId)
+    ? { label: "Baseline", meta: "Reference run is pinned.", tone: "positive" }
+    : decision.isShortlistedRun(store, runId)
+      ? { label: "Shortlisted", meta: "Ready for compare once baseline/peer exists.", tone: "positive" }
+      : decision.isCandidateRun(store, runId)
+        ? { label: "Candidate", meta: "Tracked locally but not shortlisted.", tone: "warning" }
+        : { label: "Untracked", meta: "Not in the decision queue yet.", tone: "neutral" };
+  const nextAction = decision.isBaselineRun(store, runId)
+    ? { label: "Shortlist a peer", meta: "Decision compare needs another run against this baseline.", tone: "warning" }
+    : decision.isShortlistedRun(store, runId)
+      ? { label: "Open compare", meta: "Use shortlist compare or set baseline if missing.", tone: "positive" }
+      : decision.isCandidateRun(store, runId)
+        ? { label: "Shortlist or clear", meta: "Promote only after checking evidence.", tone: "warning" }
+        : { label: "Inspect detail", meta: "Open run or artifacts before promoting.", tone: "warning" };
   return `
     <tr class="runs-row">
       <td class="mono-cell">${escapeHtml(runId)}</td>
@@ -535,7 +757,24 @@ function renderRunsRow(run, store, decision) {
       <td>${escapeHtml(formatNumber(run?.sharpe_simple))}</td>
       <td class="${escapeHtml(toneClass(run?.max_drawdown, false))}">${escapeHtml(formatPercent(run?.max_drawdown))}</td>
       <td>${escapeHtml(formatCount(run?.trades))}</td>
-      <td><div class="run-flags-cell">${renderCandidateFlags(store, runId, decision)}</div></td>
+      <td>
+        <div class="table-state tone-warning">
+          <strong>Needs inspection</strong>
+          <span>Open detail or artifacts to confirm canonical evidence.</span>
+        </div>
+      </td>
+      <td>
+        <div class="table-state tone-${escapeHtml(decisionState.tone)}">
+          <strong>${escapeHtml(decisionState.label)}</strong>
+          <span>${escapeHtml(decisionState.meta)}</span>
+        </div>
+      </td>
+      <td>
+        <div class="table-state tone-${escapeHtml(nextAction.tone)}">
+          <strong>${escapeHtml(nextAction.label)}</strong>
+          <span>${escapeHtml(nextAction.meta)}</span>
+        </div>
+      </td>
       <td>
         <div class="runs-row-actions">
           <button class="ghost-btn" type="button" data-open-run="${escapeHtml(runId)}">Open run</button>
@@ -558,8 +797,11 @@ export function renderArtifactsTab(tab, ctx) {
   const primaryResult = selectPrimaryResult(run, report);
   const latestRelatedJob = ctx.getRunRelatedJobs(run.run_id)[0] || null;
   const configEntries = summarizeObjectEntries(report?.config_resolved);
+  const snapshot = buildRunDecisionSnapshot(run, detail, ctx);
+  const compareReady = (ctx.getDecisionCompareRunIds?.() || []).length >= 2;
   return `
     <div class="artifact-shell evidence-shell">
+      ${renderDecisionFeedbackBanner(ctx, [run.run_id])}
       <div class="artifact-top">
         <div>
           <div class="section-label">Artifacts</div>
@@ -582,6 +824,17 @@ export function renderArtifactsTab(tab, ctx) {
       </div>
       <div class="evidence-grid">
         <div class="evidence-main">
+          <section class="artifact-panel">
+            <div class="section-label">Decision clarity</div>
+            <h3>What is ready and what should happen next</h3>
+            ${renderDecisionStateCards(snapshot)}
+            <div class="workflow-actions">
+              <button class="ghost-btn" type="button" data-mark-candidate="${escapeHtml(run.run_id)}">${ctx.decision.isCandidateRun(ctx.store, run.run_id) ? "Unmark candidate" : "Mark candidate"}</button>
+              <button class="ghost-btn" type="button" data-shortlist-run="${escapeHtml(run.run_id)}">${ctx.decision.isShortlistedRun(ctx.store, run.run_id) ? "Remove shortlist" : "Add shortlist"}</button>
+              <button class="ghost-btn" type="button" data-set-baseline="${escapeHtml(run.run_id)}">${ctx.decision.isBaselineRun(ctx.store, run.run_id) ? "Clear baseline" : "Set baseline"}</button>
+              <button class="ghost-btn" type="button" data-open-decision-compare="${escapeHtml(run.run_id)}" ${compareReady ? "" : "disabled"}>Open decision compare</button>
+            </div>
+          </section>
           <section class="artifact-panel">
             <div class="section-label">Canonical outputs</div>
             <h3>Artifact manifest</h3>
@@ -655,6 +908,7 @@ export function renderCandidatesTab(tab, ctx) {
 
   return `
     <div class="tab-shell">
+      ${renderDecisionFeedbackBanner(ctx)}
       <div class="artifact-top">
         <div>
           <div class="section-label">Decision layer</div>

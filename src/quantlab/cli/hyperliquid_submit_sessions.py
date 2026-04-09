@@ -511,14 +511,21 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
 
         store = HyperliquidSubmitStore(summary["session_id"], base_dir=str(session_dir.parent))
         store.write_order_status(report)
+        effective_status_known, effective_status_state = _resolve_effective_order_status_for_refresh(
+            summary,
+            report,
+        )
         status = {
-            "status": _derive_hyperliquid_submit_session_status(report),
+            "status": effective_status_state if effective_status_known else _derive_hyperliquid_submit_session_status(report),
             "updated_at": report["generated_at"],
             "submit_state": summary.get("submit_state"),
             "remote_submit_called": summary.get("remote_submit_called"),
             "submitted": summary.get("submitted"),
             "order_status_known": report["status_known"],
             "order_status_state": report["normalized_state"],
+            "reconciliation_known": summary.get("reconciliation_known"),
+            "reconciliation_state": summary.get("latest_reconciliation_state"),
+            "reconciliation_source": summary.get("reconciliation_source"),
         }
         status.update(
             _derive_hyperliquid_submission_alert_summary(
@@ -534,12 +541,12 @@ def handle_hyperliquid_submit_sessions_commands(args) -> bool:
                     "supervision_present": False,
                     "supervision_attention_required": False,
                     "supervision_errors": [],
-                    "effective_order_known": bool(report["status_known"]),
-                    "effective_order_state": report["normalized_state"],
+                    "effective_order_known": effective_status_known,
+                    "effective_order_state": effective_status_state,
                     "order_status_present": True,
-                    "reconciliation_present": False,
+                    "reconciliation_present": bool(summary.get("reconciliation_present")),
                     "order_status_errors": report.get("errors"),
-                    "reconciliation_errors": [],
+                    "reconciliation_errors": summary.get("reconciliation_errors"),
                     "submit_errors": summary.get("submit_errors"),
                 }
             )
@@ -982,6 +989,17 @@ def _derive_hyperliquid_submit_session_status(order_status: dict[str, Any]) -> s
     return str(order_status.get("normalized_state") or "unknown")
 
 
+def _resolve_effective_order_status_for_refresh(
+    summary: dict[str, Any],
+    order_status_report: dict[str, Any],
+) -> tuple[bool, str]:
+    if bool(order_status_report.get("status_known")):
+        return True, str(order_status_report.get("normalized_state") or "submitted")
+    if bool(summary.get("reconciliation_known")):
+        return True, str(summary.get("latest_reconciliation_state") or "submitted")
+    return False, str(order_status_report.get("normalized_state") or "unknown")
+
+
 def _derive_hyperliquid_cancel_session_status(summary: dict[str, Any], cancel_report: dict[str, Any]) -> str:
     if bool(cancel_report.get("cancel_accepted")):
         if summary.get("effective_order_state") == "canceled":
@@ -1023,6 +1041,10 @@ def build_hyperliquid_submission_health(root_dir: str | Path) -> dict[str, Any]:
         "order_status_known_sessions": sum(1 for session in sessions if session.get("order_status_known")),
         "reconciliation_sessions": sum(1 for session in sessions if session.get("reconciliation_present")),
         "effective_order_known_sessions": sum(1 for session in sessions if session.get("effective_order_known")),
+        "reconciliation_required_sessions": sum(1 for session in sessions if session.get("status") == "reconciliation_required"),
+        "identifier_missing_sessions": sum(
+            1 for session in sessions if session.get("submit_state") == "submitted_remote_identifier_missing"
+        ),
         "status_counts": dict(Counter((session.get("status") or "unknown") for session in sessions)),
         "submit_state_counts": dict(
             Counter((session.get("submit_state") or "no_submit_response") for session in sessions)
@@ -1169,7 +1191,18 @@ def _collect_hyperliquid_submission_alerts(sessions: list[dict[str, Any]]) -> li
             )
 
         if submitted:
-            if not session.get("order_status_present") and not session.get("reconciliation_present"):
+            if str(session.get("submit_state") or "") == "submitted_remote_identifier_missing":
+                alerts.append(
+                    _build_hyperliquid_alert(
+                        code="HYPERLIQUID_RECONCILIATION_IDENTIFIERS_MISSING",
+                        severity="critical",
+                        session=session,
+                        activity_at=activity_at,
+                        message=_join_reasons(session.get("submit_errors"))
+                        or "Submitted Hyperliquid session is missing both oid and cloid, so immediate reconciliation is not possible.",
+                    )
+                )
+            elif not session.get("order_status_present") and not session.get("reconciliation_present"):
                 alerts.append(
                     _build_hyperliquid_alert(
                         code="HYPERLIQUID_ORDER_STATUS_MISSING",
@@ -1299,10 +1332,43 @@ def _latest_by_activity(sessions: list[dict[str, Any]]) -> dict[str, Any] | None
     return dated[-1][0]
 
 
-def _hyperliquid_alert_sort_key(alert: dict[str, Any]) -> tuple[dt.datetime, str]:
+def _hyperliquid_alert_priority(alert: dict[str, Any]) -> int:
+    alert_code = str(alert.get("alert_code") or "")
+    priority_map = {
+        "HYPERLIQUID_RECONCILIATION_IDENTIFIERS_MISSING": 100,
+        "HYPERLIQUID_ORDER_STATUS_UNKNOWN": 90,
+        "HYPERLIQUID_ORDER_REJECTED": 80,
+        "HYPERLIQUID_CANCEL_REQUEST_FAILED": 70,
+        "HYPERLIQUID_SUBMIT_REQUEST_FAILED": 60,
+        "HYPERLIQUID_CANCEL_REJECTED": 50,
+        "HYPERLIQUID_SUBMIT_REJECTED": 40,
+        "HYPERLIQUID_SUPERVISION_ATTENTION": 35,
+        "HYPERLIQUID_CANCEL_SIGNING_KEY_MISSING": 30,
+        "HYPERLIQUID_CANCEL_SIGNER_MISMATCH": 29,
+        "HYPERLIQUID_ORDER_STATUS_MISSING": 20,
+        "HYPERLIQUID_ORDER_CANCELED": 10,
+        "HYPERLIQUID_SIGNED_ACTION_NOT_READY": 9,
+        "HYPERLIQUID_SIGNED_ACTION_UNSIGNED": 8,
+        "HYPERLIQUID_SIGNATURE_MISSING": 7,
+        "HYPERLIQUID_SUBMIT_PAYLOAD_MISSING": 6,
+        "HYPERLIQUID_SUBMIT_ATTENTION": 5,
+    }
+    if alert_code in priority_map:
+        return priority_map[alert_code]
+    severity = str(alert.get("severity") or "")
+    if severity == "critical":
+        return 2
+    if severity == "warning":
+        return 1
+    return 0
+
+
+def _hyperliquid_alert_sort_key(alert: dict[str, Any]) -> tuple[int, int, dt.datetime, str]:
     activity_at = alert.get("activity_at")
     try:
         parsed = dt.datetime.fromisoformat(str(activity_at)) if activity_at else dt.datetime.min
     except ValueError:
         parsed = dt.datetime.min
-    return parsed, str(alert.get("session_id") or "")
+    severity = str(alert.get("severity") or "")
+    severity_rank = 2 if severity == "critical" else 1 if severity == "warning" else 0
+    return _hyperliquid_alert_priority(alert), severity_rank, parsed, str(alert.get("session_id") or "")
