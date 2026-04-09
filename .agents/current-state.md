@@ -125,21 +125,23 @@
 | `codex/fix-315-d2-coverage-restore` | Deleted (fix in main via other path) |
 | `codex/issue-316/317/318/319` | Merged via individual PRs #324–#327 |
 
-### Local branches with pending work (not yet PRd)
-| Branch | Unique commits | Scope |
-|--------|---------------|-------|
-| `codex/bitget-roadmap-note` | 1 | docs: Bitget as optional venue |
-| `codex/broker-evidence-readiness` | 1 | feat: broker evidence readiness check |
-| `codex/cursor-mcp-integration` | 2 | feat: Cursor MCP integration |
-| `codex/desktop-runtime-hardening` | 1 | fix: startup and workspace persistence |
-| `codex/landing-github-pages` | 1 | feat: GitHub Pages landing |
-| `codex/mcp-outputs-artifacts` | 4 | feat: MCP outputs/artifacts surface |
-| `codex/pretrade-intake-artifact-links` | 1 | feat: pretrade artifact paths |
-| `codex/supervised-broker-runbook` | 1 | docs: supervised broker runbook |
-| `codex/desktop-tab-state-hardening` | — | Active worktree (quant_lab-desktop-216) |
+### Local branches with pending work (need issue + PR)
+| Branch | Diff vs main | Scope | Priority |
+|--------|-------------|-------|---------|
+| `codex/broker-evidence-readiness` | 10 files, 442 ins | feat: broker evidence readiness check | 🔴 High |
+| `codex/cursor-mcp-integration` | 11 files, 1565 ins | feat: Cursor MCP integration | 🟠 Medium |
+| `codex/landing-github-pages` | 5 files, 1294 ins | feat: GitHub Pages deploy | 🟠 Medium |
+| `codex/supervised-broker-runbook` | 4 files, 284 ins | docs: supervised broker runbook | 🟡 Low |
+| `codex/pretrade-intake-artifact-links` | 2 files, 47 ins | feat: pretrade artifact paths in research_ui | 🟡 Low |
+| `codex/desktop-tab-state-hardening` | — | Active worktree (quant_lab-desktop-216) | 🔵 Active |
 
-> These branches carry real work. Each needs an issue + PR before merge.
-> Priority order: `desktop-runtime-hardening` > `mcp-outputs-artifacts` > rest.
+### Branches audited and confirmed absorbed by main
+| Branch | Resolution |
+|--------|-----------|
+| `codex/bitget-roadmap-note` | Content in main (README.md:52, roadmap.md:273, current-state.md:40) |
+| `codex/desktop-runtime-hardening` | Content in main via PR #327 |
+| `codex/mcp-outputs-artifacts` | Content in main via PR #327 (342 lines > 329 in branch) |
+
 
 ### Root artifacts
 - `out*.txt` — untracked, covered by `.gitignore`. No action required.
