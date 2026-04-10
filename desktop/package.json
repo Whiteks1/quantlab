@@ -7,6 +7,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
     "smoke": "npm run smoke:fallback",
     "smoke:fallback": "node scripts/smoke.js --mode=fallback",
     "smoke:real-path": "node scripts/smoke.js --mode=real-path",
@@ -14,7 +15,9 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
+    "@types/node": "^24.6.1",
     "electron": "^37.2.0",
+    "typescript": "^5.9.3",
     "zod": "^4.1.12"
   }
 }

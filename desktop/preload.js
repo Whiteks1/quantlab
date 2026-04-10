@@ -1,3 +1,5 @@
+// @ts-check
+
 const { contextBridge, ipcRenderer } = require("electron");
 
 /** @typedef {import("./shared/models/workspace").WorkspaceState} WorkspaceState */
