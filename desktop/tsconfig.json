@@ -15,6 +15,7 @@
   },
   "include": [
     "main.js",
+    "main/**/*.js",
     "preload.js",
     "renderer/app.js",
     "shared/**/*.ts",
