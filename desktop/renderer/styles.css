@@ -409,7 +409,7 @@ button:disabled {
 .tabs-shell {
     display: grid;
     grid-template-rows: auto auto 1fr;
-    min-height: 500px;
+    min-height: 420px;
     gap: 4px;
 }
 
@@ -1570,6 +1570,35 @@ button:disabled {
     font-family: "IBM Plex Mono", monospace;
     font-size: 0.84rem;
     line-height: 1.55;
+}
+
+@media (max-width: 1560px) {
+    .workspace-grid[data-workbench-priority="high"] {
+        grid-template-columns: 1fr;
+    }
+
+    .workspace-grid[data-workbench-priority="high"] .support-column {
+        order: 2;
+    }
+
+    .workspace-grid[data-workbench-priority="high"] .tabs-shell {
+        min-height: 0;
+    }
+
+    .workspace-grid[data-workbench-priority="high"] .runs-workbench,
+    .workspace-grid[data-workbench-priority="high"] .compare-workbench,
+    .workspace-grid[data-workbench-priority="high"] .candidates-workbench,
+    .workspace-grid[data-workbench-priority="high"] .run-detail-grid,
+    .workspace-grid[data-workbench-priority="high"] .run-detail-evidence-grid,
+    .workspace-grid[data-workbench-priority="high"] .evidence-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .workspace-grid[data-workbench-priority="high"] .runs-workbench-side,
+    .workspace-grid[data-workbench-priority="high"] .run-detail-side {
+        position: static;
+        top: auto;
+    }
 }
 
 @media (max-width: 1200px) {
