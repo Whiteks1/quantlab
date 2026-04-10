@@ -38,6 +38,10 @@ import {
   renderSweepDecisionTab as renderSweepDecisionTabView,
 } from "./modules/tab-renderers.js";
 
+/** @typedef {import("../shared/models/runtime").RuntimeStatus} RuntimeStatus */
+/** @typedef {import("../shared/models/runtime").RuntimeChipState} RuntimeChipState */
+/** @typedef {import("../shared/models/snapshot").SnapshotStatus} SnapshotStatus */
+
 const CONFIG = {
   runsIndexPath: "/outputs/runs/runs_index.json",
   localRunsIndexPath: "outputs/runs/runs_index.json",
@@ -80,6 +84,7 @@ const state = {
   launchFeedback: SHELL_COPY.defaultLaunchFeedback,
   refreshTimer: null,
   isStepbitSubmitting: false,
+  /** @type {SnapshotStatus} */
   snapshotStatus: {
     status: "idle",
     error: null,
@@ -754,11 +759,17 @@ function bindPathActions(container, attributeNames) {
 
 function renderWorkspaceState() {
   const { status, serverUrl, error, source } = state.workspace;
-  const runs = getRuns();
-  const localFallbackActive = state.snapshotStatus.source === "local" && runs.length > 0;
-  const stepbit = state.snapshot?.stepbitWorkspace?.live_urls || {};
-  const paperCount = state.snapshot?.paperHealth?.total_sessions || 0;
-  const brokerCount = state.snapshot?.brokerHealth?.total_sessions || 0;
+  const runtimeStatus = deriveRuntimeStatus();
+  const {
+    localFallbackActive,
+    runsIndexed,
+    paperSessions,
+    brokerSessions,
+    stepbitAppReady,
+    stepbitCoreReachable,
+    stepbitCoreReady,
+  } =
+    runtimeStatus;
   elements.runtimeSummary.textContent = localFallbackActive
     ? "QuantLab shell ready from local artifacts"
     : status === "ready"
@@ -788,9 +799,9 @@ function renderWorkspaceState() {
   appendChildren(
     elements.runtimeChips,
     createRuntimeChipNode("QuantLab", status === "ready" ? "up" : status === "starting" ? "starting" : "down", status === "ready" ? "up" : status === "starting" ? "warn" : "down"),
-    createRuntimeChipNode("Runs", `${runs.length} indexed`, runs.length ? "up" : "warn"),
-    createRuntimeChipNode("Paper", String(paperCount), paperCount ? "up" : "warn"),
-    createRuntimeChipNode("Broker", String(brokerCount), brokerCount ? "up" : "warn"),
+    createRuntimeChipNode("Runs", `${runsIndexed} indexed`, runsIndexed ? "up" : "warn"),
+    createRuntimeChipNode("Paper", String(paperSessions), paperSessions ? "up" : "warn"),
+    createRuntimeChipNode("Broker", String(brokerSessions), brokerSessions ? "up" : "warn"),
     createRuntimeChipNode(
       "API",
       state.snapshotStatus.source === "local"
@@ -808,8 +819,12 @@ function renderWorkspaceState() {
         ? "up"
         : "warn",
     ),
-    createRuntimeChipNode("Stepbit app", stepbit.frontend_reachable ? "up" : "down", stepbit.frontend_reachable ? "up" : "down"),
-    createRuntimeChipNode("Stepbit core", stepbit.core_ready ? "ready" : stepbit.core_reachable ? "up" : "down", stepbit.core_ready ? "up" : stepbit.core_reachable ? "warn" : "down"),
+    createRuntimeChipNode("Stepbit app", stepbitAppReady ? "up" : "down", stepbitAppReady ? "up" : "down"),
+    createRuntimeChipNode(
+      "Stepbit core",
+      stepbitCoreReady ? "ready" : stepbitCoreReachable ? "up" : "down",
+      stepbitCoreReady ? "up" : stepbitCoreReachable ? "warn" : "down",
+    ),
   );
   syncTopbarChrome();
   renderChatAdapterStatus();
@@ -1204,16 +1219,17 @@ function summarizeServerChip() {
 }
 
 function summarizeRuntimeChip() {
-  if (state.snapshotStatus.source === "local") {
+  const runtimeStatus = deriveRuntimeStatus();
+  if (runtimeStatus.localFallbackActive) {
     return { text: "Runtime fallback", tone: "warn" };
   }
-  if (state.workspace.status === "ready") {
+  if (runtimeStatus.workspaceStatus === "ready") {
     return { text: "Runtime live", tone: "up" };
   }
-  if (state.workspace.status === "starting") {
+  if (runtimeStatus.workspaceStatus === "starting") {
     return { text: "Runtime booting", tone: "warn" };
   }
-  if (state.workspace.status === "error" || state.workspace.status === "stopped") {
+  if (runtimeStatus.workspaceStatus === "error" || runtimeStatus.workspaceStatus === "stopped") {
     return { text: "Runtime review", tone: "down" };
   }
   return { text: SHELL_COPY.defaultTopbarRuntime, tone: "muted" };
@@ -1647,13 +1663,13 @@ async function submitLaunchRequest(payload, source) {
 }
 
 function summarizeRuntimeInChat() {
-  const runs = getRuns();
+  const runtimeStatus = deriveRuntimeStatus();
   const stepbit = state.snapshot?.stepbitWorkspace?.live_urls || {};
   pushMessage("assistant", [
-    `QuantLab server: ${state.workspace.status}`,
-    `Server URL: ${state.workspace.serverUrl || "pending"}`,
+    `QuantLab server: ${runtimeStatus.workspaceStatus}`,
+    `Server URL: ${runtimeStatus.serverUrl || "pending"}`,
     `Snapshot source: ${state.snapshotStatus.source || "none"}`,
-    `Indexed runs: ${runs.length}`,
+    `Indexed runs: ${runtimeStatus.runsIndexed}`,
     `Selected runs: ${state.selectedRunIds.length}`,
     `Candidates: ${getCandidateEntries().length}`,
     `Shortlisted: ${getShortlistRunIds().length}`,
@@ -1662,6 +1678,26 @@ function summarizeRuntimeInChat() {
     `Stepbit backend: ${stepbit.backend_reachable ? "up" : "down"}`,
     `Stepbit core: ${stepbit.core_ready ? "ready" : stepbit.core_reachable ? "up" : "down"}`,
   ].join("\n"));
+}
+
+/**
+ * @returns {RuntimeStatus}
+ */
+function deriveRuntimeStatus() {
+  const runs = getRuns();
+  const stepbit = state.snapshot?.stepbitWorkspace?.live_urls || {};
+  return {
+    workspaceStatus: state.workspace.status,
+    workspaceSource: state.workspace.source,
+    serverUrl: state.workspace.serverUrl,
+    localFallbackActive: state.snapshotStatus.source === "local" && runs.length > 0,
+    runsIndexed: runs.length,
+    paperSessions: state.snapshot?.paperHealth?.total_sessions || 0,
+    brokerSessions: state.snapshot?.brokerHealth?.total_sessions || 0,
+    stepbitAppReady: Boolean(stepbit.frontend_reachable),
+    stepbitCoreReachable: Boolean(stepbit.core_reachable),
+    stepbitCoreReady: Boolean(stepbit.core_ready),
+  };
 }
 
 function focusAssistant() {
