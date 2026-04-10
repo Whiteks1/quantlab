@@ -1,3 +1,5 @@
+// @ts-check
+
 import * as decisionStore from "./modules/decision-store.js";
 import {
   NAV_ACTION_BY_KIND,
@@ -41,6 +43,8 @@ import {
 /** @typedef {import("../shared/models/runtime").RuntimeStatus} RuntimeStatus */
 /** @typedef {import("../shared/models/runtime").RuntimeChipState} RuntimeChipState */
 /** @typedef {import("../shared/models/snapshot").SnapshotStatus} SnapshotStatus */
+/** @typedef {import("../shared/models/snapshot").SnapshotSource} SnapshotSource */
+/** @typedef {import("../shared/models/workspace").WorkspaceState} WorkspaceState */
 
 const CONFIG = {
   runsIndexPath: "/outputs/runs/runs_index.json",
@@ -70,7 +74,8 @@ const CONFIG = {
 let unsubscribeWorkspaceState = null;
 
 const state = {
-  workspace: { status: "starting", serverUrl: null, logs: [], error: null },
+  /** @type {WorkspaceState} */
+  workspace: { status: "starting", serverUrl: null, logs: [], error: null, source: null },
   snapshot: null,
   candidatesStore: defaultCandidatesStore(),
   candidatesLoaded: false,
@@ -124,52 +129,52 @@ const WORKBENCH_PRIORITY_KINDS = new Set([
 ]);
 
 const elements = {
-  runtimeSummary: document.getElementById("runtime-summary"),
-  runtimeMeta: document.getElementById("runtime-meta"),
-  runtimeAlert: document.getElementById("runtime-alert"),
-  runtimeRetry: document.getElementById("runtime-retry"),
-  runtimeChips: document.getElementById("runtime-chips"),
-  topbarEyebrow: document.getElementById("topbar-eyebrow"),
-  chatLog: document.getElementById("chat-log"),
-  chatForm: document.getElementById("chat-form"),
-  chatInput: document.getElementById("chat-input"),
-  chatStepbit: document.getElementById("chat-stepbit"),
-  chatAdapterStatus: document.getElementById("chat-adapter-status"),
-  tabsBar: document.getElementById("tabs-bar"),
-  tabContent: document.getElementById("tab-content"),
-  topbarTitle: document.getElementById("topbar-title"),
-  topbarSurfaceChip: document.getElementById("topbar-surface-chip"),
-  topbarRuntimeChip: document.getElementById("topbar-runtime-chip"),
-  topbarServerChip: document.getElementById("topbar-server-chip"),
-  paletteSearch: document.getElementById("palette-search"),
-  paletteInput: document.getElementById("palette-input"),
-  runCommand: document.getElementById("run-command"),
-  commandPaletteTrigger: document.getElementById("command-palette-trigger"),
-  openBrowserRuns: document.getElementById("open-browser-runs"),
-  paletteOverlay: document.getElementById("palette-overlay"),
-  closePalette: document.getElementById("close-palette"),
-  paletteResults: document.getElementById("palette-results"),
-  workflowLaunchForm: document.getElementById("workflow-launch-form"),
-  workflowLaunchCommand: document.getElementById("workflow-launch-command"),
-  workflowRunFields: document.getElementById("workflow-run-fields"),
-  workflowSweepFields: document.getElementById("workflow-sweep-fields"),
-  workflowLaunchTicker: document.getElementById("workflow-launch-ticker"),
-  workflowLaunchStart: document.getElementById("workflow-launch-start"),
-  workflowLaunchEnd: document.getElementById("workflow-launch-end"),
-  workflowLaunchInterval: document.getElementById("workflow-launch-interval"),
-  workflowLaunchCash: document.getElementById("workflow-launch-cash"),
-  workflowLaunchPaper: document.getElementById("workflow-launch-paper"),
-  workflowLaunchConfigPath: document.getElementById("workflow-launch-config-path"),
-  workflowLaunchOutDir: document.getElementById("workflow-launch-out-dir"),
-  workflowLaunchMeta: document.getElementById("workflow-launch-meta"),
-  workflowLaunchFeedback: document.getElementById("workflow-launch-feedback"),
-  workflowLaunchSubmit: document.getElementById("workflow-launch-submit"),
-  workflowJobsList: document.getElementById("workflow-jobs-list"),
-  workflowRunsMeta: document.getElementById("workflow-runs-meta"),
-  workflowRunsList: document.getElementById("workflow-runs-list"),
-  workflowOpenCompare: document.getElementById("workflow-open-compare"),
-  workflowClearSelection: document.getElementById("workflow-clear-selection"),
-  workspaceGrid: document.querySelector(".workspace-grid"),
+  runtimeSummary: /** @type {HTMLDivElement} */ (document.getElementById("runtime-summary")),
+  runtimeMeta: /** @type {HTMLDivElement} */ (document.getElementById("runtime-meta")),
+  runtimeAlert: /** @type {HTMLDivElement} */ (document.getElementById("runtime-alert")),
+  runtimeRetry: /** @type {HTMLButtonElement} */ (document.getElementById("runtime-retry")),
+  runtimeChips: /** @type {HTMLDivElement} */ (document.getElementById("runtime-chips")),
+  topbarEyebrow: /** @type {HTMLDivElement} */ (document.getElementById("topbar-eyebrow")),
+  chatLog: /** @type {HTMLDivElement} */ (document.getElementById("chat-log")),
+  chatForm: /** @type {HTMLFormElement} */ (document.getElementById("chat-form")),
+  chatInput: /** @type {HTMLTextAreaElement} */ (document.getElementById("chat-input")),
+  chatStepbit: /** @type {HTMLButtonElement} */ (document.getElementById("chat-stepbit")),
+  chatAdapterStatus: /** @type {HTMLDivElement} */ (document.getElementById("chat-adapter-status")),
+  tabsBar: /** @type {HTMLDivElement} */ (document.getElementById("tabs-bar")),
+  tabContent: /** @type {HTMLDivElement} */ (document.getElementById("tab-content")),
+  topbarTitle: /** @type {HTMLHeadingElement} */ (document.getElementById("topbar-title")),
+  topbarSurfaceChip: /** @type {HTMLDivElement} */ (document.getElementById("topbar-surface-chip")),
+  topbarRuntimeChip: /** @type {HTMLDivElement} */ (document.getElementById("topbar-runtime-chip")),
+  topbarServerChip: /** @type {HTMLDivElement} */ (document.getElementById("topbar-server-chip")),
+  paletteSearch: /** @type {HTMLInputElement} */ (document.getElementById("palette-search")),
+  paletteInput: /** @type {HTMLInputElement} */ (document.getElementById("palette-input")),
+  runCommand: /** @type {HTMLButtonElement} */ (document.getElementById("run-command")),
+  commandPaletteTrigger: /** @type {HTMLButtonElement} */ (document.getElementById("command-palette-trigger")),
+  openBrowserRuns: /** @type {HTMLButtonElement} */ (document.getElementById("open-browser-runs")),
+  paletteOverlay: /** @type {HTMLDivElement} */ (document.getElementById("palette-overlay")),
+  closePalette: /** @type {HTMLButtonElement} */ (document.getElementById("close-palette")),
+  paletteResults: /** @type {HTMLDivElement} */ (document.getElementById("palette-results")),
+  workflowLaunchForm: /** @type {HTMLFormElement} */ (document.getElementById("workflow-launch-form")),
+  workflowLaunchCommand: /** @type {HTMLSelectElement} */ (document.getElementById("workflow-launch-command")),
+  workflowRunFields: /** @type {HTMLDivElement} */ (document.getElementById("workflow-run-fields")),
+  workflowSweepFields: /** @type {HTMLDivElement} */ (document.getElementById("workflow-sweep-fields")),
+  workflowLaunchTicker: /** @type {HTMLInputElement} */ (document.getElementById("workflow-launch-ticker")),
+  workflowLaunchStart: /** @type {HTMLInputElement} */ (document.getElementById("workflow-launch-start")),
+  workflowLaunchEnd: /** @type {HTMLInputElement} */ (document.getElementById("workflow-launch-end")),
+  workflowLaunchInterval: /** @type {HTMLInputElement} */ (document.getElementById("workflow-launch-interval")),
+  workflowLaunchCash: /** @type {HTMLInputElement} */ (document.getElementById("workflow-launch-cash")),
+  workflowLaunchPaper: /** @type {HTMLInputElement} */ (document.getElementById("workflow-launch-paper")),
+  workflowLaunchConfigPath: /** @type {HTMLInputElement} */ (document.getElementById("workflow-launch-config-path")),
+  workflowLaunchOutDir: /** @type {HTMLInputElement} */ (document.getElementById("workflow-launch-out-dir")),
+  workflowLaunchMeta: /** @type {HTMLDivElement} */ (document.getElementById("workflow-launch-meta")),
+  workflowLaunchFeedback: /** @type {HTMLDivElement} */ (document.getElementById("workflow-launch-feedback")),
+  workflowLaunchSubmit: /** @type {HTMLButtonElement} */ (document.getElementById("workflow-launch-submit")),
+  workflowJobsList: /** @type {HTMLDivElement} */ (document.getElementById("workflow-jobs-list")),
+  workflowRunsMeta: /** @type {HTMLDivElement} */ (document.getElementById("workflow-runs-meta")),
+  workflowRunsList: /** @type {HTMLDivElement} */ (document.getElementById("workflow-runs-list")),
+  workflowOpenCompare: /** @type {HTMLButtonElement} */ (document.getElementById("workflow-open-compare")),
+  workflowClearSelection: /** @type {HTMLButtonElement} */ (document.getElementById("workflow-clear-selection")),
+  workspaceGrid: /** @type {HTMLElement} */ (document.querySelector(".workspace-grid")),
 };
 
 const paletteActions = PALETTE_ACTION_SPECS.map((action) => ({
@@ -228,8 +233,9 @@ window.addEventListener("beforeunload", () => {
 
 function bindEvents() {
   document.querySelectorAll("[data-action]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const action = button.dataset.action;
+    const actionButton = /** @type {HTMLElement} */ (button);
+    actionButton.addEventListener("click", () => {
+      const action = actionButton.dataset.action;
       if (action === "open-assistant") focusAssistant();
       if (action === "open-system") openSystemTab();
       if (action === "open-experiments") openExperimentsTab();
@@ -241,8 +247,9 @@ function bindEvents() {
     });
   });
   document.querySelectorAll("[data-prompt]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const prompt = button.dataset.prompt || "";
+    const promptButton = /** @type {HTMLElement} */ (button);
+    promptButton.addEventListener("click", () => {
+      const prompt = promptButton.dataset.prompt || "";
       elements.chatInput.value = prompt;
       handleChatPrompt(prompt);
     });
@@ -408,18 +415,26 @@ async function refreshSnapshot() {
   }
 }
 
+/**
+ * @returns {Promise<{ runsRegistry: any, source: SnapshotSource, primaryError: Error | null }>}
+ */
 async function loadRunsRegistrySnapshot() {
+  /** @type {Error | null} */
   let primaryError = null;
   if (state.workspace.serverUrl) {
     try {
       const runsRegistry = await window.quantlabDesktop.requestJson(CONFIG.runsIndexPath);
-      return { runsRegistry, source: "api", primaryError: null };
+      /** @type {SnapshotSource} */
+      const source = "api";
+      return { runsRegistry, source, primaryError: null };
     } catch (error) {
-      primaryError = error;
+      primaryError = /** @type {Error} */ (error);
     }
   }
   const runsRegistry = await window.quantlabDesktop.readProjectJson(CONFIG.localRunsIndexPath);
-  return { runsRegistry, source: "local", primaryError };
+  /** @type {SnapshotSource} */
+  const source = "local";
+  return { runsRegistry, source, primaryError };
 }
 
 function renderAll() {
@@ -1001,9 +1016,9 @@ function renderTabs() {
   } else if (activeTab.kind === "candidates") {
     renderMarkupInto(elements.tabContent, renderCandidatesTab(activeTab));
   } else if (activeTab.kind === "paper") {
-    renderMarkupInto(elements.tabContent, renderPaperOpsTab(activeTab));
+    renderMarkupInto(elements.tabContent, renderPaperOpsTab());
   } else if (activeTab.kind === "system") {
-    renderMarkupInto(elements.tabContent, renderSystemTab(activeTab));
+    renderMarkupInto(elements.tabContent, renderSystemTab());
   } else if (activeTab.kind === "job") {
     renderMarkupInto(elements.tabContent, renderJobTab(activeTab));
   } else {
@@ -1054,8 +1069,9 @@ function renderPalette() {
     );
   }
   elements.paletteResults.querySelectorAll("[data-palette-action]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const action = paletteActions.find((entry) => entry.id === button.dataset.paletteAction);
+    const paletteButton = /** @type {HTMLElement} */ (button);
+    paletteButton.addEventListener("click", () => {
+      const action = paletteActions.find((entry) => entry.id === paletteButton.dataset.paletteAction);
       if (!action) return;
       action.run();
       state.paletteOpen = false;
@@ -1270,16 +1286,18 @@ function renderRunsWorklist(runs) {
 
 function bindTabChromeEvents() {
   elements.tabsBar.querySelectorAll("[data-tab-id]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.activeTabId = button.dataset.tabId;
+    const tabButton = /** @type {HTMLElement} */ (button);
+    tabButton.addEventListener("click", () => {
+      state.activeTabId = tabButton.dataset.tabId;
       renderTabs();
       scheduleShellWorkspacePersist();
     });
   });
   elements.tabsBar.querySelectorAll("[data-close-tab]").forEach((button) => {
-    button.addEventListener("click", (event) => {
+    const closeButton = /** @type {HTMLElement} */ (button);
+    closeButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      closeTab(button.dataset.closeTab);
+      closeTab(closeButton.dataset.closeTab);
     });
   });
 }
