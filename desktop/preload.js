@@ -1,5 +1,8 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+/** @typedef {import("./shared/models/workspace").WorkspaceState} WorkspaceState */
+/** @typedef {import("./shared/models/workspace").WorkspaceStateListener} WorkspaceStateListener */
+
 async function unwrapInvokeResult(channel, ...args) {
   const result = await ipcRenderer.invoke(channel, ...args);
   if (!result || typeof result !== "object" || !("ok" in result)) return result;
@@ -8,6 +11,7 @@ async function unwrapInvokeResult(channel, ...args) {
 }
 
 contextBridge.exposeInMainWorld("quantlabDesktop", {
+  /** @returns {Promise<WorkspaceState>} */
   getWorkspaceState: () => ipcRenderer.invoke("quantlab:get-workspace-state"),
   requestJson: (relativePath) => unwrapInvokeResult("quantlab:request-json", relativePath),
   requestText: (relativePath) => unwrapInvokeResult("quantlab:request-text", relativePath),
@@ -25,8 +29,16 @@ contextBridge.exposeInMainWorld("quantlabDesktop", {
   askStepbitChat: (payload) => ipcRenderer.invoke("quantlab:ask-stepbit-chat", payload),
   openExternal: (url) => ipcRenderer.invoke("quantlab:open-external", url),
   openPath: (targetPath) => ipcRenderer.invoke("quantlab:open-path", targetPath),
+  /**
+   * @param {WorkspaceStateListener} callback
+   * @returns {() => void}
+   */
   onWorkspaceState: (callback) => {
-    const wrapped = (_event, payload) => callback(payload);
+    /** @param {unknown} payload */
+    const wrapped = (_event, payload) => {
+      const workspaceState = /** @type {WorkspaceState} */ (payload);
+      callback(workspaceState);
+    };
     ipcRenderer.on("quantlab:workspace-state", wrapped);
     return () => ipcRenderer.removeListener("quantlab:workspace-state", wrapped);
   },

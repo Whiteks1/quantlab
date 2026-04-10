@@ -4,6 +4,10 @@ const fsp = require("fs/promises");
 const path = require("path");
 const { spawn } = require("child_process");
 
+/** @typedef {import("./shared/models/workspace").WorkspaceState} WorkspaceState */
+/** @typedef {import("./shared/models/workspace").WorkspaceStatePatch} WorkspaceStatePatch */
+/** @typedef {import("./shared/models/smoke").SmokeResult} SmokeResult */
+
 const DESKTOP_ROOT = __dirname;
 const PROJECT_ROOT = path.resolve(DESKTOP_ROOT, "..");
 const WORKSPACE_ROOT = path.resolve(PROJECT_ROOT, "..");
@@ -44,6 +48,7 @@ let mainWindow = null;
 let researchServerProcess = null;
 let researchServerOwned = false;
 let researchStartupTimer = null;
+/** @type {WorkspaceState} */
 let workspaceState = {
   status: "idle",
   serverUrl: null,
@@ -543,6 +548,9 @@ function appendLog(line) {
   broadcastWorkspaceState();
 }
 
+/**
+ * @param {WorkspaceStatePatch} patch
+ */
 function updateWorkspaceState(patch) {
   workspaceState = {
     ...workspaceState,
@@ -832,6 +840,10 @@ function createMainWindow() {
   });
 }
 
+/**
+ * @param {Partial<SmokeResult>} [overrides]
+ * @returns {SmokeResult}
+ */
 function defaultSmokeResult(overrides = {}) {
   return {
     bridgeReady: false,
@@ -845,6 +857,9 @@ function defaultSmokeResult(overrides = {}) {
   };
 }
 
+/**
+ * @param {Partial<SmokeResult>} [resultOverrides]
+ */
 async function persistSmokeResult(resultOverrides = {}) {
   if (!SMOKE_OUTPUT_PATH || smokeResultPersisted) return;
   const result = defaultSmokeResult(resultOverrides);
@@ -853,6 +868,10 @@ async function persistSmokeResult(resultOverrides = {}) {
   smokeResultPersisted = true;
 }
 
+/**
+ * @param {string} errorMessage
+ * @param {Partial<SmokeResult>} [overrides]
+ */
 async function failSmokeAndQuit(errorMessage, overrides = {}) {
   try {
     await persistSmokeResult({
@@ -868,6 +887,7 @@ async function failSmokeAndQuit(errorMessage, overrides = {}) {
 }
 
 async function runDesktopSmoke() {
+  /** @type {SmokeResult} */
   const result = defaultSmokeResult();
   try {
     result.bridgeReady = await mainWindow.webContents.executeJavaScript(
