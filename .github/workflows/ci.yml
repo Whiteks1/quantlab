@@ -26,7 +26,7 @@ jobs:
         run: |
           python -m pytest -q
 
-  desktop-smoke:
+  desktop-real-path:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,7 +53,7 @@ jobs:
         run: |
           npm ci
 
-      - name: Run desktop smoke
+      - name: Run desktop real-path smoke
         working-directory: desktop
         run: |
-          xvfb-run -a npm run smoke
+          xvfb-run -a npm run smoke:real-path

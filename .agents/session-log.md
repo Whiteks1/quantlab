@@ -1,5 +1,20 @@
 # Session Log - QuantLab
 
+## 2026-04-10 — Real-Path Desktop Validation and Smoke Semantics (Issue #275)
+- **Session Focus**: Restore an honest distinction between fallback desktop smoke and real-path desktop validation.
+- **Tasks Completed**:
+  - Updated `desktop/scripts/smoke.js` to parse an explicit `--mode` and pass the selected smoke mode into Electron.
+  - Kept fallback smoke on the local-shell path by disabling server boot only in fallback mode.
+  - Hardened `desktop/main.js` so real-path smoke only succeeds when `research_ui` becomes reachable instead of accepting local-runs fallback.
+  - Updated GitHub Actions to run the explicit `smoke:real-path` path under the dedicated `desktop-real-path` job name.
+- **Key Decisions**:
+  - `smoke:fallback` remains useful for shell/bootstrap coverage, but its semantics stay intentionally tolerant.
+  - `smoke:real-path` now means real `research_ui` reachability; local runs no longer count as success for that mode.
+  - CI naming now reflects the stronger guarantee instead of implying generic smoke coverage.
+- **Validation Notes**:
+  - Validate locally with both `npm run smoke:fallback` and `npm run smoke:real-path` from `desktop/`.
+  - Confirm workflow syntax and behavior with the desktop smoke commands before opening the PR.
+
 ## 2026-03-24 — Canonical Run Machine Contract (Issue #62)
 - **Session Focus**: Reduce the remaining contract asymmetry between plain `run` and `sweep` inside canonical `report.json`.
 - **Tasks Completed**:
