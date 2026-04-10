@@ -3,13 +3,16 @@ const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
 
+/** @typedef {import("../shared/models/smoke").SmokeMode} SmokeMode */
+/** @typedef {import("../shared/models/smoke").SmokeResult} SmokeResult */
+
 function parseSmokeMode(argv) {
   const rawMode = argv
     .map((entry) => String(entry || "").trim())
     .find((entry) => entry.startsWith("--mode="))
     ?.slice("--mode=".length);
   if (!rawMode || rawMode === "fallback" || rawMode === "real-path") {
-    return rawMode || "fallback";
+    return /** @type {SmokeMode} */ (rawMode || "fallback");
   }
   throw new Error(`Unsupported desktop smoke mode: ${rawMode}`);
 }
@@ -119,11 +122,12 @@ async function main() {
       child.on("exit", (code) => resolve(code ?? 1));
     });
     clearTimeout(timeout);
+    /** @type {SmokeResult | null} */
     let result = null;
     for (let attempt = 0; attempt < 10; attempt += 1) {
       try {
         const raw = await fs.readFile(outputPath, "utf8");
-        result = JSON.parse(raw);
+        result = /** @type {SmokeResult} */ (JSON.parse(raw));
         break;
       } catch (error) {
         if (error?.code !== "ENOENT") throw error;
