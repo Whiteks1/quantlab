@@ -1792,25 +1792,25 @@ function renderOpsChipRow(label, counts) {
   `;
 }
 
-function describeSnapshotRefresh(snapshotStatus) {
-  if (snapshotStatus?.status === "ready") {
+export function describeSnapshotRefresh(snapshotStatus) {
+  if (snapshotStatus?.status === "ok") {
     return {
       label: snapshotStatus.refreshPaused ? "Paused" : "Live",
       tone: snapshotStatus.refreshPaused ? "tone-warning" : "tone-positive",
       lastSuccessAt: snapshotStatus.lastSuccessAt ? formatDateTime(snapshotStatus.lastSuccessAt) : "Never",
     };
   }
-  if (snapshotStatus?.status === "error") {
+  if (snapshotStatus?.status === "degraded") {
     return {
       label: snapshotStatus.refreshPaused ? "Review required" : "Degraded",
-      tone: "tone-negative",
+      tone: "tone-warning",
       lastSuccessAt: snapshotStatus.lastSuccessAt ? formatDateTime(snapshotStatus.lastSuccessAt) : "Never",
     };
   }
-  if (snapshotStatus?.status === "loading") {
+  if (snapshotStatus?.status === "error") {
     return {
-      label: "Refreshing",
-      tone: "tone-warning",
+      label: snapshotStatus.refreshPaused ? "Review required" : "Unavailable",
+      tone: "tone-negative",
       lastSuccessAt: snapshotStatus.lastSuccessAt ? formatDateTime(snapshotStatus.lastSuccessAt) : "Never",
     };
   }

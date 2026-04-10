@@ -1,5 +1,18 @@
 # Session Log - QuantLab
 
+## 2026-04-10 — Snapshot Status Contract Alignment (Issue #361)
+- **Session Focus**: Align the desktop snapshot-status renderer semantics with the shared `desktop/shared/models/snapshot.ts` contract.
+- **Tasks Completed**:
+  - Updated `desktop/renderer/modules/tab-renderers.js` so snapshot refresh labels now branch on `ok`, `degraded`, `error`, and `idle` instead of stale `ready` / `loading` values.
+  - Kept healthy snapshots mapped to `Live`, degraded snapshots mapped to warning semantics, and explicit error snapshots mapped to negative/unavailable semantics.
+  - Added a small `node:test` regression file to lock the snapshot label/tone mapping against the current shared contract.
+- **Key Decisions**:
+  - The shared snapshot contract remains the source of truth; the renderer adapts to it rather than expanding the contract back to old status names.
+  - `degraded` and `error` remain separate operator states so local fallback or partial data does not look identical to a hard runtime failure.
+- **Validation Notes**:
+  - Validate with `npm run typecheck`, `node --check renderer/app.js`, `node --check renderer/modules/tab-renderers.js`, and `node --test tests/snapshot-status.test.mjs` from `desktop/`.
+  - Keep desktop smoke coverage in place to ensure the slice does not regress the current shell path.
+
 ## 2026-04-10 — Real-Path Desktop Validation and Smoke Semantics (Issue #275)
 - **Session Focus**: Restore an honest distinction between fallback desktop smoke and real-path desktop validation.
 - **Tasks Completed**:
