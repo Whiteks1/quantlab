@@ -30,6 +30,7 @@ const RESEARCH_UI_HEALTH_PATH = "/api/paper-sessions-health";
 const RESEARCH_UI_STARTUP_TIMEOUT_MS = 25000;
 const ELECTRON_STATE_ROOT = path.join(DESKTOP_OUTPUTS_ROOT, "electron");
 const IS_SMOKE_RUN = process.env.QUANTLAB_DESKTOP_SMOKE === "1";
+const SMOKE_MODE = process.env.QUANTLAB_DESKTOP_SMOKE_MODE === "real-path" ? "real-path" : "fallback";
 const SMOKE_OUTPUT_PATH = process.env.QUANTLAB_DESKTOP_SMOKE_OUTPUT || "";
 const SKIP_RESEARCH_UI_BOOT = process.env.QUANTLAB_DESKTOP_DISABLE_SERVER_BOOT === "1";
 let smokeResultPersisted = false;
@@ -353,6 +354,19 @@ async function readProjectText(targetPath) {
 
 async function readProjectJson(targetPath) {
   const raw = await readProjectText(targetPath);
+  try {
+    return JSON.parse(raw);
+  } catch (_error) {
+    const sanitized = raw
+      .replace(/\bNaN\b/g, "null")
+      .replace(/\b-Infinity\b/g, "null")
+      .replace(/\bInfinity\b/g, "null");
+    return JSON.parse(sanitized);
+  }
+}
+
+async function readJsonFile(targetPath) {
+  const raw = await fsp.readFile(targetPath, "utf8");
   try {
     return JSON.parse(raw);
   } catch (_error) {
@@ -905,16 +919,26 @@ async function runDesktopSmoke() {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
     try {
-      const localRuns = await readProjectJson("outputs/runs/runs_index.json");
+      const localRuns = IS_SMOKE_RUN
+        ? await readJsonFile(path.join(OUTPUTS_ROOT, "runs", "runs_index.json"))
+        : await readProjectJson("outputs/runs/runs_index.json");
       result.localRunsReady = Array.isArray(localRuns?.runs);
     } catch (_error) {
       result.localRunsReady = false;
     }
-    result.shellReady = result.bridgeReady && (result.serverReady || result.localRunsReady);
+    result.shellReady = result.bridgeReady && (
+      SMOKE_MODE === "real-path"
+        ? result.serverReady
+        : (result.serverReady || result.localRunsReady)
+    );
     if (!result.serverReady) {
-      result.error = workspaceState.error || (result.localRunsReady
-        ? "research_ui did not become reachable, but the shell loaded via the local runs index."
-        : "research_ui did not become reachable during smoke run.");
+      result.error = workspaceState.error || (
+        SMOKE_MODE === "real-path"
+          ? "research_ui did not become reachable during real-path smoke run."
+          : (result.localRunsReady
+              ? "research_ui did not become reachable, but the shell loaded via the local runs index."
+              : "research_ui did not become reachable during smoke run.")
+      );
     }
   } catch (error) {
     result.error = error.message;

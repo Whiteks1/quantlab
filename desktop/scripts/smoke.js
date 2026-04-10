@@ -6,7 +6,19 @@ const { spawn } = require("child_process");
 /** @typedef {import("../shared/models/smoke").SmokeMode} SmokeMode */
 /** @typedef {import("../shared/models/smoke").SmokeResult} SmokeResult */
 
+function parseSmokeMode(argv) {
+  const rawMode = argv
+    .map((entry) => String(entry || "").trim())
+    .find((entry) => entry.startsWith("--mode="))
+    ?.slice("--mode=".length);
+  if (!rawMode || rawMode === "fallback" || rawMode === "real-path") {
+    return /** @type {SmokeMode} */ (rawMode || "fallback");
+  }
+  throw new Error(`Unsupported desktop smoke mode: ${rawMode}`);
+}
+
 async function main() {
+  const mode = parseSmokeMode(process.argv.slice(2));
   const desktopRoot = path.resolve(__dirname, "..");
   const projectRoot = path.resolve(desktopRoot, "..");
   const electronBinary = require("electron");
@@ -15,8 +27,8 @@ async function main() {
   const outputPath = path.join(tempRoot, "result.json");
   const desktopOutputsRoot = path.join(tempRoot, "outputs");
   const workspaceStatePath = path.join(desktopOutputsRoot, "desktop", "workspace_state.json");
-  const projectRunsDir = path.join(projectRoot, "outputs", "runs");
-  const projectRunsIndexPath = path.join(projectRunsDir, "runs_index.json");
+  const smokeRunsDir = path.join(desktopOutputsRoot, "runs");
+  const smokeRunsIndexPath = path.join(smokeRunsDir, "runs_index.json");
   let seededRunsIndex = false;
 
   await fs.mkdir(path.dirname(workspaceStatePath), { recursive: true });
@@ -51,11 +63,11 @@ async function main() {
   );
 
   try {
-    await fs.access(projectRunsIndexPath);
+    await fs.access(smokeRunsIndexPath);
   } catch (_error) {
-    await fs.mkdir(projectRunsDir, { recursive: true });
+    await fs.mkdir(smokeRunsDir, { recursive: true });
     await fs.writeFile(
-      projectRunsIndexPath,
+      smokeRunsIndexPath,
       `${JSON.stringify({
         updated_at: new Date().toISOString(),
         runs: [
@@ -86,9 +98,10 @@ async function main() {
       env: {
         ...process.env,
         QUANTLAB_DESKTOP_SMOKE: "1",
+        QUANTLAB_DESKTOP_SMOKE_MODE: mode,
         QUANTLAB_DESKTOP_SMOKE_OUTPUT: outputPath,
         QUANTLAB_DESKTOP_OUTPUTS_ROOT: desktopOutputsRoot,
-        QUANTLAB_DESKTOP_DISABLE_SERVER_BOOT: "1",
+        ...(mode === "fallback" ? { QUANTLAB_DESKTOP_DISABLE_SERVER_BOOT: "1" } : {}),
       },
     });
     let stdout = "";
@@ -129,10 +142,15 @@ async function main() {
       );
     }
 
-    if (exitCode !== 0 || !result.bridgeReady || !result.shellReady) {
+    const passed =
+      mode === "real-path"
+        ? exitCode === 0 && result.bridgeReady && result.serverReady && result.apiReady
+        : exitCode === 0 && result.bridgeReady && result.shellReady;
+
+    if (!passed) {
       if (stdout.trim()) console.error(stdout.trim());
       if (stderr.trim()) console.error(stderr.trim());
-      throw new Error(`Desktop smoke failed: ${JSON.stringify(result)}`);
+      throw new Error(`Desktop smoke (${mode}) failed: ${JSON.stringify(result)}`);
     }
 
     const persistedWorkspaceRaw = await fs.readFile(workspaceStatePath, "utf8");
@@ -144,13 +162,15 @@ async function main() {
     }
 
     console.log(
-      result.serverReady
-        ? `Desktop smoke passed via ${result.serverUrl}`
-        : "Desktop smoke passed via local runs fallback",
+      mode === "real-path"
+        ? `Desktop smoke real-path passed via ${result.serverUrl}`
+        : (result.serverReady
+            ? `Desktop smoke fallback passed via ${result.serverUrl}`
+            : "Desktop smoke fallback passed via local runs fallback"),
     );
   } finally {
     if (seededRunsIndex) {
-      await fs.rm(projectRunsIndexPath, { force: true }).catch(() => {});
+      await fs.rm(smokeRunsIndexPath, { force: true }).catch(() => {});
     }
   }
 }
