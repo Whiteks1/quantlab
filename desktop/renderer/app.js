@@ -45,6 +45,10 @@ import {
 /** @typedef {import("../shared/models/snapshot").SnapshotStatus} SnapshotStatus */
 /** @typedef {import("../shared/models/snapshot").SnapshotSource} SnapshotSource */
 /** @typedef {import("../shared/models/workspace").WorkspaceState} WorkspaceState */
+/** @typedef {import("../shared/ipc/bridge").QuantlabDesktopBridge} QuantlabDesktopBridge */
+
+/** @type {QuantlabDesktopBridge} */
+const desktopBridge = window.quantlabDesktop;
 
 const CONFIG = {
   runsIndexPath: "/outputs/runs/runs_index.json",
@@ -185,7 +189,7 @@ const paletteActions = PALETTE_ACTION_SPECS.map((action) => ({
 document.addEventListener("DOMContentLoaded", async () => {
   bindEvents();
   try {
-    restoreShellWorkspaceStore(await window.quantlabDesktop.getShellWorkspaceStore());
+    restoreShellWorkspaceStore(await desktopBridge.getShellWorkspaceStore());
   } catch (_error) {
     // Workspace restore is optional; the shell can still boot from a cold state.
   } finally {
@@ -193,25 +197,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   renderAll();
   try {
-    state.candidatesStore = normalizeCandidatesStore(await window.quantlabDesktop.getCandidatesStore());
+    state.candidatesStore = normalizeCandidatesStore(await desktopBridge.getCandidatesStore());
   } catch (_error) {
     state.candidatesStore = defaultCandidatesStore();
   } finally {
     state.candidatesLoaded = true;
   }
   try {
-    state.sweepDecisionStore = normalizeSweepDecisionStore(await window.quantlabDesktop.getSweepDecisionStore());
+    state.sweepDecisionStore = normalizeSweepDecisionStore(await desktopBridge.getSweepDecisionStore());
   } catch (_error) {
     state.sweepDecisionStore = defaultSweepDecisionStore();
   } finally {
     state.sweepDecisionLoaded = true;
   }
-  const initialState = await window.quantlabDesktop.getWorkspaceState();
+  const initialState = await desktopBridge.getWorkspaceState();
   state.workspace = initialState;
   await refreshSnapshot();
   renderWorkspaceState();
   renderWorkflow();
-  unsubscribeWorkspaceState = window.quantlabDesktop.onWorkspaceState((payload) => {
+  unsubscribeWorkspaceState = desktopBridge.onWorkspaceState((payload) => {
     state.workspace = payload;
     renderWorkspaceState();
     if (payload.serverUrl) ensureRefreshLoop();
@@ -227,7 +231,7 @@ window.addEventListener("beforeunload", () => {
     unsubscribeWorkspaceState = null;
   }
   if (state.workspaceStoreLoaded) {
-    window.quantlabDesktop.saveShellWorkspaceStore(serializeShellWorkspaceStore()).catch(() => {});
+    desktopBridge.saveShellWorkspaceStore(serializeShellWorkspaceStore()).catch(() => {});
   }
 });
 
