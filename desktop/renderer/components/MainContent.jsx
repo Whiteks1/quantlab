@@ -1,72 +1,69 @@
 import React, { useEffect, useRef } from 'react';
+import { RunsPane } from './RunsPane';
+import { ComparePane } from './ComparePane';
+import { CandidatesPane } from './CandidatesPane';
 
 /**
  * MainContent - Main content area that:
- * - Mounts React-based surfaces
- * - Provides container for legacy surface HTML
- * - Manages surface tab context
+ * - Mounts React-based surfaces (Runs, Compare, Candidates)
+ * - Provides container for legacy surface HTML (other surfaces, iframes)
+ * - Manages surface tab context and active tab rendering
  * 
- * This is the focused surface area where surfaces are rendered.
- * It does NOT migrate existing surfaces yet, but provides the foundation
- * for gradual migration from legacy to React.
+ * Surfaces are mounted based on activeTab.kind:
+ * - 'runs': RunsPane
+ * - 'compare': ComparePane
+ * - 'candidates': CandidatesPane
+ * - Other kinds: rendered via legacy HTML or iframes
  */
-export default function MainContent({ currentSurface, onNavigate }) {
-  const contentRef = useRef(null);
+export default function MainContent({ activeTab, allTabs, onTabChange }) {
   const legacyContainerRef = useRef(null);
 
+  // Re-render legacy content when non-React tabs are active
   useEffect(() => {
-    // When surface changes, we would dispatch to the legacy app or React renderers
-    // For now, we provide hooks for the legacy system to use
-    console.log(`MainContent: Surface changed to ${currentSurface}`);
-    
-    // If there's a global legacy app handler, we can call it here
-    if (window.__quantlab && window.__quantlab.onSurfaceChange) {
-      window.__quantlab.onSurfaceChange(currentSurface);
+    if (
+      activeTab &&
+      !['runs', 'compare', 'candidates'].includes(activeTab.kind)
+    ) {
+      // Legacy surfaces (paper, system, experiments, job, run, artifacts, iframe, etc.)
+      // remain rendered by the legacy app.js via the DOM
+      if (window.__quantlab?.renderLegacyTab) {
+        window.__quantlab.renderLegacyTab(activeTab);
+      }
     }
-  }, [currentSurface]);
+  }, [activeTab]);
 
-  // Expose a ref so legacy code can mount content
-  useEffect(() => {
-    if (window.__quantlab) {
-      window.__quantlab.legacyContentContainer = legacyContainerRef.current;
-      window.__quantlab.reactShell = { currentSurface, onNavigate };
-    }
-  }, [currentSurface, onNavigate]);
+  if (!activeTab) {
+    return (
+      <main className="main-content">
+        <div className="tab-placeholder">
+          <h2>No surface open yet</h2>
+          <p>Create or open a run, comparison, or candidates surface to get started.</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="main-content">
-      <div className="content-tabs">
-        <div className="tabs-header">
-          <div className="tab-header-label">Active surface</div>
-        </div>
+      {/* React surfaces */}
+      {activeTab.kind === 'runs' && <RunsPane tab={activeTab} />}
+      {activeTab.kind === 'compare' && <ComparePane tab={activeTab} />}
+      {activeTab.kind === 'candidates' && <CandidatesPane tab={activeTab} />}
 
-        {/* Legacy surface container - existing surfaces render here */}
-        <div 
+      {/* Legacy surfaces - rendered via DOM container */}
+      {!['runs', 'compare', 'candidates'].includes(activeTab.kind) && (
+        <div
           ref={legacyContainerRef}
-          className="surface-container"
-          data-surface={currentSurface}
+          className="legacy-surface-container"
+          data-tab-id={activeTab.id}
+          data-tab-kind={activeTab.kind}
         >
-          {/* Legacy content will be mounted here by app.js */}
-          <div id="legacy-render-root">
-            {/* Placeholder until legacy content is mounted */}
-            <div className="surface-placeholder">
-              <p>Loading {formatSurfaceLabel(currentSurface)}...</p>
-            </div>
-          </div>
+          {/* Legacy content will be mounted here by app-legacy.js */}
         </div>
-      </div>
-
-      {/* Support lane - contextual information  */}
-      <aside className="support-lane">
-        <div className="support-header">
-          <div className="support-label">Context</div>
-        </div>
-        <div className="support-content">
-          <p className="support-placeholder">
-            Surface-specific context and controls appear here.
-          </p>
-        </div>
-      </aside>
+      )}
+    </main>
+  );
+}
     </main>
   );
 }
