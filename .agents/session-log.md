@@ -1,5 +1,19 @@
 # Session Log - QuantLab
 
+## 2026-04-14 — Desktop Target Architecture and Shared Contract Guardrails (Issue #350)
+- **Session Focus**: Fix the target Desktop architecture and migration guardrails so later shell and renderer slices stop reopening stack, authority, and continuity debates.
+- **Tasks Completed**:
+  - Added `docs/desktop-target-architecture.md` as the accepted ADR for the Desktop target state.
+  - Updated `docs/roadmap.md` to point the Desktop/UI track at the accepted architecture and to mark `research_ui` as transitional continuity.
+  - Reflected the same direction in `.agents/architecture.md` and `.agents/decision-log.md`.
+- **Key Decisions**:
+  - Native desktop workstation surfaces are the target state; `research_ui` remains transitional continuity only.
+  - `desktop/shared/` is the single owned cross-process contract source for shell, preload, renderer, and smoke boundaries.
+  - Desktop remains a workstation layer; engine artifacts and execution semantics stay authoritative.
+- **Validation Notes**:
+  - Checked the slice against the existing roadmap, Desktop migration block, and prior desktop shared-contract work so the ADR reuses existing direction instead of creating a parallel source of truth.
+  - Kept the slice documentation-only with no runtime or CI changes.
+
 ## 2026-04-14 — Authoritative Local Working-Copy Posture (Issue #368)
 - **Session Focus**: Restore a repeatable local repo posture so new slices always start from an authoritative base.
 - **Tasks Completed**:

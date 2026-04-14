@@ -191,6 +191,8 @@ Architectural rule:
 - Desktop/UI is a transversal capability track, not a primary linear stage
 - the engine, contracts, and canonical artifacts remain the authority
 - the workspace should reduce operator ambiguity, not introduce a second product authority
+- the accepted desktop target architecture now lives in [docs/desktop-target-architecture.md](./desktop-target-architecture.md)
+- `research_ui` should be treated as transitional continuity, not as the permanent shell target
 
 Exit condition:
 
