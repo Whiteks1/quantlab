@@ -1,5 +1,21 @@
 # Session Log - QuantLab
 
+## 2026-04-14 — Authoritative Local Working-Copy Posture (Issue #368)
+- **Session Focus**: Restore a repeatable local repo posture so new slices always start from an authoritative base.
+- **Tasks Completed**:
+  - Updated `.agents/workflow.md` to define the required local working-copy posture after merges.
+  - Updated `docs/workflow-operativo-codex.md` with the same rules for the canonical checkout, `main`, and when to keep or close secondary worktrees.
+  - Audited current local worktrees against `origin/main`, pruned six stale merged mirrors, and switched the primary checkout back to local `main` fast-forwarded to `origin/main`.
+- **Key Decisions**:
+  - The canonical local starting point is the primary worktree on `main`, aligned to `origin/main`.
+  - Secondary worktrees stay alive only when they still carry active local work or an open issue/PR context.
+  - Dirty active worktrees are preserved as explicit exceptions; clean stale mirrors should be removed.
+  - The only remaining active exception is `codex/desktop-tab-state-hardening`, which still carries local desktop work.
+- **Validation Notes**:
+  - Verified local branches and worktrees against `origin/main` using `git branch -vv`, `git worktree list`, and left-right commit counts.
+  - Confirmed the final local posture as three worktrees only: canonical `main`, the live desktop exception, and the active Issue #368 slice.
+  - Kept the slice limited to workflow docs and repository sanitation only.
+
 ## 2026-04-14 — Workflow Policy for External Collaborators (Issue #367)
 - **Session Focus**: Turn the current Codex and collaboration expectations into an explicit workflow contract that both humans and execution agents can follow.
 - **Tasks Completed**:
