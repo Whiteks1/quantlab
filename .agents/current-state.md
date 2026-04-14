@@ -2,12 +2,28 @@
 
 ## Active Stage
 - **Stage**: Stage D.2 — Supervised Broker Submit Safety
-- **Last Updated**: 2026-04-09
+- **Last Updated**: 2026-04-14
 - **Focus**: Stage D.2 has now closed the main ambiguity around supervised Hyperliquid submit, especially idempotency, reconciliation, and post-submit operator safety. The remaining posture is residual hardening by evidence, not broadening execution by default.
 - **Authority Note**: Stepbit-facing integration remains a secondary boundary track. QuantLab stays autonomous and external consumer needs do not override QuantLab-owned priorities.
 - **Signal Intake Note**: Quant Pulse is an upstream signal layer, not a controller. QuantLab should only consume Quant Pulse output when it can be translated into a research intent, risk filter, or product priority.
 - **Product Identity Note**: Publicly, QuantLab should now be described as a `web3 app` in direction, but still as a supervised and safety-first execution system in current maturity.
 - **Performance Note**: QuantLab remains Python-first. Native acceleration is now treated as a measured hotspot tactic, with the backtest engine as the first realistic candidate if profiling justifies escalation.
+
+## Document Role and Maintenance Policy
+
+- `current-state.md` is a **curated operational snapshot**, not a live Git inventory of every local branch, worktree, or transient CI state.
+- It is authoritative for:
+  - active stage and current product/system posture
+  - repo-level priorities that should guide the next slices
+  - the current interpretation of canonical direction across roadmap, integration, and execution work
+- It is **not** authoritative for:
+  - exact local branch lists
+  - exact local worktree posture on a specific machine
+  - ephemeral PR/check state
+- Minimum maintenance rule:
+  - update this file after structural merges that change active stage, repo-level priority, or document authority
+  - do not store machine-specific branch or worktree inventories here unless they are intentionally temporary and date-bounded
+  - use live `git` state for sanitation decisions, not this file alone
 
 ## Completed/Planned Stages
 
@@ -33,6 +49,7 @@
 ## Active Work
 - **Stage Open**: Stage D.2 remains the active execution-safety stage, but it has moved from broad ambiguity closure into residual hardening and monitoring.
 - **Current Priority**: Hold the first supervised Hyperliquid submit path narrow and auditable; only open new D.2 slices when a concrete operator-safety gap is demonstrated.
+- **Parallel Track Note**: Desktop/UI now exists as an explicit operator-workspace track that should improve evidence review and promotion visibility without replacing engine authority.
 - **Active Focus Areas**:
   - keep broker execution auditable before any broader live routing or retry logic
   - preserve paper-session discipline as a prerequisite, not the current bottleneck
@@ -107,57 +124,17 @@
 ## Known Issues / Technical Debt
 
 - The canonical machine-facing contract is now shared by `run` and `sweep`, but downstream consumers may still carry old assumptions about `run` using only top-level `summary` / `kpi_summary`.
-- `codex/codex-workflow-prompt` remote branch has 5 unique commits not yet in main. Review and merge or close before next sanitation pass.
 
-## Repository Sanitation Status (2026-04-09 — post-sprint)
+## Repository and Workspace Posture
 
-### Main branch health
-- `pytest test/` — **all tests pass** (full suite, post all merges)
-- Working tree: **clean**
+- `origin/main` remains the authoritative integration branch.
+- Repo sanitation, stale worktree cleanup, and post-merge branch hygiene should be decided from live Git state, not from frozen inventories in this file.
+- Governance and workflow authority now lives in:
+  - `.agents/workflow.md` for execution rules
+  - `docs/roadmap.md` for product/system direction
+  - issue-driven sanitation slices for machine-specific cleanup when needed
 
-### Merged and integrated in main
-| Branch | Merged via |
-|--------|-----------|
-| `codex/desktop-workstation-maturity` | PR #327 |
-| `codex/hotfix-broker-index-unpack` | PR #322 |
-| `codex/codex-workflow-prompt` | PR #329 (cheatsheet only; rest superseded) |
-| `codex/quant-pulse-intake-boundary` | Deleted (0 unique commits) |
-| `codex/fix-315-d2-coverage-restore` | Deleted (fix in main via other path) |
-| `codex/issue-316/317/318/319` | Merged via individual PRs #324–#327 |
+## Validation and Coverage Posture
 
-### Local branches — final state
-| Branch | Status |
-|--------|--------|
-| `codex/desktop-tab-state-hardening` | 🔵 Active worktree (quant_lab-desktop-216) — do not delete |
-
-### All other local codex/* branches — audited and deleted
-All branches were confirmed **older than main** via two-dot diff (each had 7,000–12,000 deletions vs main, meaning main already supersedes them completely). Deleted without PR:
-
-| Branch | Reason |
-|--------|--------|
-| `codex/broker-evidence-readiness` | content in main; branch had 11,762 deletions vs main |
-| `codex/cursor-mcp-integration` | content in main; branch had 7,896 deletions vs main |
-| `codex/landing-github-pages` | content in main; branch had 10,090 deletions vs main |
-| `codex/supervised-broker-runbook` | content in main; branch had 12,200 deletions vs main |
-| `codex/pretrade-intake-artifact-links` | content in main; branch had 9,409 deletions vs main |
-| `codex/bitget-roadmap-note` | content confirmed in main at README.md:52, roadmap.md:273 |
-| `codex/desktop-runtime-hardening` | content in main via PR #327 |
-| `codex/mcp-outputs-artifacts` | content in main via PR #327 (342 lines > 329 in branch) |
-
-
-
-### Root artifacts
-- `out*.txt` — untracked, covered by `.gitignore`. No action required.
-
-### Coverage
-| Module | Status |
-|--------|--------|
-| `features/indicators.py` | ✅ 11 real tests |
-| `strategies/rsi_ma_atr.py` | ✅ 12 real tests |
-| `brokers/hyperliquid.py` | ✅ D.2 contract tests |
-| `reporting/hyperliquid_submit_index.py` | ✅ D.2 counter tests |
-
-### Governance
-- High-control modules declared in `implementation-rules.md` ✅
-- D.2 contract locked in main ✅
-- Desktop workstation maturity merged ✅
+- Validation should be recorded in issue/PR/session continuity for the slice that actually ran it.
+- This file may summarize stable coverage posture at a high level, but it should not pretend to be the current source of truth for transient check status on a specific branch.
