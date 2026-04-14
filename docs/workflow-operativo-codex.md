@@ -4,6 +4,30 @@ Este documento define la forma recomendada de trabajar dentro de `quant_lab` cua
 
 Su objetivo es mantener el repositorio ordenado, la historia Git legible y la autoridad del sistema dentro de QuantLab.
 
+## Contrato obligatorio para colaboradores
+
+Este marco es obligatorio para cualquier colaborador externo, incluido un dev senior o un agente basado en Codex.
+
+Reglas mínimas no negociables:
+
+- el repo canónico y `origin/main` mandan
+- nunca se hace push directo a `main`
+- por defecto: `1 issue = 1 branch = 1 PR`
+- una rama debe tener una sola historia técnica dominante
+- no se trabaja desde ramas stale, huérfanas o con upstream `gone`
+- si una rama pierde su upstream o deja de representar el estado real del repo, el siguiente trabajo arranca desde `origin/main`
+- el colaborador puede proponer arquitectura, pero no redefinir roadmap, prioridades ni fronteras de ownership sin decisión explícita del owner del repo
+
+Superficies de alto control que exigen preflight reforzado y ownership claro:
+
+- `src/quantlab/brokers/hyperliquid.py`
+- `src/quantlab/cli/hyperliquid_submit_sessions.py`
+- `report.json.machine_contract`
+- `--json-request`
+- `desktop/main.js`
+- `desktop/scripts/smoke.js`
+- `.github/workflows/ci.yml`
+
 ## 1. Definir el tipo de trabajo
 
 Antes de tocar archivos, clasificar la tarea en una de estas categorías:
@@ -35,6 +59,7 @@ Reglas:
 - no trabajar desde la carpeta paraguas
 - no tocar otros repos salvo revisión explícita
 - no incluir archivos sueltos como `main.cpp` sin decisión explícita
+- si la rama local no refleja el estado canónico del repo, detenerse y volver a una base limpia desde `origin/main`
 
 ## 3. Aclarar alcance antes de implementar
 
@@ -179,6 +204,8 @@ Esto incluye, cuando aplique:
 - cerrar el issue vinculado después del merge
 - eliminar la rama local mergeada
 - eliminar la rama remota mergeada
+- eliminar o limpiar el worktree asociado si se usó uno
+- ejecutar `fetch --prune` para no seguir viendo ramas remotas ya cerradas
 - evitar que queden commits o ramas “temporales” sin contexto claro en local o remoto
 
 ## Orden estratégico actual de `quant_lab`
@@ -215,3 +242,5 @@ Para evitar contradicciones entre capas:
 - no mezclar cambios de distinta naturaleza si complica la historia Git
 - no abrir trabajo grande sin una lista previa de alcance
 - siempre con `labels` cuando haya issues
+- no trabajar desde ramas con upstream `gone`
+- no hacer push directo a `main`
