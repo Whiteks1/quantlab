@@ -2,10 +2,14 @@ import { useEffect, useReducer, useCallback } from 'react';
 
 /**
  * useLegacyBridge - Hook that provides access to the legacy app.js state
- * and allows React components to trigger updates that synchronize with the legacy shell.
+ * and allows React components to trigger updates via function calls.
  * 
- * This hook reads from window.state (managed by legacy app.js) and provides
- * a React-friendly interface to access and modify the state.
+ * The legacy app-legacy.js exposes functions and state in the global scope.
+ * This hook provides a React-friendly interface to access and modify that state.
+ * 
+ * NOTE: This assumes app-legacy.js is loaded first and all legacy functions
+ * are available in the global scope (not via window. prefix since they're
+ * declared at top level in the script).
  * 
  * Returns: {
  *   state: LegacyState,
@@ -13,20 +17,26 @@ import { useEffect, useReducer, useCallback } from 'react';
  * }
  */
 export function useLegacyBridge() {
-  const [, forceUpdate] = useReducer((x) => x + 1, 0);
+  const [renderCount, forceUpdate] = useReducer((x) => x + 1, 0);
 
-  // Get current state from legacy app
-  const legacyState = window.state || null;
+  // Get current state from global scope (set by app-legacy.js)
+  // eslint-disable-next-line no-undef
+  const legacyState = typeof state !== 'undefined' ? state : null;
 
-  // Wrapper function to call legacy functions and trigger React re-render
+  // Wrapper function to call a global legacy function and trigger re-render
   const callLegacyFunction = useCallback((fnName, ...args) => {
-    if (window[fnName] && typeof window[fnName] === 'function') {
-      window[fnName](...args);
+    try {
+      // eslint-disable-next-line no-undef
+      if (typeof globalThis[fnName] === 'function') {
+        // eslint-disable-next-line no-undef
+        globalThis[fnName](...args);
+      }
       // Force React to re-render after legacy function executes
-      // This is needed because the legacy app updates window.state directly
-      setTimeout(forceUpdate, 0);
+      setTimeout(forceUpdate, 100);
+    } catch (err) {
+      console.error(`Error calling legacy function ${fnName}:`, err);
     }
-  }, [forceUpdate]);
+  }, []);
 
   // Bridge actions that map to legacy functions
   const actions = {
@@ -40,10 +50,17 @@ export function useLegacyBridge() {
     ),
     setActiveTab: useCallback(
       (tabId) => {
-        legacyState.activeTabId = tabId;
-        callLegacyFunction('renderTabs');
+        if (legacyState) {
+          legacyState.activeTabId = tabId;
+          // eslint-disable-next-line no-undef
+          if (typeof renderTabs === 'function') {
+            // eslint-disable-next-line no-undef
+            renderTabs();
+          }
+          forceUpdate();
+        }
       },
-      [legacyState, callLegacyFunction]
+      [legacyState]
     ),
     setBaseline: useCallback(
       (runId) => callLegacyFunction('setBaseline', runId),
@@ -59,27 +76,29 @@ export function useLegacyBridge() {
     ),
     toggleRunSelection: useCallback(
       (runId) => {
-        const idx = legacyState.selectedRunIds.indexOf(runId);
-        if (idx >= 0) {
-          legacyState.selectedRunIds.splice(idx, 1);
-        } else if (legacyState.selectedRunIds.length < 4) {
-          legacyState.selectedRunIds.push(runId);
+        if (legacyState) {
+          const idx = legacyState.selectedRunIds.indexOf(runId);
+          if (idx >= 0) {
+            legacyState.selectedRunIds.splice(idx, 1);
+          } else if (legacyState.selectedRunIds.length < 4) {
+            legacyState.selectedRunIds.push(runId);
+          }
+          forceUpdate();
         }
-        forceUpdate();
       },
-      [legacyState, forceUpdate]
+      [legacyState]
     ),
   };
 
-  // Subscribe to window-level legacy state changes
+  // Subscribe to state changes via polling (simple approach)
   useEffect(() => {
     const interval = setInterval(() => {
-      // Poll for changes in the legacy state (simple approach)
-      // Proper approach would use event emitters in legacy code
+      // Periodically check if state has changed
+      // In a real implementation, legacy code would emit events
       forceUpdate();
     }, 1000);
     return () => clearInterval(interval);
-  }, [forceUpdate]);
+  }, []);
 
   return {
     state: legacyState,
@@ -91,37 +110,41 @@ export function useLegacyBridge() {
  * Bridge data accessors that map to legacy functions
  */
 export function useLegacyDataAccessors() {
-  const { state } = useLegacyBridge();
-
   return {
-    getRuns: useCallback(
-      () => window.getRuns?.() || [],
-      []
-    ),
-    getLatestRun: useCallback(
-      () => window.getLatestRun?.() || null,
-      []
-    ),
-    findRun: useCallback(
-      (runId) => window.findRun?.(runId) || null,
-      []
-    ),
-    getSelectedRuns: useCallback(
-      () => window.getSelectedRuns?.() || [],
-      []
-    ),
-    getJobs: useCallback(
-      () => window.getJobs?.() || [],
-      []
-    ),
-    getLatestFailedJob: useCallback(
-      () => window.getLatestFailedJob?.() || null,
-      []
-    ),
-    loadRunDetail: useCallback(
-      (runId) => window.loadRunDetail?.(runId),
-      []
-    ),
+    getRuns: useCallback(() => {
+      // eslint-disable-next-line no-undef
+      return typeof getRuns === 'function' ? getRuns() : [];
+    }, []),
+    
+    getLatestRun: useCallback(() => {
+      // eslint-disable-next-line no-undef
+      return typeof getLatestRun === 'function' ? getLatestRun() : null;
+    }, []),
+    
+    findRun: useCallback((runId) => {
+      // eslint-disable-next-line no-undef
+      return typeof findRun === 'function' ? findRun(runId) : null;
+    }, []),
+    
+    getSelectedRuns: useCallback(() => {
+      // eslint-disable-next-line no-undef
+      return typeof getSelectedRuns === 'function' ? getSelectedRuns() : [];
+    }, []),
+    
+    getJobs: useCallback(() => {
+      // eslint-disable-next-line no-undef
+      return typeof getJobs === 'function' ? getJobs() : [];
+    }, []),
+    
+    getLatestFailedJob: useCallback(() => {
+      // eslint-disable-next-line no-undef
+      return typeof getLatestFailedJob === 'function' ? getLatestFailedJob() : null;
+    }, []),
+    
+    loadRunDetail: useCallback((runId) => {
+      // eslint-disable-next-line no-undef
+      return typeof loadRunDetail === 'function' ? loadRunDetail(runId) : Promise.resolve(null);
+    }, []),
   };
 }
 
@@ -130,21 +153,24 @@ export function useLegacyDataAccessors() {
  */
 export function useLegacyDecision() {
   return {
-    isBaselineRun: useCallback(
-      (runId) => window.isBaselineRun?.(runId) || false,
-      []
-    ),
-    isCandidateRun: useCallback(
-      (runId) => window.isCandidateRun?.(runId) || false,
-      []
-    ),
-    isShortlistedRun: useCallback(
-      (runId) => window.isShortlistedRun?.(runId) || false,
-      []
-    ),
-    getCandidateEntriesResolved: useCallback(
-      () => window.getCandidateEntriesResolved?.() || [],
-      []
-    ),
+    isBaselineRun: useCallback((runId) => {
+      // eslint-disable-next-line no-undef
+      return typeof isBaselineRun === 'function' ? isBaselineRun(runId) : false;
+    }, []),
+    
+    isCandidateRun: useCallback((runId) => {
+      // eslint-disable-next-line no-undef
+      return typeof isCandidateRun === 'function' ? isCandidateRun(runId) : false;
+    }, []),
+    
+    isShortlistedRun: useCallback((runId) => {
+      // eslint-disable-next-line no-undef
+      return typeof isShortlistedRun === 'function' ? isShortlistedRun(runId) : false;
+    }, []),
+    
+    getCandidateEntriesResolved: useCallback(() => {
+      // eslint-disable-next-line no-undef
+      return typeof getCandidateEntriesResolved === 'function' ? getCandidateEntriesResolved() : [];
+    }, []),
   };
 }
