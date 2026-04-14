@@ -1,0 +1,138 @@
+# QuantLab Desktop Target Architecture and Shared Contract Guardrails
+
+Status: accepted
+Date: 2026-04-14
+Issue: #350
+
+## Decision
+
+QuantLab Desktop will evolve toward a native operator workspace with this target shape:
+
+- Electron shell as the host runtime
+- typed preload plus stable IPC surface as the process boundary
+- shared contract models under `desktop/shared/` as the only cross-process contract source
+- native renderer-owned workstation surfaces as the long-term UI target
+
+`research_ui` remains a transitional continuity layer. It may continue to provide browser-backed reachability where the desktop still depends on it, but it is not the target shell architecture and it must not reclaim product authority from the native workspace.
+
+## Why
+
+The desktop now spans shell bootstrap, preload, shared contracts, browser continuity, and future native workstation surfaces. Without an explicit target architecture, each migration slice would risk reopening the same debates:
+
+- whether the desktop should stay browser-first
+- whether `research_ui` remains a permanent dependency
+- whether renderer state can invent ad hoc payloads
+- whether Stepbit or other external surfaces can become the de facto workspace authority
+
+This ADR fixes those decisions now so later slices stay small.
+
+## Architecture Direction
+
+### 1. Authority stays in QuantLab engine and artifacts
+
+Desktop is a workstation layer, not a second product authority.
+
+The engine and canonical artifacts remain authoritative for:
+
+- run and sweep truth
+- paper and broker evidence
+- machine-facing contracts
+- execution and promotion semantics
+
+Desktop may visualize, filter, compare, and launch bounded actions, but it does not redefine engine authority.
+
+### 2. Shared-contract-first boundary
+
+Anything that crosses:
+
+- main process to preload
+- preload to renderer
+- smoke/runtime boundary to tests
+
+must use the shared contract layer in `desktop/shared/`.
+
+Guardrail:
+
+- do not add ad hoc channel names or payload shapes directly in `main.js`, `preload.js`, or renderer modules when the payload belongs to an owned desktop contract
+
+### 3. Native desktop is the target state
+
+The target workspace is native desktop-owned, not a long-lived embedded browser shell.
+
+Target native surfaces include:
+
+- Runs
+- Compare
+- Candidates
+- Run Detail
+- Artifact Explorer
+- Paper Ops
+- System and experiments visibility
+
+`research_ui` may continue to exist during migration, but only as bounded continuity for capabilities that have not yet moved into native surfaces.
+
+### 4. `research_ui` is transitional, not sovereign
+
+`research_ui` is allowed to provide:
+
+- real-path continuity checks
+- browser-backed fallback behavior where still required
+- temporary access to views not yet migrated
+
+`research_ui` is not allowed to become:
+
+- the main workspace owner
+- the permanent shell target
+- the place where desktop contracts are defined
+
+### 5. Stepbit remains external and optional
+
+Stepbit may assist through automation, reasoning, or external UI integration, but it does not own QuantLab Desktop architecture.
+
+Desktop should remain coherent and useful without Stepbit being present.
+
+## Required Guardrails
+
+- one shared contract source for desktop-owned payloads
+- one shell authority: Electron desktop, not browser continuity
+- one migration direction: native surfaces replace transitional browser-backed ones
+- one ownership model: engine owns truth, desktop owns workstation presentation
+- no runtime slice should reopen stack choice, workspace authority, or `research_ui` permanence unless a new ADR explicitly replaces this one
+
+## Migration Order
+
+The intended migration order is:
+
+1. shared contract foundation
+2. typed desktop base across main, preload, shared models, and renderer
+3. main-process modularization and stable IPC ownership
+4. minimal React shell frame
+5. migration of core workstation surfaces
+6. migration of run detail and artifacts
+7. migration of paper, system, and experiment surfaces
+8. explicit launch target-state decision
+9. retirement of the legacy shell renderer
+
+Micro-cuts may happen inside a slice, but this order should not be reopened casually.
+
+## Consequences
+
+Good consequences:
+
+- later desktop slices can stay implementation-focused
+- `research_ui` continuity can remain honest without becoming the destination
+- shared contracts become the stable seam between shell, preload, renderer, and smoke
+
+Tradeoffs:
+
+- some temporary duplication between native surfaces and browser continuity is acceptable during migration
+- renderer slices must stay disciplined about not expanding into engine-owned logic
+
+## Non-Goals
+
+This ADR does not:
+
+- replace engine workflow authority
+- commit QuantLab to a web-service or SaaS architecture
+- make Stepbit a first-party control plane
+- require every desktop surface to migrate in one block

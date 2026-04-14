@@ -222,3 +222,30 @@ If real broker support is introduced, the preferred order is:
 - implement Kraken as the first concrete backend
 - add Binance as the second backend to validate that the abstraction is real
 - keep CCXT optional for prototyping rather than making it the authority of execution design
+
+---
+
+# Desktop / Operator Workspace Boundary
+
+QuantLab Desktop is a transversal workstation layer, not a second product authority.
+
+The target Desktop architecture is:
+
+- Electron shell as host runtime
+- typed preload plus stable IPC surface as the process boundary
+- shared contracts under `desktop/shared/` as the only owned cross-process contract source
+- native desktop workstation surfaces as the target UI
+
+Desktop may:
+
+- visualize canonical artifacts
+- provide bounded launch and review flows
+- expose runtime continuity and operator visibility
+
+Desktop must not:
+
+- redefine engine or artifact truth
+- move business logic out of the engine into renderer code
+- treat `research_ui` as the permanent target shell
+
+`research_ui` is a transitional continuity layer only. It may remain available where migration is incomplete, but native desktop surfaces are the target state.

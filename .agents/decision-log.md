@@ -102,3 +102,35 @@ QuantLab is defined as a **quantitative research laboratory**, not a trading pla
 - reproducible experiments
 - strong reporting
 - forward evaluation before any live execution
+
+---
+
+# 2026-04-14 — Desktop target architecture and shared contract guardrails
+
+## Context
+
+Desktop migration is now active across shared contracts, shell bootstrap, preload, and future renderer migration.
+
+Without a fixed target architecture, later slices would keep reopening the same questions about:
+
+- whether the desktop stays browser-first
+- whether `research_ui` remains permanent
+- whether cross-process payloads can stay ad hoc
+- whether the workstation can drift away from engine-owned truth
+
+## Decision
+
+QuantLab Desktop will move toward a native operator workspace with:
+
+- Electron shell as the host runtime
+- typed preload plus stable IPC as the shell boundary
+- `desktop/shared/` as the only owned cross-process contract layer
+- native workstation surfaces as the target UI
+
+`research_ui` is explicitly transitional continuity, not the target shell architecture.
+
+## Consequences
+
+- desktop slices can now stay focused on implementation rather than reopening stack debates
+- renderer and shell work must consume shared contracts instead of inventing local payload shapes
+- the engine remains authoritative for artifacts, execution semantics, and promotion truth
