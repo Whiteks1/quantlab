@@ -1,6 +1,6 @@
 # QuantLab Roadmap
 
-This roadmap updates the original QuantLab plan to reflect the current repository state and the remaining stages needed to reach a broker-connected, automated, live-operating system without compromising QuantLab autonomy.
+This roadmap updates the original QuantLab plan to reflect the current product and system direction plus the remaining stages needed to reach a broker-connected, automated, live-operating system without compromising QuantLab autonomy.
 
 Public product framing:
 
@@ -27,6 +27,12 @@ The key rule remains the same:
 
 - do not move into live execution before the paper, safety, and observability layers are mature
 
+Minimum promotion policy:
+
+- do not promote a stage if live or broker-facing work still depends on ad hoc local secret handling
+- do not promote a stage if canonical critical alert coverage is missing for the failures that stage is supposed to survive
+- treat missing alert artifacts or unclear secret boundaries as promotion blockers, not polish debt
+
 ## Current Position
 
 QuantLab has already completed most of the original research foundation and quantitative robustness work.
@@ -50,6 +56,7 @@ QuantLab has already completed most of the original research foundation and quan
 - initial real-execution safety and Kraken boundary work
 - initial supervised Hyperliquid signed-submit work behind the shared execution boundary
 - optional Stepbit-facing automation readiness at the external boundary
+- Desktop/UI operator workspace architecture and shell hardening
 
 ### Not started as production capability
 
@@ -164,6 +171,31 @@ Exit condition:
   operator discipline before paper or broker-facing actions without changing
   core engine responsibilities
 
+## Transversal Capability Track - Desktop / Operator Workspace
+
+Status: in progress
+
+Goal:
+
+- provide a stable operator workspace for reviewing research, paper, and broker evidence without moving authority out of the engine
+
+Scope:
+
+- desktop shell architecture and typed desktop contracts
+- operator-facing workstation surfaces for runs, compare, artifacts, paper ops, and system continuity
+- workspace hierarchy, focus, and promotion visibility across native desktop surfaces
+- browser-backed continuity only where the desktop still depends on transitional `research_ui` behavior
+
+Architectural rule:
+
+- Desktop/UI is a transversal capability track, not a primary linear stage
+- the engine, contracts, and canonical artifacts remain the authority
+- the workspace should reduce operator ambiguity, not introduce a second product authority
+
+Exit condition:
+
+- QuantLab can expose research, paper, and execution evidence through a stable operator workspace with clear ownership, continuity, and promotion visibility
+
 ## Next Remaining Stages
 
 ## Stage C.1 - Paper Trading Operationalization
@@ -186,6 +218,12 @@ Scope:
 Exit condition:
 
 - QuantLab can run paper sessions repeatedly with traceability, alerts, and enough operator confidence to treat them as a real dry operational environment
+
+Minimum promotion signals:
+
+- paper sessions produce canonical session artifacts with explicit terminal status
+- the operator can distinguish research outputs from paper sessions without ambiguity
+- paper-critical failures emit canonical alert artifacts instead of requiring log archaeology
 
 Current interpretation:
 
@@ -306,32 +344,9 @@ Scope:
 Initial slice already present:
 
 - `KrakenBrokerAdapter` behind `BrokerAdapter`
-- read-only Hyperliquid venue preflight backed by the shared `ExecutionContext` layer
-- read-only Hyperliquid account/signer readiness backed by the shared `ExecutionContext` layer
-- local Hyperliquid action/signature-envelope build surface backed by the shared `ExecutionContext` layer
-- local Hyperliquid signer backend integration for real L1 action signing without submit
-- first supervised Hyperliquid submit response artifacts generated from previously signed Hyperliquid action artifacts with explicit reviewer confirmation
-- canonical Hyperliquid submit sessions and shared registry under `outputs/hyperliquid_submits/`
-- persistent Hyperliquid post-submit order-status artifacts over canonical submit sessions
-- explicit Hyperliquid reconciliation artifacts over canonical submit sessions using direct status, historical order, open-order, and fill surfaces
-- dedicated Hyperliquid fill-summary artifacts over canonical submit sessions for richer fee, fill-size, and closed-PnL visibility
-- bounded continuous-supervision artifacts over canonical Hyperliquid submit sessions with websocket-aware monitoring metadata and repeated local snapshots
-- supervised Hyperliquid cancel response artifacts over canonical submit sessions with explicit reviewer confirmation
-- Hyperliquid submission health summaries and deterministic alert snapshots over canonical submit sessions
-- read-only Kraken public preflight probes
-- read-only Kraken authenticated preflight probes
-- read-only Kraken account snapshot and balance-aware intent readiness
-- Kraken validate-only order probes before any real order placement work
-- canonical broker order-validation sessions and shared registry for repeated review
-- local approval gate artifacts before any future submit path
-- local pre-submit bundles generated only from approved validation sessions
-- local supervised submit gate artifacts generated only from pre-submit bundles
-- local supervised submit stub artifacts generated only from submit gates
-- first real supervised submit response artifacts generated only from previously validated sessions that already have a supervised submit gate and explicit live confirmation
-- deterministic Kraken payload translation for validated intent
-- dry-run audit snapshot without real broker connectivity
-- local dry-run artifact persistence via `broker_dry_run.json`
-- canonical broker dry-run sessions and shared registry for repeated review
+- read-only and validate-only Kraken preflight, account, and dry-run audit surfaces
+- read-only Hyperliquid readiness, signing, supervised submit, cancel, and reconciliation surfaces behind the same execution boundary
+- canonical session registries and artifact persistence for both broker dry-run and Hyperliquid submit flows
 
 Exit condition:
 
@@ -382,27 +397,46 @@ Scope:
 
 Initial slice already present:
 
-- supervised submit gate artifacts ahead of any real submit call
-- supervised submit stub artifacts for payload review before live submission
-- first tightly gated real Kraken submit response artifacts
-- local pre-write of submit response state before the remote submit path
-- explicit refusal of blind re-submit when a prior submit response artifact already exists
-- authenticated reconciliation of submit sessions against Kraken order state using stable session-derived `userref`
-- persistent broker order-status artifacts with normalized local state for submitted sessions
-- broker submission health summaries and alert snapshots over broker order-validation sessions
-- first supervised Hyperliquid submit response artifacts generated from previously signed action artifacts
-- canonical Hyperliquid submit sessions with persistent order-status, reconciliation, fill-summary, supervision, cancel-response, health, and alert artifacts
-- bounded Hyperliquid continuous supervision built as an artifact-first polling surface rather than a daemon-first runtime
+- supervised submit gates, review stubs, and first tightly gated real submit artifacts
+- persistent order-status, reconciliation, and supervision artifacts over submitted sessions
+- artifact-first health and alert snapshots for Kraken and Hyperliquid submit corridors
+- bounded post-submit supervision built around repeated artifacts rather than daemon-first runtime state
 
 Current interpretation:
 
-- `Stage D.2` is the active QuantLab-owned execution frontier
-- the main remaining work is no longer to invent the first supervised corridor, but to validate real operator use, tighten ambiguous-submit handling, and keep post-submit supervision credible
-- the highest-value next steps are therefore evidence-producing and hardening-oriented: real artifact runs, tighter runbooks, promotion criteria, and focused fixes on whichever supervised path still fails under realistic use
+- `Stage D.2` remains the central QuantLab-owned execution frontier
+- it should now be read as a hardening, evidence, and promotion-discipline stage rather than an automatic expansion stage
+- the highest-value next steps are evidence-producing and ambiguity-reducing: real artifact runs, tighter runbooks, promotion criteria, and focused fixes on whichever supervised path still fails under realistic use
 
 Exit condition:
 
 - QuantLab can survive operational broker edge cases in a controlled environment
+
+Minimum promotion signals:
+
+- repeated supervised submit sessions can be reconciled without unresolved ambiguous state
+- canonical post-submit status and alert artifacts stay current enough to support operator decisions
+- restart or resume behavior does not lose pending supervision context for active sessions
+
+## Stage D.3 - Micro-Live Promotion Gate
+
+Status: proposed
+
+Goal:
+
+- validate the supervised execution stack with minimal real exposure before opening broader supervised live operation
+
+Scope:
+
+- smallest-allowed live sizing and explicit venue or strategy allowlists
+- manual promotion checklist from `D.2` hardening into real execution
+- canonical secret-boundary discipline for live credentials
+- canonical alert coverage for submit, reject, fill, and failure-critical states
+- immediate stop-on-ambiguity rule when reconciliation or operator visibility is unclear
+
+Exit condition:
+
+- QuantLab has passed a bounded micro-live gate with low-risk real sessions, explicit operator review, canonical alert artifacts, and no unresolved promotion blockers around secrets, reconciliation, or stop control
 
 ## Stage E - Supervised Live Execution
 
@@ -423,6 +457,12 @@ Scope:
 Exit condition:
 
 - the system can trade live in a tightly supervised, low-risk mode with full auditability and emergency stop capability
+
+Minimum promotion signals:
+
+- supervised live runs inherit the secret and alert discipline already proven in `D.3`
+- operator review, stop control, and auditability remain intact under repeated low-risk live use
+- live supervision no longer depends on ad hoc local interpretation to understand order or risk state
 
 ## Stage F - Controlled Automation
 
@@ -467,15 +507,16 @@ Exit condition:
 
 ## Recommended Execution Order
 
-From the current repository state, the most rational order is:
+From the current strategic position, the most rational order is:
 
-1. harden the already-implemented `Stage D.2` supervised broker corridors with real operator evidence, reconciliation discipline, and post-submit clarity
+1. harden `Stage D.2` supervised broker corridors with real operator evidence, reconciliation discipline, and post-submit clarity
 2. continue `Stage C.1` paper-trading polish where it directly improves promotion discipline, runbooks, and paper-to-broker readiness
-3. continue `Stage O` producer-side stabilization only where real integration friction requires it
-4. harden `Stage O.1` integration fixtures only if consumer feedback justifies them
-5. avoid reopening `Stage D.0` / `D.1` as primary stages unless a real hardening gap proves the current boundary insufficient
-6. enter `Stage E` supervised live execution only after the current `D.2` corridors are operationally credible
-7. only then move into `Stage F` controlled automation
+3. continue the Desktop/UI operator workspace track where it reduces review ambiguity or improves promotion visibility across research, paper, and broker evidence
+4. continue `Stage O` producer-side stabilization only where real integration friction requires it
+5. harden `Stage O.1` integration fixtures only if consumer feedback justifies them
+6. avoid reopening `Stage D.0` / `D.1` as primary stages unless a real hardening gap proves the current boundary insufficient
+7. pass an explicit `Stage D.3` micro-live promotion gate before opening `Stage E`
+8. only then move into `Stage F` controlled automation
 
 ## What Should Not Happen Early
 
@@ -483,7 +524,7 @@ From the current repository state, the most rational order is:
 - no live broker work before safety limits and kill-switch behavior exist
 - no exchange-specific strategy or risk logic outside `BrokerAdapter`
 - no expansion of external orchestration before the paper and safety layers are operationally trustworthy
-- no new venue or UI expansion before the existing supervised corridors produce credible operational evidence
+- no new venue or operator-workspace expansion that is disconnected from credible supervised-corridor evidence
 - no collapsing of QuantLab and Stepbit responsibilities into one codebase
 
 ## Related Documents
