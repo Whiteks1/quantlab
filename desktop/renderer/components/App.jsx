@@ -1,14 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Topbar from './Topbar.jsx';
 import Sidebar from './Sidebar.jsx';
 import MainContent from './MainContent.jsx';
-
-/**
- * @typedef {{
- *   currentSurface: string;
- *   isSidebarCollapsed: boolean;
- * }} AppState
- */
+import {
+  QuantLabContextProvider,
+  useQuantLabContextValue,
+} from './QuantLabContext.jsx';
 
 /**
  * App - Root component for the QuantLab Desktop React shell
@@ -16,43 +13,65 @@ import MainContent from './MainContent.jsx';
  * Manages the overall layout and state for:
  * - Topbar with runtime status
  * - Sidebar with navigation
- * - MainContent area for surfaces
+ * - MainContent area for surfaces (Runs, Compare, Candidates)
  * 
- * Does NOT migrate existing surfaces yet; provides routing foundation only.
+ * Bridges to the legacy app.js state and provides context to all surfaces.
  */
 export default function App() {
-  // Start with System surface as default
-  const [currentSurface, setCurrentSurface] = useState('system');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  const handleNavigate = (surface) => {
-    setCurrentSurface(surface);
-  };
+  // Build context value that bridges to legacy state
+  const contextValue = useQuantLabContextValue();
+
+  if (!contextValue?.state) {
+    return (
+      <div className="app-container loading">
+        <div className="loading-message">
+          <p>QuantLab Desktop is initializing...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleToggleSidebar = () => {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
+  // Get active tab from state
+  const activeTab = contextValue.state?.tabs?.find(
+    (t) => t.id === contextValue.state.activeTabId
+  ) || null;
+
+  const allTabs = contextValue.state?.tabs || [];
+
+  const handleTabChange = (tabId) => {
+    contextValue.setActiveTab(tabId);
+  };
+
   return (
-    <div className="app-container">
-      <Topbar 
-        currentSurface={currentSurface}
-        onToggleSidebar={handleToggleSidebar}
-        isSidebarCollapsed={isSidebarCollapsed}
-      />
-      
-      <div className="app-main-area">
-        <Sidebar
-          currentSurface={currentSurface}
-          onNavigate={handleNavigate}
-          isCollapsed={isSidebarCollapsed}
+    <QuantLabContextProvider value={contextValue}>
+      <div className="app-container">
+        <Topbar
+          activeTab={activeTab}
+          onToggleSidebar={handleToggleSidebar}
+          isSidebarCollapsed={isSidebarCollapsed}
         />
-        
-        <MainContent
-          currentSurface={currentSurface}
-          onNavigate={handleNavigate}
-        />
+
+        <div className="app-main-area">
+          <Sidebar
+            activeTab={activeTab}
+            allTabs={allTabs}
+            onTabChange={handleTabChange}
+            isCollapsed={isSidebarCollapsed}
+          />
+
+          <MainContent
+            activeTab={activeTab}
+            allTabs={allTabs}
+            onTabChange={handleTabChange}
+          />
+        </div>
       </div>
-    </div>
+    </QuantLabContextProvider>
   );
 }
