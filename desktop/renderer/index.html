@@ -10,6 +10,11 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- React Shell Root - New minimal shell frame -->
+    <div id="react-root"></div>
+    
+    <!-- Legacy shell container - kept for backward compatibility during migration -->
+    <div id="legacy-shell" class="hidden" style="display: none;">
     <div class="app-shell">
         <aside class="sidebar">
             <div class="brand">
@@ -264,6 +269,8 @@
             <div id="palette-results" class="palette-results"></div>
         </div>
     </div>
+    </div>
+    <!-- End legacy shell -->
 
     <script type="module" src="app.js"></script>
 </body>

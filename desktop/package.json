@@ -13,9 +13,15 @@
     "smoke:real-path": "node scripts/smoke.js --mode=real-path",
     "mcp": "node mcp-server.mjs"
   },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
     "@types/node": "^24.6.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
     "electron": "^37.2.0",
     "typescript": "^5.9.3",
     "zod": "^4.1.12"
