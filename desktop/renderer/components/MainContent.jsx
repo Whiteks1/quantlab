@@ -64,25 +64,3 @@ export default function MainContent({ activeTab, allTabs, onTabChange }) {
     </main>
   );
 }
-    </main>
-  );
-}
-
-/**
- * Format surface name for display
- * @param {string} surface
- * @returns {string}
- */
-function formatSurfaceLabel(surface) {
-  const labels = {
-    'system': 'System',
-    'experiments': 'Experiments',
-    'launch': 'Launch',
-    'runs': 'Runs',
-    'candidates': 'Candidates',
-    'compare': 'Compare',
-    'paper-ops': 'Paper Ops',
-    'assistant': 'Assistant',
-  };
-  return labels[surface] || surface;
-}

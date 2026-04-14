@@ -1,98 +1,53 @@
 // @ts-check
 
 /**
- * app.js - React entry point for the QuantLab Desktop shell
- * 
- * This is the new React-based entry point (Issue #352) that:
- * - Mounts the React shell frame (Topbar, Sidebar, MainContent)
- * - Provides hooks for legacy surface rendering
- * - Preserves existing QuantLab Desktop behavior during transition
- * 
- * The legacy app logic is preserved in app-legacy.js and integrated
- * as needed through the legacy surface mounting system.
+ * Transitional desktop renderer bootstrap.
+ *
+ * React shell work remains deferred until the renderer has real tooling for
+ * JSX and bare-package imports. Until then, keep the current desktop
+ * operational by booting the proven legacy shell through the existing module
+ * entrypoint.
  */
 
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import App from './components/App.jsx';
+import "./app-legacy.js";
 
-// Global namespace for QuantLab Desktop
 window.__quantlab = window.__quantlab || {};
 
 /**
- * Initialize the React shell frame
+ * Restore the visible legacy shell while the React renderer tooling is not yet
+ * available in the runtime path.
  */
-function initializeReactShell() {
-  const rootElement = document.getElementById('react-root');
-  
-  if (!rootElement) {
-    console.error('[QuantLab React] Root element not found');
-    return false;
+function activateLegacyShell() {
+  const reactRoot = document.getElementById("react-root");
+  const legacyShell = document.getElementById("legacy-shell");
+
+  if (reactRoot) {
+    reactRoot.innerHTML = "";
+    reactRoot.setAttribute("hidden", "true");
+    reactRoot.style.display = "none";
   }
 
-  try {
-    const root = createRoot(rootElement);
-    root.render(React.createElement(App));
-    console.log('[QuantLab React] Shell initialized successfully');
-    return true;
-  } catch (error) {
-    console.error('[QuantLab React] Failed to initialize:', error);
-    rootElement.innerHTML = '<div style="padding: 20px; background: #fee; color: #c33; font-family: monospace;">Failed to initialize QuantLab Desktop shell.</div>';
-    return false;
+  if (legacyShell) {
+    legacyShell.removeAttribute("hidden");
+    legacyShell.classList.remove("hidden");
+    legacyShell.style.display = "";
   }
+
+  window.__quantlab.rendererMode = "legacy";
 }
 
-/**
- * Bridge for legacy surface rendering
- * 
- * Legacy surfaces can use window.__quantlab.renderLegacySurface(content)
- * to render content in the current surface container
- */
-window.__quantlab.renderLegacySurface = function(content) {
-  const container = document.getElementById('legacy-render-root');
-  if (!container) {
-    console.warn('[QuantLab React] Legacy render root not found');
-    return;
-  }
-  
-  if (typeof content === 'string') {
-    container.innerHTML = content;
-  } else if (content instanceof HTMLElement) {
-    container.innerHTML = '';
-    container.appendChild(content);
-  } else {
-    console.warn('[QuantLab React] Invalid content type for legacy render');
-  }
-};
-
-/**
- * Surface change handler for legacy/new surface code
- * 
- * Called when user navigates to a different surface
- * Both React and legacy systems can listen for surface changes here
- */
-window.__quantlab.onSurfaceChange = function(surface) {
-  console.log(`[QuantLab React] Surface changed to: ${surface}`);
-  // Legacy code can hook into this to load surface data
-  // React surfaces can also use this through props
-};
-
-/**
- * Bridge to access current shell state
- */
-window.__quantlab.getShellState = function() {
+window.__quantlab.getShellState = function getShellState() {
   return {
-    reactShell: window.__quantlab.reactShell || null,
-    legacyContainer: document.getElementById('legacy-render-root'),
+    rendererMode: window.__quantlab.rendererMode || "legacy",
+    reactRoot: document.getElementById("react-root"),
+    legacyShell: document.getElementById("legacy-shell"),
   };
 };
 
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeReactShell);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", activateLegacyShell, { once: true });
 } else {
-  initializeReactShell();
+  activateLegacyShell();
 }
 
-// Export for testing
-export { initializeReactShell };
+export { activateLegacyShell };
