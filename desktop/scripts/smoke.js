@@ -127,10 +127,14 @@ async function main() {
     for (let attempt = 0; attempt < 10; attempt += 1) {
       try {
         const raw = await fs.readFile(outputPath, "utf8");
+        if (!raw.trim()) {
+          throw new SyntaxError("Desktop smoke result.json is still empty.");
+        }
         result = /** @type {SmokeResult} */ (JSON.parse(raw));
         break;
       } catch (error) {
-        if (error?.code !== "ENOENT") throw error;
+        const incompleteJson = error instanceof SyntaxError;
+        if (error?.code !== "ENOENT" && !incompleteJson) throw error;
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
