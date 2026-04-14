@@ -279,3 +279,29 @@ After a PR merges, the closeout is not optional. The expected finish is:
 6. return to a valid base before starting the next slice
 
 Do not leave merged work hanging around as active local context unless it is an intentional integration branch.
+
+### Authoritative local working-copy posture
+
+The repository should always have one unambiguous local starting point.
+
+Required local posture:
+
+- the primary worktree should be the canonical checkout
+- that canonical checkout should sit on local `main`
+- local `main` should fast-forward to `origin/main` before new slice work starts
+- new slices should start from dedicated worktrees or branches created from `origin/main`
+
+Keep an extra worktree only when all of the following are true:
+
+- it still belongs to an active issue or active PR
+- it still carries unique local work or intentional unmerged context
+- it is not merely a stale mirror of already-merged history
+
+Close a worktree when any of the following becomes true:
+
+- its branch has no unique commits versus `origin/main`
+- its upstream remote branch is gone and the work is already merged or superseded
+- the linked issue and PR are already closed
+- it no longer represents a valid starting point for the next session
+
+If a worktree is dirty but still active, keep it and mark it explicitly as the one remaining live exception.

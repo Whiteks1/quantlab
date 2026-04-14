@@ -208,6 +208,32 @@ Esto incluye, cuando aplique:
 - ejecutar `fetch --prune` para no seguir viendo ramas remotas ya cerradas
 - evitar que queden commits o ramas “temporales” sin contexto claro en local o remoto
 
+## 10.1 Postura local autoritativa
+
+Después de merges y limpiezas, el repositorio debe conservar una base local inequívoca.
+
+Postura correcta:
+
+- el worktree principal debe ser el checkout canónico
+- ese checkout canónico debe estar en `main`
+- `main` local debe quedar alineado con `origin/main` antes de abrir el siguiente slice
+- los nuevos slices deben arrancar desde ramas o worktrees dedicados creados desde `origin/main`
+
+Cuándo conservar un worktree secundario:
+
+- sigue ligado a una issue o PR activa
+- todavía tiene trabajo local único o contexto intencional no mergeado
+- no es solo una copia atrasada de historia ya absorbida por `main`
+
+Cuándo cerrarlo:
+
+- no tiene commits únicos frente a `origin/main`
+- su upstream remoto desapareció y el trabajo ya está merged o superseded
+- la issue o PR vinculada ya está cerrada
+- ya no sirve como base válida para la siguiente sesión
+
+Si un worktree está sucio pero sigue vivo, debe quedar identificado explícitamente como la excepción activa.
+
 ## Orden estratégico actual de `quant_lab`
 
 A día de hoy, el orden correcto es:
