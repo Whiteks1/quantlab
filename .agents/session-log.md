@@ -1,5 +1,19 @@
 # Session Log - QuantLab
 
+## 2026-04-14 — Workflow Policy for External Collaborators (Issue #367)
+- **Session Focus**: Turn the current Codex and collaboration expectations into an explicit workflow contract that both humans and execution agents can follow.
+- **Tasks Completed**:
+  - Updated `.agents/workflow.md` with a mandatory collaboration contract for external contributors and Codex-based agents.
+  - Added explicit source-of-truth, no-direct-push, no-stale-branch, and high-control-surface rules.
+  - Aligned `docs/workflow-operativo-codex.md` with the same collaboration contract and mandatory post-merge hygiene.
+- **Key Decisions**:
+  - The canonical repository state is `origin/main`; stale or orphaned branches are not valid starting points for new work.
+  - Contributors may propose architecture, but roadmap and ownership changes remain repository-owner decisions.
+  - Post-merge cleanup is part of the workflow contract, not optional hygiene.
+- **Validation Notes**:
+  - Verified the touched docs remain aligned in scope and terminology.
+  - Kept the slice documentation-only with no runtime or CI behavior changes.
+
 ## 2026-04-10 — Snapshot Status Contract Alignment (Issue #361)
 - **Session Focus**: Align the desktop snapshot-status renderer semantics with the shared `desktop/shared/models/snapshot.ts` contract.
 - **Tasks Completed**:

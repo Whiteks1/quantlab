@@ -18,6 +18,32 @@ QuantLab follows a strict **Issue-Branch-PR** workflow:
 
 Codex-created branches should use the `codex/` prefix.
 
+### Mandatory collaboration contract
+
+This workflow is mandatory for any external collaborator, including senior contributors and Codex-based execution agents.
+
+QuantLab is not an open-ended sandbox. It is a repo with active contracts, ownership boundaries, and safety-sensitive surfaces.
+
+Minimum non-negotiable rules:
+
+- the canonical repository and `origin/main` are the source of truth
+- no direct pushes to `main`
+- `1 issue = 1 branch = 1 PR` by default
+- one branch must carry one dominant technical story
+- no work from stale, orphaned, or `gone` branches
+- if a branch upstream disappears, new work restarts from `origin/main`
+- the collaborator may propose architecture, but may not redefine roadmap, priorities, or ownership boundaries without explicit repository-owner approval
+
+High-control surfaces requiring explicit preflight and narrow ownership:
+
+- `src/quantlab/brokers/hyperliquid.py`
+- `src/quantlab/cli/hyperliquid_submit_sessions.py`
+- `report.json.machine_contract`
+- `--json-request`
+- `desktop/main.js`
+- `desktop/scripts/smoke.js`
+- `.github/workflows/ci.yml`
+
 ---
 
 ## 2. Agent Collaboration Model
@@ -131,6 +157,23 @@ The following files or surfaces are boundary-sensitive and must not be changed i
 
 If a task requires changes across these boundaries, assign one single owner chat for the slice. Do not split the same slice across both chats.
 
+##### Source-of-truth rule
+If there is a conflict between:
+
+- a stale local checkout
+- an old branch
+- a forked workspace
+- or undocumented assumptions
+
+the source of truth is:
+
+1. repository state in `origin/main`
+2. current issue and merged PR history
+3. `.agents/current-state.md`
+4. public docs
+
+Do not continue implementation from a branch that no longer reflects the canonical repository state.
+
 ##### No ownership by file name alone
 Ownership is determined by dominant concern, not by file name alone.
 
@@ -223,3 +266,16 @@ git diff -- <paths>
 If the working tree is already dirty, verify that the existing diff belongs to the intended slice before continuing.
 
 When a slice touches runtime code, contracts, CLI, or test-bearing behavior, run the relevant validation and record what actually ran in the issue, PR, or `.agents/session-log.md`.
+
+### Post-merge closeout
+
+After a PR merges, the closeout is not optional. The expected finish is:
+
+1. confirm the linked issue is closed or explicitly close it
+2. delete the remote branch
+3. delete or clean the local branch
+4. remove or clean the associated worktree when one was used
+5. fetch with prune so the local repo stops tracking merged remote branches
+6. return to a valid base before starting the next slice
+
+Do not leave merged work hanging around as active local context unless it is an intentional integration branch.
