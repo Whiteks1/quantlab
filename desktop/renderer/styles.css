@@ -1641,7 +1641,7 @@ button:disabled {
     display: contents;
 }
 
-.app-container {
+#react-root:not([hidden]) .app-container {
     display: grid;
     grid-template-columns: 280px 1fr;
     grid-template-rows: auto 1fr;
@@ -1650,7 +1650,7 @@ button:disabled {
     color: var(--text);
 }
 
-.topbar {
+#react-root:not([hidden]) .topbar {
     grid-column: 1 / -1;
     grid-row: 1;
     display: flex;
@@ -1662,13 +1662,13 @@ button:disabled {
     backdrop-filter: blur(8px);
 }
 
-.topbar-left {
+#react-root:not([hidden]) .topbar-left {
     display: flex;
     align-items: center;
     gap: 12px;
 }
 
-.topbar-toggle {
+#react-root:not([hidden]) .topbar-toggle {
     background: none;
     border: none;
     color: var(--text);
@@ -1681,76 +1681,76 @@ button:disabled {
     transition: background 0.2s, color 0.2s;
 }
 
-.topbar-toggle:hover {
+#react-root:not([hidden]) .topbar-toggle:hover {
     background: var(--bg-hover);
 }
 
-.topbar-center {
+#react-root:not([hidden]) .topbar-center {
     flex: 1;
     text-align: center;
 }
 
-.topbar-title {
+#react-root:not([hidden]) .topbar-title {
     margin: 0;
     font-size: 14px;
     font-weight: 500;
     color: var(--text);
 }
 
-.topbar-right {
+#react-root:not([hidden]) .topbar-right {
     display: flex;
     align-items: center;
     gap: 24px;
 }
 
-.topbar-status {
+#react-root:not([hidden]) .topbar-status {
     display: flex;
     align-items: center;
     gap: 16px;
 }
 
-.topbar-surface-label {
+#react-root:not([hidden]) .topbar-surface-label {
     font-size: 13px;
     color: var(--muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-.topbar-runtime-indicator {
+#react-root:not([hidden]) .topbar-runtime-indicator {
     display: flex;
     align-items: center;
     gap: 6px;
     font-size: 12px;
 }
 
-.indicator-dot {
+#react-root:not([hidden]) .indicator-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     background: var(--success);
 }
 
-.indicator-dot.online {
+#react-root:not([hidden]) .indicator-dot.online {
     background: var(--success);
     box-shadow: 0 0 8px rgba(57, 217, 138, 0.4);
 }
 
-.indicator-label {
+#react-root:not([hidden]) .indicator-label {
     color: var(--muted);
 }
 
-.app-main-area {
+#react-root:not([hidden]) .app-main-area {
     grid-column: 1 / -1;
     grid-row: 2;
     display: grid;
     grid-template-columns: 280px 1fr;
 }
 
-.sidebar.collapsed {
+#react-root:not([hidden]) .sidebar.collapsed {
     display: none;
 }
 
-.sidebar-brand {
+#react-root:not([hidden]) .sidebar-brand {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -1758,13 +1758,13 @@ button:disabled {
     border-bottom: 1px solid var(--border);
 }
 
-.sidebar-nav {
+#react-root:not([hidden]) .sidebar-nav {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.nav-item {
+#react-root:not([hidden]) .nav-item {
     background: none;
     border: none;
     color: var(--muted);
@@ -1780,17 +1780,17 @@ button:disabled {
     transition: background 0.2s, color 0.2s;
 }
 
-.nav-item:hover {
+#react-root:not([hidden]) .nav-item:hover {
     background: var(--bg-hover);
     color: var(--text);
 }
 
-.nav-item.is-active {
+#react-root:not([hidden]) .nav-item.is-active {
     background: var(--bg-panel);
     color: var(--accent);
 }
 
-.nav-icon {
+#react-root:not([hidden]) .nav-icon {
     width: 24px;
     height: 24px;
     display: flex;
@@ -1802,14 +1802,14 @@ button:disabled {
     font-weight: bold;
 }
 
-.sidebar-panels {
+#react-root:not([hidden]) .sidebar-panels {
     display: flex;
     flex-direction: column;
     gap: 12px;
     margin-top: 12px;
 }
 
-.sidebar-panel {
+#react-root:not([hidden]) .sidebar-panel {
     padding: 12px;
     background: rgba(22, 31, 46, 0.5);
     border: 1px solid var(--border);
@@ -1817,7 +1817,7 @@ button:disabled {
     font-size: 12px;
 }
 
-.panel-label {
+#react-root:not([hidden]) .panel-label {
     color: var(--muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -1825,13 +1825,13 @@ button:disabled {
     margin-bottom: 6px;
 }
 
-.sidebar-panel p {
+#react-root:not([hidden]) .sidebar-panel p {
     margin: 0;
     color: var(--muted);
     line-height: 1.4;
 }
 
-.runtime-chip {
+#react-root:not([hidden]) .runtime-chip {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1842,16 +1842,16 @@ button:disabled {
     font-size: 12px;
 }
 
-.chip-indicator {
+#react-root:not([hidden]) .chip-indicator {
     color: var(--success);
     font-size: 14px;
 }
 
-.chip-text {
+#react-root:not([hidden]) .chip-text {
     color: var(--text);
 }
 
-.main-content {
+#react-root:not([hidden]) .main-content {
     grid-column: 2;
     grid-row: 2;
     display: grid;
@@ -1860,19 +1860,19 @@ button:disabled {
     border-left: 1px solid var(--border);
 }
 
-.content-tabs {
+#react-root:not([hidden]) .content-tabs {
     display: flex;
     flex-direction: column;
     background: var(--bg);
 }
 
-.tabs-header {
+#react-root:not([hidden]) .tabs-header {
     padding: 12px 20px;
     border-bottom: 1px solid var(--border);
     background: rgba(17, 24, 39, 0.4);
 }
 
-.tab-header-label {
+#react-root:not([hidden]) .tab-header-label {
     font-size: 11px;
     color: var(--muted);
     text-transform: uppercase;
@@ -1880,14 +1880,14 @@ button:disabled {
     font-weight: 500;
 }
 
-.surface-container {
+#react-root:not([hidden]) .surface-container {
     position: relative;
     flex: 1;
     padding: 20px;
     overflow: auto;
 }
 
-.surface-placeholder {
+#react-root:not([hidden]) .surface-placeholder {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1896,19 +1896,19 @@ button:disabled {
     font-size: 14px;
 }
 
-.support-lane {
+#react-root:not([hidden]) .support-lane {
     border-left: 1px solid var(--border);
     background: rgba(17, 24, 39, 0.4);
     display: flex;
     flex-direction: column;
 }
 
-.support-header {
+#react-root:not([hidden]) .support-header {
     padding: 12px 16px;
     border-bottom: 1px solid var(--border);
 }
 
-.support-label {
+#react-root:not([hidden]) .support-label {
     font-size: 11px;
     color: var(--muted);
     text-transform: uppercase;
@@ -1916,14 +1916,14 @@ button:disabled {
     font-weight: 500;
 }
 
-.support-content {
+#react-root:not([hidden]) .support-content {
     flex: 1;
     padding: 16px;
     overflow: auto;
     font-size: 12px;
 }
 
-.support-placeholder {
+#react-root:not([hidden]) .support-placeholder {
     margin: 0;
     color: var(--muted);
     line-height: 1.5;
@@ -1932,24 +1932,24 @@ button:disabled {
 /* Responsive adjustments for React shell */
 
 @media (max-width: 980px) {
-    .app-container {
+    #react-root:not([hidden]) .app-container {
         grid-template-columns: 1fr;
     }
 
-    .app-main-area {
+    #react-root:not([hidden]) .app-main-area {
         grid-template-columns: 1fr;
     }
 
-    .sidebar {
+    #react-root:not([hidden]) .sidebar {
         display: none;
     }
 
-    .main-content {
+    #react-root:not([hidden]) .main-content {
         grid-column: 1;
         grid-template-columns: 1fr;
     }
 
-    .support-lane {
+    #react-root:not([hidden]) .support-lane {
         display: none;
     }
 }
