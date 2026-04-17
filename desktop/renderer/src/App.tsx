@@ -195,34 +195,41 @@ export default function App() {
   return (
     <div className={styles.shell}>
       <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <p className={styles.eyebrow}>QuantLab Desktop</p>
-          <h1 className={styles.title}>React runtime</h1>
-          <p className={styles.subtitle}>
-            Vite-backed renderer runtime. Shared IPC and model contracts remain authoritative.
-          </p>
+        <div className={styles.sidebarTop}>
+          <div className={styles.brand}>
+            <p className={styles.eyebrow}>QuantLab Desktop</p>
+            <h1 className={styles.title}>React runtime</h1>
+            <p className={styles.subtitle}>
+              Vite-backed renderer runtime. Shared IPC and model contracts remain authoritative.
+            </p>
+          </div>
+
+          <section className={styles.navSection} aria-label="Desktop surfaces">
+            <p className={styles.sectionLabel}>Surfaces</p>
+            <nav className={styles.nav}>
+              {SURFACES.map((surface) => (
+                <button
+                  key={surface.id}
+                  type="button"
+                  className={`${styles.navButton} ${activeSurface === surface.id ? styles.navButtonActive : ""}`.trim()}
+                  onClick={() => setActiveSurface(surface.id)}
+                >
+                  {surface.label}
+                </button>
+              ))}
+            </nav>
+          </section>
         </div>
 
-        <nav className={styles.nav} aria-label="Desktop surfaces">
-          {SURFACES.map((surface) => (
-            <button
-              key={surface.id}
-              type="button"
-              className={`${styles.navButton} ${activeSurface === surface.id ? styles.navButtonActive : ""}`.trim()}
-              onClick={() => setActiveSurface(surface.id)}
-            >
-              {surface.label}
-            </button>
-          ))}
-        </nav>
-
-        <section className={styles.sidebarPanel}>
-          <p className={styles.eyebrow}>Boundary</p>
-          <p>
-            Legacy renderer files remain in the repo, but this runtime does not mount them. Non-migrated
-            surfaces stay explicitly paused instead of falling through to unsafe DOM or CSS collisions.
-          </p>
-        </section>
+        <div className={styles.sidebarBottom}>
+          <section className={styles.sidebarPanel}>
+            <p className={styles.eyebrow}>Boundary</p>
+            <p>
+              Legacy renderer files remain in the repo, but this runtime does not mount them. Non-migrated
+              surfaces stay explicitly paused instead of falling through to unsafe DOM or CSS collisions.
+            </p>
+          </section>
+        </div>
       </aside>
 
       <div className={styles.main}>
