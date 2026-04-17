@@ -5,12 +5,13 @@
   "description": "QuantLab Desktop shell for research, runtime visibility, and bounded AI assistance.",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron .",
+    "start": "npm run build && electron .",
+    "dev": "concurrently \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env NODE_ENV=development electron .\"",
+    "build": "vite build",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "smoke": "npm run smoke:fallback",
-    "smoke:fallback": "node scripts/smoke.js --mode=fallback",
-    "smoke:real-path": "node scripts/smoke.js --mode=real-path",
+    "smoke:fallback": "npm run build && node scripts/smoke.js --mode=fallback",
+    "smoke:real-path": "npm run build && node scripts/smoke.js --mode=real-path",
     "mcp": "node mcp-server.mjs"
   },
   "dependencies": {
@@ -19,11 +20,16 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
+    "@vitejs/plugin-react": "^5.0.4",
     "@types/node": "^24.6.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
     "electron": "^37.2.0",
     "typescript": "^5.9.3",
+    "vite": "^7.1.11",
+    "wait-on": "^8.0.5",
     "zod": "^4.1.12"
   }
 }
