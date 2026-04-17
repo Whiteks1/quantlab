@@ -5,8 +5,9 @@
   "description": "QuantLab Desktop shell for research, runtime visibility, and bounded AI assistance.",
   "main": "main.js",
   "scripts": {
-    "start": "npm run build && electron .",
-    "dev": "concurrently \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env NODE_ENV=development electron .\"",
+    "start": "electron .",
+    "start:react": "npm run build && cross-env QUANTLAB_DESKTOP_RENDERER=react electron .",
+    "dev": "concurrently \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env NODE_ENV=development QUANTLAB_DESKTOP_RENDERER=react electron .\"",
     "build": "vite build",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "smoke": "npm run smoke:fallback",

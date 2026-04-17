@@ -12,6 +12,7 @@ const fs = require("fs");
  * }} options
  */
 function createMainWindow({ BrowserWindow, desktopRoot, isSmokeRun, onClosed }) {
+  const useReactRenderer = process.env.QUANTLAB_DESKTOP_RENDERER === "react";
   const mainWindow = new BrowserWindow({
     width: 1440,
     height: 960,
@@ -29,12 +30,16 @@ function createMainWindow({ BrowserWindow, desktopRoot, isSmokeRun, onClosed }) 
     },
   });
 
-  if (process.env.NODE_ENV === "development") {
+  if (useReactRenderer && process.env.NODE_ENV === "development") {
     mainWindow.loadURL("http://127.0.0.1:5173");
   } else {
     const distEntry = path.join(desktopRoot, "renderer", "dist", "index.html");
     const sourceEntry = path.join(desktopRoot, "renderer", "index.html");
-    mainWindow.loadFile(fs.existsSync(distEntry) ? distEntry : sourceEntry);
+    const legacyEntry = path.join(desktopRoot, "renderer", "legacy.html");
+    const entry = useReactRenderer
+      ? (fs.existsSync(distEntry) ? distEntry : sourceEntry)
+      : legacyEntry;
+    mainWindow.loadFile(entry);
   }
   if (!isSmokeRun) {
     mainWindow.once("ready-to-show", () => {
