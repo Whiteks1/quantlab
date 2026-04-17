@@ -25,9 +25,12 @@
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   gap: 1.5rem;
 }
 
+.sidebarTop,
+.sidebarBottom,
 .brand,
 .main,
 .assistant {
@@ -64,8 +67,24 @@
   line-height: 1.5;
 }
 
+.navSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sectionLabel {
+  margin: 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .nav {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
 }
 
