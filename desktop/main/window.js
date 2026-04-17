@@ -1,6 +1,7 @@
 // @ts-check
 
 const path = require("path");
+const fs = require("fs");
 
 /**
  * @param {{
@@ -28,7 +29,13 @@ function createMainWindow({ BrowserWindow, desktopRoot, isSmokeRun, onClosed }) 
     },
   });
 
-  mainWindow.loadFile(path.join(desktopRoot, "renderer", "index.html"));
+  if (process.env.NODE_ENV === "development") {
+    mainWindow.loadURL("http://127.0.0.1:5173");
+  } else {
+    const distEntry = path.join(desktopRoot, "renderer", "dist", "index.html");
+    const sourceEntry = path.join(desktopRoot, "renderer", "index.html");
+    mainWindow.loadFile(fs.existsSync(distEntry) ? distEntry : sourceEntry);
+  }
   if (!isSmokeRun) {
     mainWindow.once("ready-to-show", () => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
