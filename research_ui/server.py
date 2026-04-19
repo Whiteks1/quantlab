@@ -16,6 +16,7 @@ from uuid import uuid4
 
 PORT = 8000
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+RESEARCH_UI_STATIC_ROOT = PROJECT_ROOT / "research_ui"
 SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
@@ -563,7 +564,14 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Location', '/research_ui/index.html')
             self.end_headers()
             return
-        return super().do_GET()
+        if request_path == '/research_ui':
+            self.send_response(302)
+            self.send_header('Location', '/research_ui/index.html')
+            self.end_headers()
+            return
+        if request_path.startswith('/research_ui/'):
+            return self._serve_research_ui_static(request_path)
+        self.send_error(404, "Not found")
 
     def do_POST(self):
         request_path = unquote(self.path.split("?", 1)[0].split("#", 1)[0])
@@ -613,6 +621,37 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             target = target.resolve()
             target.relative_to(repo_root_resolved)
         except Exception:  # noqa: BLE001
+            self.send_error(403, "Forbidden")
+            return
+
+        if target.is_dir():
+            target = target / "index.html"
+
+        if not target.exists() or not target.is_file():
+            self.send_error(404, "File not found")
+            return
+
+        body = target.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", self.guess_type(str(target)))
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_research_ui_static(self, request_path: str):
+        relative_path = request_path[len('/research_ui/'):].lstrip('/')
+        root_resolved = RESEARCH_UI_STATIC_ROOT.resolve()
+        target = (root_resolved / relative_path) if relative_path else (root_resolved / "index.html")
+
+        try:
+            target = target.resolve()
+            relative_parts = target.relative_to(root_resolved).parts
+        except Exception:  # noqa: BLE001
+            self.send_error(403, "Forbidden")
+            return
+
+        if any(part.startswith('.') for part in relative_parts):
             self.send_error(403, "Forbidden")
             return
 
@@ -2086,19 +2125,13 @@ def _is_hyperliquid_payload(filename: str, payload: dict[str, object]) -> bool:
     return False
 
 def run_server():
-    # Ensure we are in the project root
-    current_dir = os.path.basename(os.getcwd())
-    if current_dir == "research_ui":
-        os.chdir("..")
-        print("Changed directory to project root.")
-    
     port = PORT
     max_retries = 5
     httpd = None
 
     while max_retries > 0:
         try:
-            httpd = socketserver.TCPServer(("", port), DashboardHandler)
+            httpd = socketserver.TCPServer(("127.0.0.1", port), DashboardHandler)
             break
         except OSError:
             print(f"Port {port} is busy, trying {port + 1}...")
@@ -2110,8 +2143,8 @@ def run_server():
         sys.exit(1)
 
     print(f"\n--- QuantLab Research Dashboard Dev Server ---")
-    print(f"Serving from: {os.getcwd()}")
-    print(f"URL: http://localhost:{port}")
+    print(f"Serving from: {PROJECT_ROOT}")
+    print(f"URL: http://127.0.0.1:{port}")
     print(f"Press Ctrl+C to stop\n")
 
     try:
