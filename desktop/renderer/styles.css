@@ -47,6 +47,7 @@ button, input, textarea { font: inherit; }
         rgba(8, 14, 22, 0.92);
     display: grid;
     gap: 18px;
+    align-content: start;
 }
 
 .brand { display: flex; align-items: center; gap: 14px; }
@@ -121,7 +122,7 @@ button, input, textarea { font: inherit; }
     text-transform: uppercase;
 }
 
-.nav-list { display: grid; gap: 8px; }
+.nav-list { display: grid; gap: 8px; align-content: start; }
 
 .nav-item, .chip, .ghost-btn, .primary-btn {
     border: 1px solid var(--border);
