@@ -721,3 +721,32 @@ def test_start_stepbit_workspace_releases_lock_before_long_running_steps(tmp_pat
 
     assert status == 202
     assert payload["status"] == "accepted"
+
+
+
+def test_get_local_api_token_from_env(monkeypatch):
+    """Test that get_local_api_token reads from environment."""
+    monkeypatch.setenv("QUANTLAB_LOCAL_API_TOKEN", "test_token_123")
+    token = research_ui_server.get_local_api_token()
+    assert token == "test_token_123"
+
+
+def test_get_local_api_token_empty_when_not_set(monkeypatch):
+    """Test that get_local_api_token returns empty string when not set."""
+    monkeypatch.delenv("QUANTLAB_LOCAL_API_TOKEN", raising=False)
+    token = research_ui_server.get_local_api_token()
+    assert token == ""
+
+
+def test_max_json_body_bytes_constant_is_set():
+    """Test that MAX_JSON_BODY_BYTES constant is defined."""
+    assert research_ui_server.MAX_JSON_BODY_BYTES == 64 * 1024
+
+
+def test_dashboard_handler_has_required_methods():
+    """Test that DashboardHandler has all required validation methods."""
+    handler_class = research_ui_server.DashboardHandler
+    assert hasattr(handler_class, "_require_local_api_token")
+    assert hasattr(handler_class, "_origin_is_local")
+    assert hasattr(handler_class, "_validate_json_request")
+    assert hasattr(handler_class, "_read_json_body")

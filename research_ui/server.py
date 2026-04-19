@@ -2,6 +2,7 @@ import http.server
 import json
 import socketserver
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -16,9 +17,15 @@ from uuid import uuid4
 
 PORT = 8000
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+RESEARCH_UI_STATIC_ROOT = PROJECT_ROOT / "research_ui"
+MAX_JSON_BODY_BYTES = 64 * 1024
 SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
+
+
+def get_local_api_token() -> str:
+    return os.environ.get("QUANTLAB_LOCAL_API_TOKEN", "").strip()
 
 LAUNCH_HISTORY_LIMIT = 12
 LAUNCH_JOBS: list[dict[str, object]] = []
@@ -563,29 +570,48 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Location', '/research_ui/index.html')
             self.end_headers()
             return
-        return super().do_GET()
+        if request_path == '/research_ui':
+            self.send_response(302)
+            self.send_header('Location', '/research_ui/index.html')
+            self.end_headers()
+            return
+        if request_path.startswith('/research_ui/'):
+            return self._serve_research_ui_static(request_path)
+        self.send_error(404, "Not found")
 
     def do_POST(self):
         request_path = unquote(self.path.split("?", 1)[0].split("#", 1)[0])
-        if request_path.startswith('/api/stepbit-workspace/start'):
-            try:
-                body = self._read_json_body()
+        if request_path not in {"/api/stepbit-workspace/start", "/api/launch-control"}:
+            self.send_error(404, "Not found")
+            return
+
+        if not self._origin_is_local():
+            self.send_error(403, "Forbidden")
+            return
+
+        if not self._require_local_api_token():
+            return
+
+        content_length = self._validate_json_request()
+        if content_length is None:
+            return
+
+        try:
+            body = self._read_json_body(content_length)
+        except ValueError as exc:
+            return self._send_json({"status": "error", "message": str(exc)}, status=400)
+
+        try:
+            if request_path == "/api/stepbit-workspace/start":
                 payload, status = start_stepbit_workspace(PROJECT_ROOT, body)
                 return self._send_json(payload, status=status)
-            except ValueError as exc:
-                return self._send_json({"status": "error", "message": str(exc)}, status=400)
-            except Exception as exc:  # noqa: BLE001
-                return self._send_json({"status": "error", "message": str(exc)}, status=500)
-        if request_path.startswith('/api/launch-control'):
-            try:
-                body = self._read_json_body()
-                job_payload, status = launch_quantlab_job(PROJECT_ROOT, body)
-                return self._send_json(job_payload, status=status)
-            except ValueError as exc:
-                return self._send_json({"status": "error", "message": str(exc)}, status=400)
-            except Exception as exc:  # noqa: BLE001
-                return self._send_json({"status": "error", "message": str(exc)}, status=500)
-        self.send_error(404, "Not found")
+
+            job_payload, status = launch_quantlab_job(PROJECT_ROOT, body)
+            return self._send_json(job_payload, status=status)
+        except ValueError as exc:
+            return self._send_json({"status": "error", "message": str(exc)}, status=400)
+        except Exception as exc:  # noqa: BLE001
+            return self._send_json({"status": "error", "message": str(exc)}, status=500)
 
     def _send_json(self, payload, status=200):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -596,13 +622,69 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _read_json_body(self):
-        content_length = int(self.headers.get("Content-Length", "0"))
-        raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
+    def _require_local_api_token(self):
+        expected = get_local_api_token()
+        if not expected:
+            self.send_error(503, "Local API token not configured")
+            return False
+
+        provided = (self.headers.get("X-QuantLab-Token") or "").strip()
+        if not secrets.compare_digest(provided, expected):
+            self.send_error(401, "Unauthorized")
+            return False
+
+        return True
+
+    def _origin_is_local(self):
+        origin = (self.headers.get("Origin") or "").strip().lower()
+        host = (self.headers.get("Host") or "").strip().lower()
+        allowed_origin_prefixes = ("http://127.0.0.1:", "http://localhost:", "http://[::1]:")
+        allowed_host_prefixes = ("127.0.0.1:", "localhost:", "[::1]:")
+
+        if origin and origin != "null":
+            if not origin.startswith(allowed_origin_prefixes):
+                return False
+
+        if host and not host.startswith(allowed_host_prefixes):
+            return False
+
+        return True
+
+    def _validate_json_request(self):
+        content_type = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+        if content_type != "application/json":
+            self.send_error(415, "Content-Type must be application/json")
+            return None
+
         try:
-            return json.loads(raw.decode("utf-8") or "{}")
+            content_length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self.send_error(400, "Invalid Content-Length")
+            return None
+
+        if content_length <= 0:
+            self.send_error(400, "Request body is required")
+            return None
+
+        if content_length > MAX_JSON_BODY_BYTES:
+            self.send_error(413, "Request body too large")
+            return None
+
+        return content_length
+
+    def _read_json_body(self, content_length: int):
+        raw = self.rfile.read(content_length)
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except UnicodeDecodeError as exc:
+            raise ValueError("Request body must be valid UTF-8.") from exc
         except json.JSONDecodeError as exc:
             raise ValueError(f"Invalid JSON body: {exc.msg}") from exc
+
+        if not isinstance(payload, dict):
+            raise ValueError("JSON body must be an object.")
+
+        return payload
 
     def _serve_external_static(self, repo_root: Path, prefix: str, request_path: str):
         relative_path = request_path[len(prefix):].lstrip("/")
@@ -613,6 +695,37 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             target = target.resolve()
             target.relative_to(repo_root_resolved)
         except Exception:  # noqa: BLE001
+            self.send_error(403, "Forbidden")
+            return
+
+        if target.is_dir():
+            target = target / "index.html"
+
+        if not target.exists() or not target.is_file():
+            self.send_error(404, "File not found")
+            return
+
+        body = target.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", self.guess_type(str(target)))
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_research_ui_static(self, request_path: str):
+        relative_path = request_path[len('/research_ui/'):].lstrip('/')
+        root_resolved = RESEARCH_UI_STATIC_ROOT.resolve()
+        target = (root_resolved / relative_path) if relative_path else (root_resolved / "index.html")
+
+        try:
+            target = target.resolve()
+            relative_parts = target.relative_to(root_resolved).parts
+        except Exception:  # noqa: BLE001
+            self.send_error(403, "Forbidden")
+            return
+
+        if any(part.startswith('.') for part in relative_parts):
             self.send_error(403, "Forbidden")
             return
 
@@ -2086,19 +2199,13 @@ def _is_hyperliquid_payload(filename: str, payload: dict[str, object]) -> bool:
     return False
 
 def run_server():
-    # Ensure we are in the project root
-    current_dir = os.path.basename(os.getcwd())
-    if current_dir == "research_ui":
-        os.chdir("..")
-        print("Changed directory to project root.")
-    
     port = PORT
     max_retries = 5
     httpd = None
 
     while max_retries > 0:
         try:
-            httpd = socketserver.TCPServer(("", port), DashboardHandler)
+            httpd = socketserver.TCPServer(("127.0.0.1", port), DashboardHandler)
             break
         except OSError:
             print(f"Port {port} is busy, trying {port + 1}...")
@@ -2110,8 +2217,8 @@ def run_server():
         sys.exit(1)
 
     print(f"\n--- QuantLab Research Dashboard Dev Server ---")
-    print(f"Serving from: {os.getcwd()}")
-    print(f"URL: http://localhost:{port}")
+    print(f"Serving from: {PROJECT_ROOT}")
+    print(f"URL: http://127.0.0.1:{port}")
     print(f"Press Ctrl+C to stop\n")
 
     try:
