@@ -148,8 +148,22 @@ async function main() {
 
     const passed =
       mode === "real-path"
-        ? exitCode === 0 && result.bridgeReady && result.serverReady && result.apiReady
-        : exitCode === 0 && result.bridgeReady && result.shellReady;
+        ? (
+          exitCode === 0
+          && result.bridgeReady
+          && result.domReady
+          && result.workbenchReady
+          && result.serverReady
+          && result.apiReady
+        )
+        : (
+          exitCode === 0
+          && result.bridgeReady
+          && result.domReady
+          && result.workbenchReady
+          && result.shellReady
+          && result.rendererMode === "legacy"
+        );
 
     if (!passed) {
       if (stdout.trim()) console.error(stdout.trim());

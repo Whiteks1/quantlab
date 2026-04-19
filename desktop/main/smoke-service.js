@@ -44,6 +44,9 @@ function createSmokeService({
     return {
       bridgeReady: false,
       shellReady: false,
+      domReady: false,
+      workbenchReady: false,
+      rendererMode: "unknown",
       serverReady: false,
       apiReady: false,
       localRunsReady: false,
@@ -96,6 +99,39 @@ function createSmokeService({
         "Boolean(window.quantlabDesktop && typeof window.quantlabDesktop.getWorkspaceState === 'function')",
         true,
       );
+      const uiDeadline = Date.now() + 5000;
+      while (Date.now() < uiDeadline) {
+        const uiState = await mainWindow.webContents.executeJavaScript(
+          `(() => {
+            const shellState = window.__quantlab?.getShellState?.() || {};
+            const rendererMode = shellState.rendererMode || window.__quantlab?.rendererMode || "unknown";
+            const legacyShell = document.getElementById("legacy-shell");
+            const tabContent = document.getElementById("tab-content");
+            const tabsBar = document.getElementById("tabs-bar");
+            const workspaceGrid = document.querySelector(".workspace-grid");
+            const legacyVisible = Boolean(
+              legacyShell
+              && !legacyShell.classList.contains("hidden")
+              && getComputedStyle(legacyShell).display !== "none"
+            );
+            const domReady = Boolean(document.body && (legacyShell || document.getElementById("react-root")));
+            const workbenchReady = rendererMode === "legacy"
+              ? Boolean(legacyVisible && tabContent && tabsBar && workspaceGrid)
+              : Boolean(document.getElementById("react-root"));
+            return {
+              rendererMode,
+              domReady,
+              workbenchReady,
+            };
+          })()`,
+          true,
+        );
+        result.rendererMode = uiState?.rendererMode || "unknown";
+        result.domReady = Boolean(uiState?.domReady);
+        result.workbenchReady = Boolean(uiState?.workbenchReady);
+        if (result.domReady && result.workbenchReady) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
       const deadline = Date.now() + startupTimeoutMs;
       while (Date.now() < deadline) {
         const workspaceState = workspace.getState();
@@ -115,7 +151,7 @@ function createSmokeService({
       } catch (_error) {
         result.localRunsReady = false;
       }
-      result.shellReady = result.bridgeReady && (
+      result.shellReady = result.bridgeReady && result.domReady && result.workbenchReady && (
         smokeMode === "real-path"
           ? result.serverReady
           : (result.serverReady || result.localRunsReady)
@@ -128,6 +164,9 @@ function createSmokeService({
                 ? "research_ui did not become reachable, but the shell loaded via the local runs index."
                 : "research_ui did not become reachable during smoke run.")
         );
+      }
+      if (!result.domReady || !result.workbenchReady) {
+        result.error = `desktop renderer safety check failed: renderer=${result.rendererMode}, domReady=${result.domReady}, workbenchReady=${result.workbenchReady}`;
       }
     } catch (error) {
       result.error = error.message;
