@@ -6,6 +6,14 @@ export interface SmokeResult {
   domReady: boolean;
   workbenchReady: boolean;
   rendererMode: "legacy" | "react" | "unknown";
+  happyPathReady: boolean;
+  happyPathRunsReady: boolean;
+  happyPathRunDetailReady: boolean;
+  happyPathArtifactsReady: boolean;
+  happyPathCandidatesReady: boolean;
+  happyPathCompareReady: boolean;
+  happyPathRunCount: number;
+  happyPathSelectableRunCount: number;
   serverReady: boolean;
   apiReady: boolean;
   localRunsReady: boolean;

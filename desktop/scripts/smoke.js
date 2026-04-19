@@ -20,7 +20,6 @@ function parseSmokeMode(argv) {
 async function main() {
   const mode = parseSmokeMode(process.argv.slice(2));
   const desktopRoot = path.resolve(__dirname, "..");
-  const projectRoot = path.resolve(desktopRoot, "..");
   const electronBinary = require("electron");
   const electronArgs = process.platform === "linux" ? ["--no-sandbox", "."] : ["."];
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "quantlab-desktop-smoke-"));
@@ -29,6 +28,11 @@ async function main() {
   const workspaceStatePath = path.join(desktopOutputsRoot, "desktop", "workspace_state.json");
   const smokeRunsDir = path.join(desktopOutputsRoot, "runs");
   const smokeRunsIndexPath = path.join(smokeRunsDir, "runs_index.json");
+  const smokeRunOneId = "smoke_run_001";
+  const smokeRunTwoId = "smoke_run_002";
+  const smokeRunOnePath = path.join(smokeRunsDir, smokeRunOneId);
+  const smokeRunTwoPath = path.join(smokeRunsDir, smokeRunTwoId);
+  const nowIso = new Date().toISOString();
   let seededRunsIndex = false;
 
   await fs.mkdir(path.dirname(workspaceStatePath), { recursive: true });
@@ -66,22 +70,78 @@ async function main() {
     await fs.access(smokeRunsIndexPath);
   } catch (_error) {
     await fs.mkdir(smokeRunsDir, { recursive: true });
+    await fs.mkdir(smokeRunOnePath, { recursive: true });
+    await fs.mkdir(smokeRunTwoPath, { recursive: true });
+    const smokeReportOne = {
+      generated_at: nowIso,
+      summary: {
+        run_id: smokeRunOneId,
+        mode: "grid",
+        ticker: "ETH-USD",
+        total_return: 0.12,
+        sharpe_simple: 1.1,
+        max_drawdown: -0.08,
+        trades: 4,
+      },
+      config_resolved: {
+        ticker: "ETH-USD",
+        start: "2024-01-01",
+        end: "2024-03-31",
+        interval: "1d",
+      },
+      results: [],
+    };
+    const smokeReportTwo = {
+      generated_at: nowIso,
+      summary: {
+        run_id: smokeRunTwoId,
+        mode: "walkforward",
+        ticker: "BTC-USD",
+        total_return: 0.09,
+        sharpe_simple: 0.8,
+        max_drawdown: -0.11,
+        trades: 6,
+      },
+      config_resolved: {
+        ticker: "BTC-USD",
+        start: "2024-01-01",
+        end: "2024-03-31",
+        interval: "1d",
+      },
+      results: [],
+    };
+    await fs.writeFile(path.join(smokeRunOnePath, "report.json"), `${JSON.stringify(smokeReportOne, null, 2)}\n`, "utf8");
+    await fs.writeFile(path.join(smokeRunTwoPath, "report.json"), `${JSON.stringify(smokeReportTwo, null, 2)}\n`, "utf8");
+    await fs.writeFile(path.join(smokeRunOnePath, "notes.txt"), "smoke artifact\n", "utf8");
+    await fs.writeFile(path.join(smokeRunTwoPath, "notes.txt"), "smoke artifact\n", "utf8");
     await fs.writeFile(
       smokeRunsIndexPath,
       `${JSON.stringify({
-        updated_at: new Date().toISOString(),
+        updated_at: nowIso,
         runs: [
           {
-            run_id: "smoke_run_001",
+            run_id: smokeRunOneId,
             mode: "grid",
             ticker: "ETH-USD",
-            created_at: new Date().toISOString(),
+            created_at: nowIso,
             git_commit: "smoke000",
             total_return: 0.12,
             sharpe_simple: 1.1,
             max_drawdown: -0.08,
             trades: 4,
-            path: path.join(projectRoot, "outputs", "runs", "smoke_run_001"),
+            path: smokeRunOnePath,
+          },
+          {
+            run_id: smokeRunTwoId,
+            mode: "walkforward",
+            ticker: "BTC-USD",
+            created_at: nowIso,
+            git_commit: "smoke001",
+            total_return: 0.09,
+            sharpe_simple: 0.8,
+            max_drawdown: -0.11,
+            trades: 6,
+            path: smokeRunTwoPath,
           },
         ],
       }, null, 2)}\n`,
@@ -153,6 +213,7 @@ async function main() {
           && result.bridgeReady
           && result.domReady
           && result.workbenchReady
+          && result.happyPathReady
           && result.serverReady
           && result.apiReady
         )
@@ -161,6 +222,7 @@ async function main() {
           && result.bridgeReady
           && result.domReady
           && result.workbenchReady
+          && result.happyPathReady
           && result.shellReady
           && result.rendererMode === "legacy"
         );
@@ -171,11 +233,29 @@ async function main() {
       throw new Error(`Desktop smoke (${mode}) failed: ${JSON.stringify(result)}`);
     }
 
-    const persistedWorkspaceRaw = await fs.readFile(workspaceStatePath, "utf8");
-    const persistedWorkspace = JSON.parse(persistedWorkspaceRaw);
+    let persistedWorkspace = null;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      try {
+        const persistedWorkspaceRaw = await fs.readFile(workspaceStatePath, "utf8");
+        if (!persistedWorkspaceRaw.trim()) {
+          throw new SyntaxError("Desktop workspace_state.json is still empty.");
+        }
+        persistedWorkspace = JSON.parse(persistedWorkspaceRaw);
+        break;
+      } catch (error) {
+        const incompleteJson = error instanceof SyntaxError;
+        if (error?.code !== "ENOENT" && !incompleteJson) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+    if (!persistedWorkspace) {
+      throw new Error("Desktop smoke could not read workspace_state.json after Electron exited.");
+    }
     const restoredPaperTab = Array.isArray(persistedWorkspace.tabs)
       && persistedWorkspace.tabs.some((tab) => tab && tab.id === "paper-ops" && tab.kind === "paper");
-    if (!restoredPaperTab || persistedWorkspace.active_tab_id !== "paper-ops") {
+    const hasActiveTab = typeof persistedWorkspace.active_tab_id === "string"
+      && persistedWorkspace.tabs.some((tab) => tab && tab.id === persistedWorkspace.active_tab_id);
+    if (!restoredPaperTab || !hasActiveTab) {
       throw new Error(`Desktop smoke persistence failed: ${JSON.stringify(persistedWorkspace)}`);
     }
 
