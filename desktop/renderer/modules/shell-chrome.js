@@ -50,13 +50,6 @@ export const PALETTE_ACTION_SPECS = [
     handler: "openSweepDecisionTab",
   },
   {
-    id: "launch",
-    label: "Open Launch (Legacy)",
-    description: "Legacy browser fallback. Use native Launch panel.",
-    handler: "openLaunchTab",
-    legacy: true,
-  },
-  {
     id: "runs",
     label: "Open Runs",
     description: "Open the native run explorer.",
@@ -127,12 +120,5 @@ export const PALETTE_ACTION_SPECS = [
     label: "Show Runtime Status",
     description: "Summarize runtime health through the assistant support lane.",
     handler: "summarizeRuntimeInChat",
-  },
-  {
-    id: "runs-legacy",
-    label: "Open Runs (Legacy)",
-    description: "Legacy browser fallback. Use when native surface is unavailable.",
-    handler: "openLegacyRunsTab",
-    legacy: true,
   },
 ];

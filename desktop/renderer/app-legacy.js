@@ -243,7 +243,6 @@ function bindEvents() {
       if (action === "open-assistant") focusAssistant();
       if (action === "open-system") openSystemTab();
       if (action === "open-experiments") openExperimentsTab();
-      if (action === "open-launch") openResearchTab("launch", "Launch", "#/launch");
       if (action === "open-runs") openRunsNativeTab();
       if (action === "open-candidates") openCandidatesTab();
       if (action === "open-compare") openCompareSelectionTab();
@@ -1359,7 +1358,6 @@ const TAB_CONTENT_EVENT_BINDERS = {
       ["open-run", (value) => openRunDetailTab(value)],
       ["open-artifacts", (value) => openArtifactsTabForRun(value)],
       ["mark-candidate", (value) => toggleCandidate(value)],
-      ["open-runs-legacy", () => openResearchTab("runs", "Runs (legacy)", "#/")],
       ["open-job", (value) => openJobTab(value)],
       ["open-candidates", () => openCandidatesTab()],
       ["open-ops", () => openPaperOpsTab()],
@@ -1596,8 +1594,8 @@ async function handleChatPrompt(prompt) {
     return;
   }
   if (normalized.includes("open launch") || normalized === "launch") {
-    openResearchTab("launch", "Launch", "#/launch");
-    pushMessage("assistant", "Opened the Launch surface inside a desktop tab.");
+    openExperimentsTab();
+    pushMessage("assistant", "Opened the Experiments workspace (Launch is now integrated into this surface).");
     return;
   }
   if (normalized.includes("open compare") || normalized === "compare" || normalized.includes("compare selected")) {
@@ -2329,8 +2327,6 @@ function buildPaletteActionHandler(handlerName) {
     openExperimentsTab,
     openLatestFailedLaunchTab,
     openLatestRunTab,
-    openLegacyRunsTab,
-    openLaunchTab,
     openPaperOpsTab,
     openRunsNativeTab,
     openShortlistCompareTab,
@@ -2341,13 +2337,6 @@ function buildPaletteActionHandler(handlerName) {
   return handlers[handlerName] || (() => {});
 }
 
-function openLaunchTab() {
-  openResearchTab("launch", "Launch", "#/launch");
-}
-
-function openLegacyRunsTab() {
-  openResearchTab("runs", "Runs (legacy)", "#/");
-}
 
 function pushMessage(role, content, label = role) {
   state.chatMessages.push({ role, content, label });

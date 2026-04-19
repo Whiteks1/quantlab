@@ -210,7 +210,6 @@ export function renderRunsTab(_tab, ctx) {
           <div class="artifact-meta">Primary workstation for indexed runs, local evidence, shortlist state, and operational continuity.</div>
         </div>
         ${renderActionRow([
-          renderActionButton({ label: "Open legacy view", dataset: { openRunsLegacy: true } }),
           renderActionButton({ label: "Open candidates", dataset: { openCandidates: true } }),
           renderActionButton({ label: "Open paper ops", dataset: { openOps: true } }),
         ])}
