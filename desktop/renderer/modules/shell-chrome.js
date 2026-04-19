@@ -18,7 +18,6 @@ export const NAV_ACTION_BY_KIND = {
   assistant: "open-assistant",
   system: "open-system",
   experiments: "open-experiments",
-  launch: "open-launch",
   runs: "open-runs",
   candidates: "open-candidates",
   compare: "open-compare",
@@ -52,9 +51,10 @@ export const PALETTE_ACTION_SPECS = [
   },
   {
     id: "launch",
-    label: "Open Launch (browser)",
-    description: "Open the browser-backed Launch surface (transitional path).",
+    label: "Open Launch (Legacy browser fallback)",
+    description: "Browser-backed Launch surface. Use native Launch panel instead.",
     handler: "openLaunchTab",
+    legacy: true,
   },
   {
     id: "runs",
