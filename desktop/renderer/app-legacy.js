@@ -1072,7 +1072,7 @@ function renderPalette() {
         createElementNode(
           "button",
           {
-            className: action.legacy ? "palette-item palette-item--legacy" : "palette-item",
+            className: "palette-item",
             dataset: { paletteAction: action.id },
             type: "button",
           },
