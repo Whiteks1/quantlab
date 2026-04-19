@@ -189,32 +189,25 @@ Compatibility path:
 python main.py --help
 ```
 
-## Desktop Shell Prototype
+## Quickstart (v0.1 Workflow)
 
-The repository now also includes an initial desktop shell under [desktop/](./desktop/).
+**QuantLab Research v0.1 is a local-first workstation for launching, inspecting, and reviewing real runs through a stable desktop shell.**
 
-Its current role is:
+To see the product in action, you only need to run the integrated desktop shell:
 
-- launch a single Electron app instead of juggling browser tabs
-- auto-start `research_ui/server.py`
-- provide a workstation-first shell with `Runs` and `System` as primary entry surfaces
-- keep the assistant available as support tooling instead of the main product surface
-- persist a local decision layer for `Candidates`, `Shortlist`, and `Baseline`
-- open `Launch`, `Run Workspace`, `Candidates`, `Compare`, `Artifacts`, `Paper Ops`, and launch review as desktop tabs
-- surface local runtime visibility for QuantLab Research and Stepbit
+1. Ensure your local virtual environment is active and `quantlab` dependencies are satisfied.
+2. Launch the desktop application:
+   ```bash
+   cd desktop
+   npm install
+   npm start
+   ```
+3. Navigate the local workbench:
+   - **System state**: Validate that your local telemetry (API mode, index size) is correct on the initial dashboard.
+   - **Inspect Runs**: View your historically executed runs in a safe, readable table via the `Runs` tab.
+   - **View Run Detail and Compare**: Dig into cross-run comparison, canonical artifacts, config resolution, and gracefully handled missing outputs natively without relying indiscriminately on the legacy local browser views.
 
-Start it with:
-
-```powershell
-cd desktop
-npm install
-npm start
-```
-
-See also:
-
-- [desktop/README.md](./desktop/README.md)
-- [docs/quantlab-desktop-v1.md](./docs/quantlab-desktop-v1.md)
+*Note: For a precise summary of what is supported versus what intentionally degrades in this initial version, read [docs/v0.1-scope.md](./docs/v0.1-scope.md).*
 
 ## Current Capabilities
 
