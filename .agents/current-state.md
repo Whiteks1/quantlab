@@ -2,8 +2,8 @@
 
 ## Active Stage
 - **Stage**: Stage D.2 — Supervised Broker Submit Safety
-- **Last Updated**: 2026-04-14
-- **Focus**: Stage D.2 has now closed the main ambiguity around supervised Hyperliquid submit, especially idempotency, reconciliation, and post-submit operator safety. The remaining posture is residual hardening by evidence, not broadening execution by default.
+- **Last Updated**: 2026-04-19
+- **Focus**: Stage D.2 has now closed the main ambiguity around supervised Hyperliquid submit, especially idempotency, reconciliation, and post-submit operator safety. The remaining posture is residual hardening by evidence, not broadening execution by default. Desktop v0.1 is now a Release Candidate on `main`; the next execution frontier is D.3 (micro-live promotion gate).
 - **Authority Note**: Stepbit-facing integration remains a secondary boundary track. QuantLab stays autonomous and external consumer needs do not override QuantLab-owned priorities.
 - **Signal Intake Note**: Quant Pulse is an upstream signal layer, not a controller. QuantLab should only consume Quant Pulse output when it can be translated into a research intent, risk filter, or product priority.
 - **Product Identity Note**: Publicly, QuantLab should now be described as a `web3 app` in direction, but still as a supervised and safety-first execution system in current maturity.
@@ -47,9 +47,9 @@
 | O | Stepbit Automation Readiness (I/O & CLI Stability) | 🟨 In Progress |
 
 ## Active Work
-- **Stage Open**: Stage D.2 remains the active execution-safety stage, but it has moved from broad ambiguity closure into residual hardening and monitoring.
-- **Current Priority**: Hold the first supervised Hyperliquid submit path narrow and auditable; only open new D.2 slices when a concrete operator-safety gap is demonstrated.
-- **Parallel Track Note**: Desktop/UI now exists as an explicit operator-workspace track that should improve evidence review and promotion visibility without replacing engine authority.
+- **Stage Open**: Stage D.2 and Desktop v0.1 are now both at RC/closed-in-code status. D.2 remains the active execution-safety stage but has moved from broad ambiguity closure into residual hardening and monitoring. Desktop v0.1 is a Release Candidate on `main` as of 2026-04-19.
+- **Current Priority**: The next real frontier is Stage D.3 — first supervised Hyperliquid session with real (minimal) capital. Hold the D.3 gate explicit: checklist, preflight, account snapshot, submit, reconciliation, documented artifact trail.
+- **Parallel Track Note**: Desktop/UI migration to native surfaces continues as a parallel track (issues #409–#412). Desktop work should not open new scope before the migration slices land.
 - **Active Focus Areas**:
   - keep broker execution auditable before any broader live routing or retry logic
   - preserve paper-session discipline as a prerequisite, not the current bottleneck
