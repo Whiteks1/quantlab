@@ -46,7 +46,7 @@ export function renderSummaryCard(label, value, tone = "") {
 }
 
 export function compareMetric(label, value, extraClass) {
-  return `<div class="${escapeHtml(normalizeTone(extraClass))}"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+  return `<div class="${escapeHtml(normalizeTone(extraClass))}"><dt title="${escapeHtml(label)}">${escapeHtml(label)}</dt><dd title="${escapeHtml(String(value))}">${escapeHtml(value)}</dd></div>`;
 }
 
 function renderStateChip(label, value, tone = "") {
@@ -577,9 +577,14 @@ function renderRunResolvedConfigBlock(configEntries) {
       <div class="section-label">Resolved config</div>
       <h3>Effective parameters</h3>
       ${configEntries.length ? `
-        <dl class="metric-list compact">
-          ${configEntries.map(([label, value]) => compareMetric(label, value, "")).join("")}
-        </dl>
+        <div class="config-grid compact">
+          ${configEntries.map(([key, value]) => `
+            <div class="config-entry">
+              <dt title="${escapeHtml(key)}">${escapeHtml(key)}</dt>
+              <dd title="${escapeHtml(String(value))}">${escapeHtml(value)}</dd>
+            </div>
+          `).join("")}
+        </div>
       ` : `<div class="empty-state">No resolved config was available in the canonical report.</div>`}
     </div>
   `;
@@ -730,7 +735,7 @@ export function renderCompareTab(tab, ctx) {
                 </div>
                 ${configDeltaEntries.map(([key, values]) => `
                   <div class="mini-table-row">
-                    <span>${escapeHtml(key)}</span>
+                    <span title="${escapeHtml(key)}">${escapeHtml(key)}</span>
                     <span title="${escapeHtml(values.join(" | "))}">${escapeHtml(values.join(" | "))}</span>
                   </div>
                 `).join("")}

@@ -494,6 +494,7 @@ function normalizeShellTab(tab) {
   };
   if (base.kind === "iframe") {
     if (typeof tab.url !== "string" || !tab.url) return null;
+    if (tab.url.includes(":8000/research_ui")) return null;
     return { ...base, url: tab.url };
   }
   if (base.kind === "run" || base.kind === "artifacts") {
