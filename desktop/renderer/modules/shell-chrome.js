@@ -52,8 +52,8 @@ export const PALETTE_ACTION_SPECS = [
   },
   {
     id: "launch",
-    label: "Open Launch",
-    description: "Open the QuantLab launch surface.",
+    label: "Open Launch (browser)",
+    description: "Open the browser-backed Launch surface (transitional path).",
     handler: "openLaunchTab",
   },
   {
