@@ -27,6 +27,26 @@ if str(SRC_ROOT) not in sys.path:
 def get_local_api_token() -> str:
     return os.environ.get("QUANTLAB_LOCAL_API_TOKEN", "").strip()
 
+
+# Session management for browser-based research_ui access
+_RESEARCH_UI_SESSION_TOKEN: str = ""
+_RESEARCH_UI_SESSION_LOCK = Lock()
+
+
+def _generate_research_ui_session() -> str:
+    """Generate a new ephemeral session token for browser access."""
+    return secrets.token_urlsafe(32)
+
+
+def _get_or_create_research_ui_session() -> str:
+    """Get existing session or create a new one (single per process)."""
+    global _RESEARCH_UI_SESSION_TOKEN
+    with _RESEARCH_UI_SESSION_LOCK:
+        if not _RESEARCH_UI_SESSION_TOKEN:
+            _RESEARCH_UI_SESSION_TOKEN = _generate_research_ui_session()
+        return _RESEARCH_UI_SESSION_TOKEN
+
+
 LAUNCH_HISTORY_LIMIT = 12
 LAUNCH_JOBS: list[dict[str, object]] = []
 LAUNCH_LOCK = Lock()
@@ -589,7 +609,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(403, "Forbidden")
             return
 
-        if not self._require_local_api_token():
+        if not self._require_sensitive_post_auth():
             return
 
         content_length = self._validate_json_request()
@@ -622,18 +642,31 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _require_local_api_token(self):
-        expected = get_local_api_token()
-        if not expected:
-            self.send_error(503, "Local API token not configured")
-            return False
+    def _require_sensitive_post_auth(self) -> bool:
+        """Validate POST auth: accept either desktop token header OR browser session cookie."""
 
-        provided = (self.headers.get("X-QuantLab-Token") or "").strip()
-        if not secrets.compare_digest(provided, expected):
-            self.send_error(401, "Unauthorized")
-            return False
+        # Path 1: Desktop - X-QuantLab-Token header
+        provided_header = (self.headers.get("X-QuantLab-Token") or "").strip()
+        expected_token = get_local_api_token()
 
-        return True
+        if provided_header and expected_token:
+            if secrets.compare_digest(provided_header, expected_token):
+                return True
+
+        # Path 2: Browser - QUANTLAB_SESSION cookie
+        cookie_header = (self.headers.get("Cookie") or "").strip()
+        if cookie_header:
+            for part in cookie_header.split(";"):
+                part = part.strip()
+                if part.startswith("QUANTLAB_SESSION="):
+                    session_value = part[len("QUANTLAB_SESSION=") :].strip()
+                    valid_session = _get_or_create_research_ui_session()
+                    if secrets.compare_digest(session_value, valid_session):
+                        return True
+
+        # Neither valid token nor valid session
+        self.send_error(401, "Unauthorized")
+        return False
 
     def _origin_is_local(self):
         origin = (self.headers.get("Origin") or "").strip().lower()
@@ -741,6 +774,19 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Type", self.guess_type(str(target)))
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        # Bootstrap session cookie — emitted only on the real research_ui entry points.
+        # No Max-Age / Expires is intentional: this is a browser-session-only cookie
+        # that expires when the browser session ends. Do not add persistence here.
+        _RESEARCH_UI_ENTRY_PATHS = frozenset({
+            "/research_ui/",
+            "/research_ui/index.html",
+        })
+        if request_path in _RESEARCH_UI_ENTRY_PATHS and target.name == "index.html":
+            session_token = _get_or_create_research_ui_session()
+            cookie_value = (
+                f"QUANTLAB_SESSION={session_token}; HttpOnly; SameSite=Strict; Path=/"
+            )
+            self.send_header("Set-Cookie", cookie_value)
         self.end_headers()
         self.wfile.write(body)
 

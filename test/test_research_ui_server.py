@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -746,7 +747,198 @@ def test_max_json_body_bytes_constant_is_set():
 def test_dashboard_handler_has_required_methods():
     """Test that DashboardHandler has all required validation methods."""
     handler_class = research_ui_server.DashboardHandler
-    assert hasattr(handler_class, "_require_local_api_token")
+    assert hasattr(handler_class, "_require_sensitive_post_auth")
     assert hasattr(handler_class, "_origin_is_local")
     assert hasattr(handler_class, "_validate_json_request")
     assert hasattr(handler_class, "_read_json_body")
+
+
+# ── Headless handler harness ──────────────────────────────────────────────────
+
+class _HeadlessHandler(research_ui_server.DashboardHandler):
+    """DashboardHandler with all network I/O stubbed for unit tests.
+
+    Does NOT call BaseHTTPRequestHandler.__init__ (that requires a live socket).
+    Only the methods under test are exercised; everything else is stubbed.
+    """
+
+    def __init__(self, headers: dict | None = None) -> None:  # noqa: D107
+        # Bypass the socket-dependent parent __init__ entirely.
+        self._headers_in: dict = headers or {}
+        self._response_code: int | None = None
+        self._error_code: int | None = None
+        self._error_msg: str | None = None
+        self._sent_headers: list[tuple[str, str]] = []
+        self.wfile: io.BytesIO = io.BytesIO()
+        self.rfile: io.BytesIO = io.BytesIO()
+
+    class _Headers:
+        def __init__(self, d: dict) -> None:
+            self._d = d
+
+        def get(self, key: str, default=None):  # type: ignore[override]
+            return self._d.get(key, default)
+
+    @property
+    def headers(self):  # type: ignore[override]
+        return self._Headers(self._headers_in)
+
+    def send_response(self, code, message=None) -> None:  # type: ignore[override]
+        self._response_code = code
+
+    def send_error(self, code, message=None) -> None:  # type: ignore[override]
+        self._error_code = code
+        self._error_msg = message
+
+    def send_header(self, keyword, value) -> None:  # type: ignore[override]
+        self._sent_headers.append((keyword, value))
+
+    def end_headers(self) -> None:  # type: ignore[override]
+        pass
+
+    def guess_type(self, path) -> str:  # type: ignore[override]
+        p = str(path)
+        if p.endswith(".html"):
+            return "text/html"
+        if p.endswith(".css"):
+            return "text/css"
+        return "application/octet-stream"
+
+    def log_message(self, format, *args) -> None:  # noqa: A002
+        pass  # suppress output during tests
+
+
+# ── Session bootstrap tests ───────────────────────────────────────────────────
+
+def test_generate_research_ui_session_returns_nonempty_string():
+    """_generate_research_ui_session produces a non-trivial token."""
+    token = research_ui_server._generate_research_ui_session()
+    assert isinstance(token, str)
+    assert len(token) > 20
+
+
+def test_get_or_create_research_ui_session_is_stable_within_process(monkeypatch):
+    """Same process returns the same session token after first creation."""
+    monkeypatch.setattr(research_ui_server, "_RESEARCH_UI_SESSION_TOKEN", "")
+    first = research_ui_server._get_or_create_research_ui_session()
+    second = research_ui_server._get_or_create_research_ui_session()
+    assert first == second
+    assert len(first) > 20
+
+
+# ── Set-Cookie emission tests ─────────────────────────────────────────────────
+
+def test_serve_research_ui_index_emits_set_cookie(tmp_path: Path, monkeypatch):
+    """GET /research_ui/index.html must emit exactly one Set-Cookie header."""
+    (tmp_path / "index.html").write_text("<html></html>", encoding="utf-8")
+    monkeypatch.setattr(research_ui_server, "RESEARCH_UI_STATIC_ROOT", tmp_path)
+    monkeypatch.setattr(research_ui_server, "_RESEARCH_UI_SESSION_TOKEN", "")
+
+    handler = _HeadlessHandler()
+    handler._serve_research_ui_static("/research_ui/index.html")
+
+    cookie_headers = [v for k, v in handler._sent_headers if k == "Set-Cookie"]
+    assert len(cookie_headers) == 1, "Expected exactly one Set-Cookie header"
+
+
+def test_serve_research_ui_index_cookie_has_required_attributes(tmp_path: Path, monkeypatch):
+    """The emitted cookie must carry HttpOnly, SameSite=Strict, Path=/, QUANTLAB_SESSION=."""
+    (tmp_path / "index.html").write_text("<html></html>", encoding="utf-8")
+    monkeypatch.setattr(research_ui_server, "RESEARCH_UI_STATIC_ROOT", tmp_path)
+    monkeypatch.setattr(research_ui_server, "_RESEARCH_UI_SESSION_TOKEN", "")
+
+    handler = _HeadlessHandler()
+    handler._serve_research_ui_static("/research_ui/index.html")
+
+    cookie_headers = [v for k, v in handler._sent_headers if k == "Set-Cookie"]
+    assert cookie_headers, "Expected a Set-Cookie header"
+    cookie = cookie_headers[0]
+    assert "QUANTLAB_SESSION=" in cookie
+    assert "HttpOnly" in cookie
+    assert "SameSite=Strict" in cookie
+    assert "Path=/" in cookie
+    # No Max-Age / Expires: intentional session-only cookie
+    assert "Max-Age" not in cookie
+    assert "Expires" not in cookie
+
+
+def test_serve_research_ui_index_cookie_does_not_contain_api_token(tmp_path: Path, monkeypatch):
+    """The Set-Cookie value must never contain QUANTLAB_LOCAL_API_TOKEN."""
+    secret = "super_secret_desktop_token_xyz"
+    monkeypatch.setenv("QUANTLAB_LOCAL_API_TOKEN", secret)
+    (tmp_path / "index.html").write_text("<html></html>", encoding="utf-8")
+    monkeypatch.setattr(research_ui_server, "RESEARCH_UI_STATIC_ROOT", tmp_path)
+    monkeypatch.setattr(research_ui_server, "_RESEARCH_UI_SESSION_TOKEN", "")
+
+    handler = _HeadlessHandler()
+    handler._serve_research_ui_static("/research_ui/index.html")
+
+    cookie_headers = [v for k, v in handler._sent_headers if k == "Set-Cookie"]
+    assert cookie_headers, "Expected a Set-Cookie header"
+    assert secret not in cookie_headers[0], "API token must not appear in Set-Cookie"
+
+
+def test_serve_research_ui_static_asset_does_not_emit_set_cookie(tmp_path: Path, monkeypatch):
+    """Static assets (CSS, JS) must not trigger a Set-Cookie header."""
+    (tmp_path / "styles.css").write_text("body {}", encoding="utf-8")
+    monkeypatch.setattr(research_ui_server, "RESEARCH_UI_STATIC_ROOT", tmp_path)
+
+    handler = _HeadlessHandler()
+    handler._serve_research_ui_static("/research_ui/styles.css")
+
+    cookie_headers = [v for k, v in handler._sent_headers if k == "Set-Cookie"]
+    assert cookie_headers == [], "Static assets must not emit Set-Cookie"
+
+
+# ── _require_sensitive_post_auth tests ────────────────────────────────────────
+
+def test_require_sensitive_post_auth_accepts_valid_header_token(monkeypatch):
+    """Desktop path: a correct X-QuantLab-Token header must be accepted."""
+    token = "valid_desktop_token_abc123"
+    monkeypatch.setenv("QUANTLAB_LOCAL_API_TOKEN", token)
+    monkeypatch.setattr(research_ui_server, "_RESEARCH_UI_SESSION_TOKEN", "")
+
+    handler = _HeadlessHandler(headers={"X-QuantLab-Token": token})
+    result = handler._require_sensitive_post_auth()
+
+    assert result is True
+    assert handler._error_code is None
+
+
+def test_require_sensitive_post_auth_accepts_valid_session_cookie(monkeypatch):
+    """Browser path: a correct QUANTLAB_SESSION cookie must be accepted."""
+    session = "valid_session_token_abc123"
+    monkeypatch.setattr(research_ui_server, "_RESEARCH_UI_SESSION_TOKEN", session)
+    monkeypatch.delenv("QUANTLAB_LOCAL_API_TOKEN", raising=False)
+
+    handler = _HeadlessHandler(headers={"Cookie": f"QUANTLAB_SESSION={session}"})
+    result = handler._require_sensitive_post_auth()
+
+    assert result is True
+    assert handler._error_code is None
+
+
+def test_require_sensitive_post_auth_rejects_invalid_cookie(monkeypatch):
+    """A wrong cookie value must result in 401 — not fall through silently."""
+    session = "valid_session_token_abc123"
+    monkeypatch.setattr(research_ui_server, "_RESEARCH_UI_SESSION_TOKEN", session)
+    monkeypatch.delenv("QUANTLAB_LOCAL_API_TOKEN", raising=False)
+
+    handler = _HeadlessHandler(headers={"Cookie": "QUANTLAB_SESSION=wrong_token_value"})
+    result = handler._require_sensitive_post_auth()
+
+    assert result is False
+    assert handler._error_code == 401
+
+
+def test_require_sensitive_post_auth_rejects_no_token_no_cookie(monkeypatch):
+    """Base case: neither header token nor cookie present must yield 401."""
+    monkeypatch.delenv("QUANTLAB_LOCAL_API_TOKEN", raising=False)
+    # Even with a valid session in memory, an empty request has no credentials.
+    monkeypatch.setattr(research_ui_server, "_RESEARCH_UI_SESSION_TOKEN", "some_valid_session")
+
+    handler = _HeadlessHandler(headers={})
+    result = handler._require_sensitive_post_auth()
+
+    assert result is False
+    assert handler._error_code == 401
