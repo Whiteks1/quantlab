@@ -16,6 +16,14 @@ We establish a phased architectural boundary rather than forcing an immediate mi
 2. **Medium/Long-Term (vNext Architecture)**: The **React Shell** is designated as the canonical architecture. 
 3. **Migration Policy**: We eliminate the "competing desktops" paradigm. The legacy workstation becomes the functional blueprint/UX reference for the React shell. Post-v0.1, all new functionality and migrated slices must land in the React shell.
 
+## Operational Guardrails
+To enforce this architectural division, the following rules apply immediately:
+
+- **No new feature work lands in the legacy/transitional workstation after the v0.1 scope freeze, except release-blocking fixes.**
+- **Any post-v0.1 desktop slice must declare whether it is:**
+  - `[legacy release fix]`
+  - *or* `[React migration slice]`
+
 ## Consequences
 - **Positive**: v0.1 is unblocked and relies on the already-validated inspection flows. We avoid the high risk of rushing a full feature parity migration into React before April 30.
 - **Positive**: The technical debt of the legacy shell is bounded; it is officially a transitional release rather than a permanent foundation.
