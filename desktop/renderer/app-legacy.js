@@ -789,8 +789,19 @@ function renderWorkspaceState() {
     stepbitCoreReady,
   } =
     runtimeStatus;
+  const runtimeMode = localFallbackActive
+    ? "local-only"
+    : state.snapshotStatus.status === "error"
+      ? "degraded"
+      : status === "ready"
+        ? "managed"
+        : status === "starting"
+          ? "booting"
+          : "review";
   elements.runtimeSummary.textContent = localFallbackActive
-    ? "QuantLab shell ready from local artifacts"
+    ? "QuantLab shell running in local-only fallback mode"
+    : state.snapshotStatus.status === "error"
+    ? "QuantLab runtime degraded"
     : status === "ready"
     ? "QuantLab research surface ready"
     : status === "starting"
@@ -800,12 +811,12 @@ function renderWorkspaceState() {
     : "Research surface unavailable";
   elements.runtimeMeta.textContent = error
     ? localFallbackActive
-      ? `Using outputs/runs/runs_index.json while research_ui is unavailable. ${error}`
+      ? `Using outputs/runs/runs_index.json while research_ui is unavailable. Browser-backed Launch/System links stay limited. ${error}`
       : error
     : serverUrl
-    ? `${serverUrl}/research_ui/index.html${source === "external" ? " · external server" : ""}`
+    ? `${serverUrl}/research_ui/index.html${source === "external" ? " · external server" : " · managed server"}${state.snapshotStatus.status === "error" ? " · API degraded" : ""}`
     : localFallbackActive
-    ? "Using outputs/runs/runs_index.json without a live research_ui server."
+    ? "Using outputs/runs/runs_index.json without a live research_ui server. Launch browser surface is transitional and currently unavailable."
     : "Waiting for localhost server URL.";
   const runtimeAlert = buildRuntimeAlert();
   elements.runtimeAlert.textContent = runtimeAlert.message;
@@ -817,6 +828,7 @@ function renderWorkspaceState() {
   elements.runtimeRetry.disabled = state.isRetryingWorkspace;
   appendChildren(
     elements.runtimeChips,
+    createRuntimeChipNode("Mode", runtimeMode, runtimeMode === "managed" ? "up" : runtimeMode === "booting" ? "warn" : runtimeMode === "local-only" ? "warn" : "down"),
     createRuntimeChipNode("QuantLab", status === "ready" ? "up" : status === "starting" ? "starting" : "down", status === "ready" ? "up" : status === "starting" ? "warn" : "down"),
     createRuntimeChipNode("Runs", `${runsIndexed} indexed`, runsIndexed ? "up" : "warn"),
     createRuntimeChipNode("Paper", String(paperSessions), paperSessions ? "up" : "warn"),
@@ -1242,6 +1254,9 @@ function summarizeRuntimeChip() {
   const runtimeStatus = deriveRuntimeStatus();
   if (runtimeStatus.localFallbackActive) {
     return { text: "Runtime fallback", tone: "warn" };
+  }
+  if (state.snapshotStatus.status === "error") {
+    return { text: "Runtime degraded", tone: "down" };
   }
   if (runtimeStatus.workspaceStatus === "ready") {
     return { text: "Runtime live", tone: "up" };
@@ -1687,7 +1702,17 @@ async function submitLaunchRequest(payload, source) {
 function summarizeRuntimeInChat() {
   const runtimeStatus = deriveRuntimeStatus();
   const stepbit = state.snapshot?.stepbitWorkspace?.live_urls || {};
+  const runtimeMode = runtimeStatus.localFallbackActive
+    ? "local-only fallback"
+    : state.snapshotStatus.status === "error"
+      ? "degraded"
+      : runtimeStatus.workspaceStatus === "ready"
+        ? "managed live"
+        : runtimeStatus.workspaceStatus === "starting"
+          ? "booting"
+          : "review required";
   pushMessage("assistant", [
+    `Runtime mode: ${runtimeMode}`,
     `QuantLab server: ${runtimeStatus.workspaceStatus}`,
     `Server URL: ${runtimeStatus.serverUrl || "pending"}`,
     `Snapshot source: ${state.snapshotStatus.source || "none"}`,
@@ -1787,6 +1812,15 @@ function maybeOpenDefaultSurface() {
 
 function openResearchTab(navKind, title, hash) {
   if (!state.workspace.serverUrl) {
+    const runtimeStatus = deriveRuntimeStatus();
+    if (runtimeStatus.localFallbackActive) {
+      pushMessage("assistant", "This browser-backed surface is unavailable because research_ui is offline. The workstation remains usable in local-only mode; use native Runs/Paper Ops/System until runtime recovers.");
+      return;
+    }
+    if (state.workspace.status === "error" || state.workspace.status === "stopped") {
+      pushMessage("assistant", "research_ui is unavailable right now. Open System and use Retry runtime; the rest of the workstation can still run from local artifacts when available.");
+      return;
+    }
     pushMessage("assistant", "The local research surface is still starting. Wait a moment and retry.");
     return;
   }

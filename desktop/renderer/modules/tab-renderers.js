@@ -1445,6 +1445,9 @@ export function renderSystemTab(ctx) {
   const systemUrls = collectSystemUrls(workspace, liveUrls);
   const logPreview = collectSystemLogPreview(workspace.logs, ctx.maxLogPreviewChars);
   const refreshState = describeSnapshotRefresh(snapshotStatus);
+  const launchSurfaceState = workspace.serverUrl
+    ? "Available (browser transitional)"
+    : "Unavailable (runtime offline)";
   const watchItems = buildSystemWatchItems({
     workspace,
     snapshotStatus,
@@ -1477,6 +1480,7 @@ export function renderSystemTab(ctx) {
         ${renderSummaryCard("Launch jobs", formatCount(Array.isArray(launchControl?.jobs) ? launchControl.jobs.length : 0), jobs.length ? "tone-positive" : "tone-warning")}
         ${renderSummaryCard("Paper state", paper?.available ? "Ready" : "Pending", paper?.available ? "tone-positive" : "tone-warning")}
         ${renderSummaryCard("Broker alerts", formatCount(brokerAlerts.length), brokerAlerts.length ? "tone-negative" : broker?.available ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Launch browser", workspace.serverUrl ? "Available" : "Unavailable", workspace.serverUrl ? "tone-positive" : "tone-warning")}
         ${renderSummaryCard("Stepbit frontend", liveUrls.frontend_reachable ? "Attached" : "Detached", liveUrls.frontend_reachable ? "tone-positive" : "tone-warning")}
         ${renderSummaryCard("Stepbit core", liveUrls.core_ready ? "Ready" : liveUrls.core_reachable ? "Partial" : "Detached", liveUrls.core_ready ? "tone-positive" : liveUrls.core_reachable ? "tone-warning" : "tone-negative")}
       </div>
@@ -1488,6 +1492,7 @@ export function renderSystemTab(ctx) {
             ${compareMetric("Workspace state", resolveWorkspaceBootstrapSignal(workspace).label, resolveWorkspaceBootstrapSignal(workspace).tone)}
             ${compareMetric("Server URL", workspace.serverUrl || "pending", "")}
             ${compareMetric("Server source", titleCase(workspace.source || "unknown"), "")}
+            ${compareMetric("Launch browser surface", launchSurfaceState, workspace.serverUrl ? "tone-positive" : "tone-warning")}
             ${compareMetric("Refresh state", refreshState.label, refreshState.tone)}
             ${compareMetric("Last refresh", refreshState.lastSuccessAt, "")}
             ${compareMetric("Consecutive refresh errors", formatCount(Number(snapshotStatus.consecutiveErrors || 0)), "")}
@@ -1508,7 +1513,7 @@ export function renderSystemTab(ctx) {
                 </button>
               `).join("")}
             </div>
-          ` : `<div class="empty-state">No addressable local surfaces are visible yet. Wait for bootstrap or retry the runtime.</div>`}
+          ` : `<div class="empty-state">No addressable browser surfaces are visible yet. This is expected while runtime is booting or when the shell is running local-only fallback.</div>`}
         </section>
         <section class="artifact-panel system-stack">
           <div class="section-label">Launch queue</div>
@@ -1526,7 +1531,7 @@ export function renderSystemTab(ctx) {
                 </button>
               `).join("")}
             </div>
-          ` : `<div class="empty-state">No launch jobs are available yet.</div>`}
+          ` : `<div class="empty-state">No launch jobs are available yet. This is expected before the first run or sweep request.</div>`}
         </section>
         <section class="artifact-panel system-stack">
           <div class="section-label">Decision memory</div>
@@ -1583,7 +1588,7 @@ export function renderPaperOpsTab(ctx) {
     {
       tone: paperReady ? "positive" : "warning",
       label: "Paper track",
-      title: paperReady ? `${paper.total_sessions} sessions tracked` : "No paper sessions tracked yet",
+      title: paperReady ? `${paper.total_sessions} sessions tracked` : "No paper sessions tracked yet (not blocked)",
       meta: paper?.latest_session_status
         ? `Latest status ${titleCase(paper.latest_session_status)}${paper?.latest_session_at ? ` · ${formatDateTime(paper.latest_session_at)}` : ""}`
         : "Paper execution has not produced visible sessions yet.",
@@ -1591,7 +1596,7 @@ export function renderPaperOpsTab(ctx) {
     {
       tone: brokerHasAlerts ? "negative" : brokerReady ? "positive" : "warning",
       label: "Broker boundary",
-      title: brokerHasAlerts ? "Broker alerts require review" : brokerReady ? "Broker validations are visible" : "Broker validations not present yet",
+      title: brokerHasAlerts ? "Broker alerts require review" : brokerReady ? "Broker validations are visible" : "Broker validations not present yet (not blocked)",
       meta: brokerHasAlerts
         ? `${formatCount((broker?.alerts || []).length)} active alerts across the submission boundary.`
         : brokerReady
@@ -1677,9 +1682,9 @@ export function renderPaperOpsTab(ctx) {
         </div>
       </div>
       <div class="tab-summary-grid">
-        ${renderSummaryCard("Paper state", paperReady ? "Ready" : "Pending", paperReady ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Paper state", paperReady ? "Ready" : "No sessions yet", paperReady ? "tone-positive" : "tone-warning")}
         ${renderSummaryCard("Latest paper state", titleCase(paper?.latest_session_status || "none"), paper?.latest_issue_session_id ? "tone-negative" : paperReady ? "tone-positive" : "tone-warning")}
-        ${renderSummaryCard("Broker boundary", brokerReady ? "Visible" : "Missing", brokerHasAlerts ? "tone-negative" : brokerReady ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Broker boundary", brokerReady ? "Visible" : "No validations yet", brokerHasAlerts ? "tone-negative" : brokerReady ? "tone-positive" : "tone-warning")}
         ${renderSummaryCard("Broker alerts", broker?.has_alerts ? "Review required" : "Clear", broker?.has_alerts ? "tone-negative" : "tone-positive")}
         ${renderSummaryCard("Decision compare", decisionCompareRunIds.length >= 2 ? "Ready" : "Incomplete", decisionCompareRunIds.length >= 2 ? "tone-positive" : "tone-warning")}
         ${renderSummaryCard("Latest failed launch", latestFailedJob ? "Review required" : "Clear", latestFailedJob ? "tone-warning" : "tone-positive")}
@@ -1762,7 +1767,7 @@ export function renderPaperOpsTab(ctx) {
               ${compareMetric("Launch state", resolveLaunchSignal(latestJob.status, { emptyLabel: "Launch pending" }).label, resolveLaunchSignal(latestJob.status, { emptyLabel: "Launch pending" }).tone)}
               ${compareMetric("Run id", latestJob.run_id || "-", "")}
             </dl>
-          ` : `<div class="empty-state">No launch jobs are available yet.</div>`}
+          ` : `<div class="empty-state">No launch jobs are available yet. This is expected before the first launch request.</div>`}
         </section>
         <section class="artifact-panel">
           <div class="section-label">Stepbit boundary</div>
@@ -1844,6 +1849,7 @@ function collectSystemLogPreview(logs, maxChars) {
 
 function buildSystemWatchItems({ workspace, snapshotStatus, brokerAlerts, latestFailedJob, launchJobs, liveUrls, latestRun }) {
   const items = [];
+  const localFallbackActive = snapshotStatus?.source === "local";
   if (workspace?.error) {
     items.push({
       tone: "negative",
@@ -1854,9 +1860,11 @@ function buildSystemWatchItems({ workspace, snapshotStatus, brokerAlerts, latest
     items.push({
       tone: workspace?.status === "ready" ? "positive" : "warning",
       label: "Workspace bootstrap",
-      body: workspace?.status === "ready"
-        ? "Research UI is reachable from the desktop shell."
-        : "Bootstrap is incomplete or waiting for the local server.",
+      body: localFallbackActive
+        ? "research_ui is not reachable; the desktop is running from local artifacts."
+        : workspace?.status === "ready"
+          ? "Research UI is reachable from the desktop shell."
+          : "Bootstrap is incomplete or waiting for the local server.",
     });
   }
   if (snapshotStatus?.status === "error") {
@@ -1899,7 +1907,7 @@ function buildSystemWatchItems({ workspace, snapshotStatus, brokerAlerts, latest
       ? "Frontend, backend, and core are available."
       : liveUrls?.frontend_reachable || liveUrls?.backend_reachable
         ? "Some Stepbit surfaces are reachable, but the core is not ready."
-        : "Stepbit is currently inactive from the shell perspective.",
+        : "Stepbit is currently offline; this does not block QuantLab workstation usage.",
   });
   if (latestRun?.run_id) {
     items.push({
