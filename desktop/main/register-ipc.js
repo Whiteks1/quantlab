@@ -64,6 +64,43 @@ function errorIpcResult(error) {
   };
 }
 
+function getLocalApiToken() {
+  return (process.env.QUANTLAB_LOCAL_API_TOKEN || "").trim();
+}
+
+function normalizeRelativePath(relativePath) {
+  const value = String(relativePath || "").trim();
+  if (!value) {
+    throw new Error("Relative path is required.");
+  }
+  if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(value)) {
+    throw new Error("Absolute URLs are not allowed.");
+  }
+  if (!value.startsWith("/")) {
+    throw new Error("Relative path must start with '/'.");
+  }
+  return value.split("?", 1)[0].split("#", 1)[0];
+}
+
+function isSensitiveResearchUiPostPath(normalizedPath) {
+  return (
+    normalizedPath === "/api/launch-control" ||
+    normalizedPath === "/api/stepbit-workspace/start"
+  );
+}
+
+async function readResponseData(response) {
+  const text = await response.text();
+  if (!text) {
+    return {};
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
+
 /**
  * @param {{
  *   ipcMain: typeof import("electron").ipcMain,
@@ -91,7 +128,14 @@ function errorIpcResult(error) {
  *   },
  * }} options
  */
-function registerIpcHandlers({ ipcMain, shell, workspace, localStores, researchUi, stepbit }) {
+function registerIpcHandlers({
+  ipcMain,
+  shell,
+  workspace,
+  localStores,
+  researchUi,
+  stepbit,
+}) {
   ipcMain.handle(GET_WORKSPACE_STATE_CHANNEL, async () => workspace.getState());
 
   ipcMain.handle(REQUEST_JSON_CHANNEL, async (_event, relativePath) => {
@@ -100,10 +144,11 @@ function registerIpcHandlers({ ipcMain, shell, workspace, localStores, researchU
       if (!workspaceState.serverUrl) {
         throw new Error("Research UI server is not ready yet.");
       }
+      const normalizedPath = normalizeRelativePath(relativePath);
       const base = workspaceState.serverUrl.replace(/\/$/, "");
-      const response = await fetch(`${base}${relativePath}`);
+      const response = await fetch(`${base}${normalizedPath}`);
       if (!response.ok) {
-        throw new Error(`${relativePath} returned ${response.status}`);
+        throw new Error(`${normalizedPath} returned ${response.status}`);
       }
       return okIpcResult(await response.json());
     } catch (error) {
@@ -117,10 +162,11 @@ function registerIpcHandlers({ ipcMain, shell, workspace, localStores, researchU
       if (!workspaceState.serverUrl) {
         throw new Error("Research UI server is not ready yet.");
       }
+      const normalizedPath = normalizeRelativePath(relativePath);
       const base = workspaceState.serverUrl.replace(/\/$/, "");
-      const response = await fetch(`${base}${relativePath}`);
+      const response = await fetch(`${base}${normalizedPath}`);
       if (!response.ok) {
-        throw new Error(`${relativePath} returned ${response.status}`);
+        throw new Error(`${normalizedPath} returned ${response.status}`);
       }
       return okIpcResult(await response.text());
     } catch (error) {
@@ -128,18 +174,33 @@ function registerIpcHandlers({ ipcMain, shell, workspace, localStores, researchU
     }
   });
 
-  ipcMain.handle(GET_CANDIDATES_STORE_CHANNEL, async () => localStores.readCandidatesStore());
-  ipcMain.handle(SAVE_CANDIDATES_STORE_CHANNEL, async (_event, payload) => localStores.writeCandidatesStore(payload));
+  ipcMain.handle(GET_CANDIDATES_STORE_CHANNEL, async () =>
+    localStores.readCandidatesStore(),
+  );
+  ipcMain.handle(SAVE_CANDIDATES_STORE_CHANNEL, async (_event, payload) =>
+    localStores.writeCandidatesStore(payload),
+  );
 
-  ipcMain.handle(GET_SWEEP_DECISION_STORE_CHANNEL, async () => localStores.readSweepDecisionStore());
-  ipcMain.handle(SAVE_SWEEP_DECISION_STORE_CHANNEL, async (_event, payload) => localStores.writeSweepDecisionStore(payload));
+  ipcMain.handle(GET_SWEEP_DECISION_STORE_CHANNEL, async () =>
+    localStores.readSweepDecisionStore(),
+  );
+  ipcMain.handle(SAVE_SWEEP_DECISION_STORE_CHANNEL, async (_event, payload) =>
+    localStores.writeSweepDecisionStore(payload),
+  );
 
-  ipcMain.handle(GET_SHELL_WORKSPACE_STORE_CHANNEL, async () => localStores.readShellWorkspaceStore());
-  ipcMain.handle(SAVE_SHELL_WORKSPACE_STORE_CHANNEL, async (_event, payload) => localStores.writeShellWorkspaceStore(payload));
+  ipcMain.handle(GET_SHELL_WORKSPACE_STORE_CHANNEL, async () =>
+    localStores.readShellWorkspaceStore(),
+  );
+  ipcMain.handle(SAVE_SHELL_WORKSPACE_STORE_CHANNEL, async (_event, payload) =>
+    localStores.writeShellWorkspaceStore(payload),
+  );
 
-  ipcMain.handle(LIST_DIRECTORY_CHANNEL, async (_event, targetPath, maxDepth = 2) => {
-    return localStores.listDirectoryEntries(targetPath, maxDepth);
-  });
+  ipcMain.handle(
+    LIST_DIRECTORY_CHANNEL,
+    async (_event, targetPath, maxDepth = 2) => {
+      return localStores.listDirectoryEntries(targetPath, maxDepth);
+    },
+  );
 
   ipcMain.handle(READ_PROJECT_TEXT_CHANNEL, async (_event, targetPath) => {
     return localStores.readProjectText(targetPath);
@@ -155,16 +216,26 @@ function registerIpcHandlers({ ipcMain, shell, workspace, localStores, researchU
       if (!workspaceState.serverUrl) {
         throw new Error("Research UI server is not ready yet.");
       }
+      const normalizedPath = normalizeRelativePath(relativePath);
       const base = workspaceState.serverUrl.replace(/\/$/, "");
-      const response = await fetch(`${base}${relativePath}`, {
+      const headers = { "Content-Type": "application/json" };
+      if (isSensitiveResearchUiPostPath(normalizedPath)) {
+        const token = getLocalApiToken();
+        if (!token) {
+          throw new Error("Local API token is not configured.");
+        }
+        headers["X-QuantLab-Token"] = token;
+      }
+      const response = await fetch(`${base}${normalizedPath}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload ?? {}),
       });
-      const text = await response.text();
-      const data = text ? JSON.parse(text) : {};
+      const data = await readResponseData(response);
       if (!response.ok) {
-        throw new Error(data.message || `${relativePath} returned ${response.status}`);
+        throw new Error(
+          data.message || `${normalizedPath} returned ${response.status}`,
+        );
       }
       return okIpcResult(data);
     } catch (error) {
