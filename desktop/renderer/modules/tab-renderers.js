@@ -671,6 +671,28 @@ export function renderCompareTab(tab, ctx) {
   if (tab.status === "loading") {
     return `<div class="tab-placeholder">Preparing decision-oriented compare for ${runs.length} runs...</div>`;
   }
+
+  const validRuns = runs.filter((run) => typeof run.total_return === "number" && typeof run.sharpe_simple === "number");
+  if (validRuns.length !== runs.length) {
+    return `
+      <div class="compare-shell compare-tab">
+        <div class="artifact-top">
+          <div>
+            <div class="section-label">Compare gracefully degraded</div>
+            <h3>Compare is not ready for this run shape yet</h3>
+            <div class="artifact-meta">One or more selected runs lack canonical structured metrics required for comparison.</div>
+          </div>
+        </div>
+        <div class="compare-workbench" style="margin-top:24px;">
+          <div class="empty-state" style="justify-content:flex-start; text-align:left; max-width:800px;">
+            <p>Comparison requires full result matrices (Return, Sharpe, Drawdown) to be available in the local index.</p>
+            <p style="margin-top:8px; color:var(--muted);">You can still inspect these runs individually via the Runs queue, but cross-run ranking is disabled until they produce canonical results.</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   const rankMetric = tab.rankMetric || "sharpe_simple";
   const rankedRuns = rankRunsByMetric(runs, rankMetric);
   const winner = rankedRuns[0];
