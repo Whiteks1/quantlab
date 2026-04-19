@@ -61,6 +61,7 @@ A secondary boundary track remains active:
 - stable `report.json.machine_contract`
 - automatic refresh of `outputs/runs/runs_index.*`
 - reliable health/version surfaces via `--check` and `--version`
+- stable desktop v0.1foundation with hardened structural layout (sidebar/nav) and graceful local-only fallback support when API surfaces are unreachable.
 
 External integration work remains subordinate to QuantLab Research-owned priorities.
 Stepbit-facing hardening is valid when it reduces real boundary friction, but it does not set the product roadmap.
@@ -193,21 +194,27 @@ python main.py --help
 
 **QuantLab Research v0.1 is a local-first workstation for launching, inspecting, and reviewing real runs through a stable desktop shell.**
 
-To see the product in action, you only need to run the integrated desktop shell:
+The recommended way to explore the product is via the native desktop shell:
 
-1. Ensure your local virtual environment is active and `quantlab` dependencies are satisfied.
-2. Launch the desktop application:
-   ```bash
+1. **Setup**: Ensure your local virtual environment is active (`pip install -e .`).
+2. **Launch**: 
+   ```powershell
    cd desktop
-   npm install
+   npm install  # only first time
    npm start
    ```
-3. Navigate the local workbench:
-   - **System state**: Validate that your local telemetry (API mode, index size) is correct on the initial dashboard.
-   - **Inspect Runs**: View your historically executed runs in a safe, readable table via the `Runs` tab.
-   - **View Run Detail and Compare**: Dig into cross-run comparison, canonical artifacts, config resolution, and gracefully handled missing outputs natively without relying indiscriminately on the legacy local browser views.
+3. **Explore**:
+   - **System**: Verify local telemetry and bridge connectivity.
+   - **Runs**: Survey indexed history and open detailed artifacts.
+   - **Compare**: Rank shortlisted candidates based on canonical metrics.
 
-*Note: For a precise summary of what is supported versus what intentionally degrades in this initial version, read [docs/v0.1-scope.md](./docs/v0.1-scope.md).*
+### Operational Notes & Warnings
+
+- **Local-first Design**: v0.1 is optimized for local workstation usage and may display local-only or runtime fallback states depending on your environment setup.
+- **Surface Availability**: Optional sibling integrations (such as Stepbit) may appear offline or detached; this is intended behavior and does not block the primary QuantLab inspection and research flow.
+- **Native Priority**: The canonical v0.1 experience is the native desktop inspection workstation. Browser-backed transitional surfaces are preserved but demoted to legacy fallback.
+
+*Note: For detailed boundaries and known limitations, see [docs/v0.1-scope.md](./docs/v0.1-scope.md).*
 
 ## Current Capabilities
 

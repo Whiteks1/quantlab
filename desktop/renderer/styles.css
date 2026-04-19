@@ -45,9 +45,9 @@ button, input, textarea { font: inherit; }
     background:
         linear-gradient(180deg, rgba(15, 23, 35, 0.96), rgba(10, 15, 23, 0.98)),
         rgba(8, 14, 22, 0.92);
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 18px;
-    align-content: start;
 }
 
 .brand { display: flex; align-items: center; gap: 14px; }
@@ -122,7 +122,7 @@ button, input, textarea { font: inherit; }
     text-transform: uppercase;
 }
 
-.nav-list { display: grid; gap: 8px; align-content: start; }
+.nav-list { display: flex; flex-direction: column; gap: 8px; }
 
 .nav-item, .chip, .ghost-btn, .primary-btn {
     border: 1px solid var(--border);
@@ -582,6 +582,7 @@ button:disabled {
     display: grid;
     gap: 10px;
     align-content: start;
+    min-width: 0;
 }
 
 .summary-card .label {
@@ -590,6 +591,9 @@ button:disabled {
     font-size: 0.73rem;
     text-transform: uppercase;
     letter-spacing: 0.09em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .summary-card .value {
@@ -597,6 +601,9 @@ button:disabled {
     font-size: 1.4rem;
     font-weight: 700;
     line-height: 1.12;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .summary-card.tone-positive {
@@ -907,6 +914,9 @@ button:disabled {
 
 .palette-dialog {
     width: min(720px, 100%);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
     border: 1px solid var(--border);
     border-radius: 22px;
     background: linear-gradient(180deg, rgba(17, 24, 39, 0.98), rgba(9, 14, 21, 0.99));
@@ -918,17 +928,47 @@ button:disabled {
     margin-top: 14px;
 }
 
-.palette-results { margin-top: 16px; display: grid; gap: 10px; }
+.palette-results { 
+    margin-top: 16px; 
+    display: grid; 
+    gap: 8px; 
+    overflow-y: auto;
+    min-height: 0;
+    padding-right: 8px;
+}
+
+/* Custom scrollbar for palette results to ensure visibility and brand alignment */
+.palette-results::-webkit-scrollbar {
+    width: 6px;
+}
+.palette-results::-webkit-scrollbar-track {
+    background: transparent;
+}
+.palette-results::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 10px;
+}
+.palette-results::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+}
+
 .palette-item {
-    padding: 14px 16px;
-    border-radius: 14px;
+    padding: 10px 14px;
+    border-radius: 12px;
     border: 1px solid var(--border);
     background: rgba(19, 30, 44, 0.94);
     cursor: pointer;
+    text-align: left;
+    transition: 140ms ease;
 }
 
-.palette-item strong { display: block; margin-bottom: 6px; }
-.palette-item span { color: var(--muted); }
+.palette-item:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-strong);
+}
+
+.palette-item strong { display: block; margin-bottom: 2px; font-size: 0.96rem; }
+.palette-item span { color: var(--muted); font-size: 0.84rem; line-height: 1.4; }
 
 .ghost-btn.is-selected {
     border-color: rgba(90, 169, 255, 0.35);
@@ -1008,6 +1048,9 @@ button:disabled {
 
 .run-spotlight-card h3 {
     margin: 4px 0 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .run-spotlight-card .artifact-meta {

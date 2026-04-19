@@ -322,10 +322,11 @@ function createLocalStoreService({
   }
 
   async function readJsonFile(targetPath) {
-    const raw = await fsp.readFile(targetPath, "utf8");
     try {
+      const raw = await fsp.readFile(targetPath, "utf8");
       return JSON.parse(raw);
     } catch (error) {
+      if (error && error.code === "ENOENT") return null;
       throw new Error(`Failed to parse JSON at ${path.relative(projectRoot, targetPath)}: ${error.message}`);
     }
   }

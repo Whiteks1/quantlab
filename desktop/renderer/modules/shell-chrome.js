@@ -51,8 +51,8 @@ export const PALETTE_ACTION_SPECS = [
   },
   {
     id: "launch",
-    label: "Open Launch (Legacy browser fallback)",
-    description: "Browser-backed Launch surface. Use native Launch panel instead.",
+    label: "Open Launch (Legacy)",
+    description: "Legacy browser fallback. Use native Launch panel.",
     handler: "openLaunchTab",
     legacy: true,
   },
@@ -130,8 +130,8 @@ export const PALETTE_ACTION_SPECS = [
   },
   {
     id: "runs-legacy",
-    label: "Open Runs (Legacy) — browser fallback",
-    description: "Browser-based run explorer. Use only when native Runs surface is unavailable.",
+    label: "Open Runs (Legacy)",
+    description: "Legacy browser fallback. Use when native surface is unavailable.",
     handler: "openLegacyRunsTab",
     legacy: true,
   },

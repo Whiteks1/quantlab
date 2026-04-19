@@ -42,7 +42,7 @@ function normalizeTone(tone = "") {
 
 export function renderSummaryCard(label, value, tone = "") {
   const toneClass = normalizeTone(tone);
-  return `<article class="summary-card ${escapeHtml(toneClass)}"><div class="label">${escapeHtml(label)}</div><div class="value ${escapeHtml(toneClass)}">${escapeHtml(value)}</div></article>`;
+  return `<article class="summary-card ${escapeHtml(toneClass)}"><div class="label" title="${escapeHtml(label)}">${escapeHtml(label)}</div><div class="value ${escapeHtml(toneClass)}" title="${escapeHtml(value)}">${escapeHtml(value)}</div></article>`;
 }
 
 export function compareMetric(label, value, extraClass) {
@@ -163,7 +163,7 @@ export function renderCandidateCard(entry, forceShow, ctx) {
       <div class="section-label">${forceShow ? "Pinned baseline" : entry.shortlisted ? "Shortlisted candidate" : "Tracked candidate"}</div>
       <div class="run-row-top">
         <div class="run-row-title">
-          <strong>${escapeHtml(title)}</strong>
+          <strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong>
           <div class="run-row-meta">
             <span>${escapeHtml(run?.ticker || "-")}</span>
             <span>${escapeHtml(run?.mode ? titleCase(run.mode) : "unavailable")}</span>
@@ -732,7 +732,7 @@ export function renderCompareTab(tab, ctx) {
                 ${configDeltaEntries.map(([key, values]) => `
                   <div class="mini-table-row">
                     <span>${escapeHtml(key)}</span>
-                    <span>${escapeHtml(values.join(" | "))}</span>
+                    <span title="${escapeHtml(values.join(" | "))}">${escapeHtml(values.join(" | "))}</span>
                   </div>
                 `).join("")}
               </div>
@@ -822,7 +822,7 @@ function renderRunsRow(run, ctx) {
       <td>
         <div class="run-primary-cell">
           <div class="run-primary-title-row">
-            <span class="mono-cell run-primary-id">${escapeHtml(runId)}</span>
+            <span class="mono-cell run-primary-id" title="${escapeHtml(runId)}">${escapeHtml(runId)}</span>
             <span class="run-inline-chip">${escapeHtml(titleCase(run?.mode || "unknown"))}</span>
           </div>
           <div class="run-primary-meta">
@@ -1111,15 +1111,15 @@ function renderCompareRankingTable(runs, rankMetric, ctx) {
           ${runs.map((run, index) => `
             <tr class="runs-row compare-row ${index === 0 ? "compare-row-leader" : ""}">
               <td class="mono-cell">#${index + 1}</td>
-              <td class="mono-cell">${escapeHtml(run.run_id)}</td>
+              <td class="mono-cell" title="${escapeHtml(run.run_id)}">${escapeHtml(run.run_id)}</td>
               <td>${escapeHtml(titleCase(run.mode || "unknown"))}</td>
               <td>${escapeHtml(run.ticker || "-")}</td>
               <td>${escapeHtml(formatDateTime(run.created_at))}</td>
-              <td class="${escapeHtml(rankMetric === "max_drawdown" ? toneClass(run.max_drawdown, false) : toneClass(run[rankMetric], true))}">${escapeHtml(formatMetricForDisplay(run[rankMetric], rankMetric))}</td>
-              <td class="${escapeHtml(toneClass(run.total_return, true))}">${escapeHtml(formatPercent(run.total_return))}</td>
-              <td>${escapeHtml(formatNumber(run.sharpe_simple))}</td>
-              <td class="${escapeHtml(toneClass(run.max_drawdown, false))}">${escapeHtml(formatPercent(run.max_drawdown))}</td>
-              <td>${escapeHtml(formatCount(run.trades))}</td>
+              <td class="${escapeHtml(rankMetric === "max_drawdown" ? toneClass(run.max_drawdown, false) : toneClass(run[rankMetric], true))}" title="${escapeHtml(formatMetricForDisplay(run[rankMetric], rankMetric))}">${escapeHtml(formatMetricForDisplay(run[rankMetric], rankMetric))}</td>
+              <td class="${escapeHtml(toneClass(run.total_return, true))}" title="${escapeHtml(formatPercent(run.total_return))}">${escapeHtml(formatPercent(run.total_return))}</td>
+              <td title="${escapeHtml(formatNumber(run.sharpe_simple))}">${escapeHtml(formatNumber(run.sharpe_simple))}</td>
+              <td class="${escapeHtml(toneClass(run.max_drawdown, false))}" title="${escapeHtml(formatPercent(run.max_drawdown))}">${escapeHtml(formatPercent(run.max_drawdown))}</td>
+              <td title="${escapeHtml(formatCount(run.trades))}">${escapeHtml(formatCount(run.trades))}</td>
               <td><div class="run-flags-cell">${renderCandidateFlags(ctx.store, run.run_id, ctx.decision)}</div></td>
               <td>
                 <div class="runs-row-actions">
@@ -1422,7 +1422,7 @@ function renderSweepDecisionCard(entry, ctx) {
     <article class="candidate-card">
       <div class="run-row-top">
         <div class="run-row-title">
-          <strong>${escapeHtml(entry.entry_id)}</strong>
+          <strong title="${escapeHtml(entry.entry_id)}">${escapeHtml(entry.entry_id)}</strong>
           <div class="run-row-meta">
             <span>${escapeHtml(sweepRunId)}</span>
             <span>${escapeHtml(sweep?.configName || configPath || "-")}</span>
