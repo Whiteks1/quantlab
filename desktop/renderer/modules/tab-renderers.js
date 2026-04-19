@@ -123,12 +123,13 @@ export function renderCompactEntryList(entries) {
 }
 
 export function renderLocalFilesList(entries, truncated = false) {
-  if (!entries.length) {
-    return renderEmptyState("No local files were discoverable in the run directory.");
+  const safeEntries = Array.isArray(entries) ? entries : [];
+  if (!safeEntries.length) {
+    return `<div class="empty-state">No local workspace logs or extra files discovered. The run may have been remote or its workspace detached, but metrics are still indexed in the registry.</div>`;
   }
   return `
     <div class="artifact-list">
-      ${entries.map((entry) => `
+      ${safeEntries.map((entry) => `
         <button class="artifact-link" type="button" data-open-path="${escapeHtml(entry.path)}">
           <span>${escapeHtml(entry.relative_path || entry.name)}</span>
           <span>${escapeHtml(entry.kind === "directory" ? "dir" : formatBytes(entry.size_bytes))}</span>
@@ -342,7 +343,7 @@ export function renderRunTab(tab, ctx) {
   const report = detail.report;
   const primaryResult = selectPrimaryResult(run, report);
   const configEntries = summarizeObjectEntries(report?.config_resolved);
-  const fileEntries = detail.directoryEntries || [];
+  const fileEntries = Array.isArray(detail.directoryEntries) ? detail.directoryEntries : [];
   const topResults = selectTopResults(report?.results, 4);
   const candidateEntry = ctx.decision.getCandidateEntry(ctx.store, run.run_id);
   const relatedJobs = ctx.getRunRelatedJobs(run.run_id);
@@ -864,6 +865,7 @@ export function renderArtifactsTab(tab, ctx) {
   const detail = tab.detail || { report: null, reportUrl: null, directoryEntries: [] };
   const report = detail.report;
   const artifacts = Array.isArray(report?.artifacts) ? report.artifacts : [];
+  const fileEntries = Array.isArray(detail.directoryEntries) ? detail.directoryEntries : [];
   const primaryResult = selectPrimaryResult(run, report);
   const latestRelatedJob = ctx.getRunRelatedJobs(run.run_id)[0] || null;
   const configEntries = summarizeObjectEntries(report?.config_resolved);
@@ -884,10 +886,10 @@ export function renderArtifactsTab(tab, ctx) {
         ])}
       </div>
       <div class="tab-summary-grid">
-        ${renderSummaryCard("Manifest files", String(artifacts.length))}
-        ${renderSummaryCard("Workspace files", String(detail.directoryEntries?.length || 0))}
-        ${renderSummaryCard("Primary return", primaryResult ? formatPercent(primaryResult.total_return) : "-", primaryResult ? toneClass(primaryResult.total_return, true) : "")}
-        ${renderSummaryCard("Primary sharpe", primaryResult ? formatNumber(primaryResult.sharpe_simple) : "-")}
+        ${renderSummaryCard("Workspace path", run.path ? "Discoverable" : "Unavailable", run.path ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Report.json", detail.reportUrl ? "Available" : "Missing", detail.reportUrl ? "tone-positive" : "tone-warning")}
+        ${renderSummaryCard("Manifest files", artifacts.length ? formatCount(artifacts.length) : "None", artifacts.length ? "tone-positive" : "tone-neutral")}
+        ${renderSummaryCard("Local files", fileEntries.length ? formatCount(fileEntries.length) : "None", fileEntries.length ? "tone-positive" : "tone-neutral")}
       </div>
       <div class="evidence-grid">
         <div class="evidence-main">
@@ -900,7 +902,7 @@ export function renderArtifactsTab(tab, ctx) {
                 const href = buildRunArtifactHref(run.path, artifact.file_name);
                 return `<button class="artifact-link" type="button" data-open-external="${escapeHtml(href)}"><span>${escapeHtml(artifact.file_name)}</span><span>${escapeHtml(formatBytes(artifact.size_bytes))}</span></button>`;
               }).join("")}
-            </div>` : `<div class="empty-state">The canonical report does not expose an artifact manifest for this run.</div>`}
+            </div>` : `<div class="empty-state">No canonical artifact manifest available for this run.<br/><br/>This run can still be inspected through its summary metrics, decision compare, and local output path.</div>`}
           </section>
           <section class="artifact-panel">
             <div class="section-label">Key outputs</div>
@@ -944,7 +946,7 @@ export function renderArtifactsTab(tab, ctx) {
           <section class="artifact-panel">
             <div class="section-label">Local files</div>
             <h3>Workspace directory</h3>
-            ${renderLocalFilesList(detail.directoryEntries || [], detail.directoryTruncated)}
+            ${renderLocalFilesList(fileEntries, detail.directoryTruncated)}
           </section>
         </div>
       </div>
