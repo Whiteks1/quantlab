@@ -15,6 +15,37 @@ QuantLab Desktop will evolve toward a native operator workspace with this target
 
 `research_ui` remains a transitional continuity layer. It may continue to provide browser-backed reachability where the desktop still depends on it, but it is not the target shell architecture and it must not reclaim product authority from the native workspace.
 
+## 2026-04-20 Update: Launch Target State
+
+Issue #411 formalizes desktop product intent and continuity boundaries; it does not implement Launch expansion or legacy retirement.
+
+After #409, #410, and #427, the desktop owns the primary inspection and operation surfaces:
+
+- Runs
+- Run Detail with integrated artifact continuity
+- Compare
+- Candidates
+- Paper Ops
+- System
+- Experiments
+
+Launch is not a separate product identity and should not become a trading-console protagonist. Its target state is a first-class desktop capability inside the QuantLab Research workstation:
+
+- visible in the shell workflow and navigation model
+- bounded by deterministic inputs, explicit requests, and supervised operation
+- connected to engine-owned launch contracts and canonical artifacts
+- reviewable through jobs, run detail, paper/system state, and evidence surfaces
+
+Launch may become a dedicated native surface in a later React migration slice if that is the smallest coherent implementation step, but #411 only fixes the product decision. It does not add a new Launch UI, expand the legacy shell, or retire `research_ui`.
+
+`research_ui` now remains only as a continuity boundary for:
+
+- real-path smoke and runtime reachability checks
+- browser-backed job or launch continuity still not replaced by native surfaces
+- temporary fallback while the release surface remains the transitional workstation
+
+It must not be treated as the target Launch experience.
+
 ## Why
 
 The desktop now spans shell bootstrap, preload, shared contracts, browser continuity, and future native workstation surfaces. Without an explicit target architecture, each migration slice would risk reopening the same debates:
@@ -68,6 +99,7 @@ Target native surfaces include:
 - Artifact Explorer
 - Paper Ops
 - System and experiments visibility
+- Launch as a bounded workstation capability
 
 `research_ui` may continue to exist during migration, but only as bounded continuity for capabilities that have not yet moved into native surfaces.
 
@@ -110,8 +142,8 @@ The intended migration order is:
 5. migration of core workstation surfaces
 6. migration of run detail and artifacts
 7. migration of paper, system, and experiment surfaces
-8. explicit launch target-state decision
-9. retirement of the legacy shell renderer
+8. explicit Launch target-state decision (#411)
+9. retirement of the legacy shell renderer in a later implementation slice
 
 Micro-cuts may happen inside a slice, but this order should not be reopened casually.
 

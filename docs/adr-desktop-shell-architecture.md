@@ -16,6 +16,13 @@ We establish a phased architectural boundary rather than forcing an immediate mi
 2. **Medium/Long-Term (vNext Architecture)**: The **React Shell** is designated as the canonical architecture. 
 3. **Migration Policy**: We eliminate the "competing desktops" paradigm. The legacy workstation becomes the functional blueprint/UX reference for the React shell. Post-v0.1, all new functionality and migrated slices must land in the React shell.
 
+## 2026-04-20 Clarification
+`#411` formalizes desktop product intent and continuity boundaries; it does not implement Launch expansion or legacy retirement.
+
+Launch remains part of the QuantLab Research workstation flow, not a separate product identity. The release surface may keep the current workflow panel, assistant commands, and browser-backed continuity where required, but future work should migrate Launch toward native, supervised, evidence-linked operation rather than expanding `research_ui` as the product owner.
+
+The legacy workstation remains the v0.1 release surface. `research_ui` and browser-backed paths are continuity mechanisms only; they are not the long-term shell architecture.
+
 ## Operational Guardrails
 To enforce this architectural division, the following rules apply immediately:
 
