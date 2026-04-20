@@ -1,6 +1,6 @@
 # QuantLab Desktop — Product Surfaces Inventory
 
-> Last updated: 2026-04-09  
+> Last updated: 2026-04-20  
 > Status: authoritative. Update this file when surfaces change ownership or status.
 
 ---
@@ -25,7 +25,9 @@ These surfaces exist and function but are not the primary focus of the current p
 
 | Surface | Tab kind | Status | Owner | Notes |
 |---------|----------|--------|-------|-------|
-| **Paper Ops** | `paper` | `keep` | `research_ui` iframe | Delegates to `research_ui` `/ops` route. Not native. Ownership: research_ui side. |
+| **Paper Ops** | `paper` | `keep` | desktop-native | Native-hosted (via #410). Uses existing render logic from `renderPaperOpsTab()`. Broker boundary, decision queue, operational continuity. No iframe. |
+| **System** | `system` | `keep` | desktop-native | Native-hosted (via #410). Uses existing render logic from `renderSystemTab()`. Runtime diagnostics, workspace status, API refresh, logs. No iframe. |
+| **Experiments** | `experiments` | `keep` | desktop-native | Native-hosted (via #410). Uses existing render logic from `renderExperimentsTab()`. Config catalog, sweep leaderboards, decision tracking. No iframe. |
 | **Job** | `job` | `keep` | `research_ui` iframe | Active job view. Delegates to `research_ui` `/launch`. Real-time feedback. |
 | **Sweep Decision** | `sweep-decision` | `freeze` | `research_ui` iframe | Delegates to `research_ui` `/launch`. Rarely used. Freeze until sweep workflow matures. |
 
@@ -37,8 +39,6 @@ These surfaces exist but should be migrated, replaced, or eliminated in the curr
 
 | Surface | Tab kind | Status | Owner | Notes |
 |---------|----------|--------|-------|-------|
-| **Experiments** | `experiments` | `migrate-piece` | `research_ui` iframe | Delegates to `research_ui` `/research_ui/index.html#/launch`. The experiment config/sweep picker should eventually be native. Not a current priority. |
-| **System** | `system` | `freeze` | `research_ui` iframe | Root research_ui iframe fallback. Exists as escape hatch. Keep but do not develop. |
 | **iFrame** | `iframe` | `freeze` | external URL | Generic iframe for arbitrary URLs. Keep as utility, do not promote. |
 
 ---
@@ -52,11 +52,11 @@ These surfaces exist but should be migrated, replaced, or eliminated in the curr
 | Artifacts | ❌ No | Fully native (reads from `outputs/`) |
 | Compare | ❌ No | Fully native |
 | Candidates | ❌ No | Fully native |
-| Paper Ops | ✅ Yes | Iframe → `/ops` |
+| Paper Ops | ❌ No | Native-hosted wrapper (existing `renderPaperOpsTab()` logic) |
+| System | ❌ No | Native-hosted wrapper (existing `renderSystemTab()` logic) |
+| Experiments | ❌ No | Native-hosted wrapper (existing `renderExperimentsTab()` logic) |
 | Job | ✅ Yes | Iframe → `/launch` |
 | Sweep Decision | ✅ Yes | Iframe → `/launch` |
-| Experiments | ✅ Yes | Iframe → `/research_ui/index.html#/launch` |
-| System | ✅ Yes | Iframe → root |
 | iFrame | varies | Arbitrary URL |
 
 ---
