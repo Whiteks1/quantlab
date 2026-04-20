@@ -46,6 +46,29 @@ Launch may become a dedicated native surface in a later React migration slice if
 
 It must not be treated as the target Launch experience.
 
+## 2026-04-20 Update: research_ui Cutoff Before Legacy Retirement
+
+Issue #432 fixes the cutoff for `research_ui` before #412 can remove the legacy shell renderer.
+
+`research_ui` remains allowed as a transitional external boundary for:
+
+- real-path smoke and runtime reachability checks
+- launch/job execution endpoints that do not yet have a native replacement
+- paper, broker, Stepbit, and launch-control payloads while desktop still reads them through server APIs
+- browser-backed fallback links during the transition
+
+`research_ui` is no longer allowed to be treated as:
+
+- the target shell runtime
+- the canonical workstation UI
+- the Launch product owner
+- the Job / Launch Review UX owner
+- the place for new desktop product behavior
+
+This means #412 is not a blind deletion task. It can only remove legacy renderer ownership after every remaining `research_ui` dependency is either preserved as an explicit external API, replaced by a native/React-owned surface, or marked safe to delete.
+
+#412 must not remove `research_ui/server.py`, real-path smoke reachability, or launch/job API support while desktop still depends on those endpoints.
+
 ## Why
 
 The desktop now spans shell bootstrap, preload, shared contracts, browser continuity, and future native workstation surfaces. Without an explicit target architecture, each migration slice would risk reopening the same debates:
@@ -143,7 +166,8 @@ The intended migration order is:
 6. migration of run detail and artifacts
 7. migration of paper, system, and experiment surfaces
 8. explicit Launch target-state decision (#411)
-9. retirement of the legacy shell renderer in a later implementation slice
+9. `research_ui` cutoff and legacy-retirement preconditions (#432)
+10. retirement of the legacy shell renderer after the cutoff conditions are satisfied (#412)
 
 Micro-cuts may happen inside a slice, but this order should not be reopened casually.
 

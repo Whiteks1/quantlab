@@ -9,7 +9,7 @@ Current scope:
 - workstation-first sidebar and shell chrome
 - primary `Runs` / `System` work surfaces plus an assistant support lane
 - local decision store for candidates, shortlist, and baseline
-- context tabs that combine embedded `research_ui` surfaces with shell-native run workspace, compare, artifacts, candidates, paper ops, and launch review tabs
+- context tabs that combine shell-native workstation surfaces with transitional launch/job continuity
 - runtime strip for QuantLab and Stepbit visibility
 
 This is intentionally a first block, not the final product shell.
@@ -70,7 +70,7 @@ The server entrypoint is `mcp-server.mjs`, and the `mcp` npm script runs it dire
 
 - The assistant support lane is deterministic and specialized for QuantLab commands.
 - The assistant can route explicit `ask stepbit ...` prompts through a Stepbit-backed adapter while keeping QuantLab as the primary shell and decision surface.
-- The shell reuses the existing `research_ui` as an embedded workspace surface.
+- `research_ui` remains a transitional API and reachability boundary; it is not the target shell or canonical workspace surface.
 - The renderer is now split into focused ES modules under `desktop/renderer/modules/` so workflow logic, decision-store helpers, and tab renderers no longer live in one file.
 - The shell can now review recent launch jobs and explain the latest failure from local stdout/stderr logs.
 - The shell now persists decision state locally in `outputs/desktop/candidates_shortlist.json`.

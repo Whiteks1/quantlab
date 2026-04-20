@@ -29,8 +29,8 @@ These surfaces exist and function but are not the primary focus of the current p
 | **System** | `system` | `keep` | desktop-native | Native-hosted (via #410). Uses existing render logic from `renderSystemTab()`. Runtime diagnostics, workspace status, API refresh, logs. No iframe. |
 | **Experiments** | `experiments` | `keep` | desktop-native | Native-hosted (via #410). Uses existing render logic from `renderExperimentsTab()`. Config catalog, sweep leaderboards, decision tracking. No iframe. |
 | **Launch** | none / future `launch` | `target-state` | desktop-native capability | First-class workstation capability, not a separate product identity. Current release surface keeps the shell workflow panel and assistant commands. Future native React work may promote it to a dedicated surface only if it preserves supervised execution and evidence continuity. |
-| **Job** | `job` | `keep` | `research_ui` iframe | Active job view. Delegates to `research_ui` `/launch`. Real-time feedback. |
-| **Sweep Decision** | `sweep-decision` | `freeze` | `research_ui` iframe | Delegates to `research_ui` `/launch`. Rarely used. Freeze until sweep workflow matures. |
+| **Job / Launch Review** | `job` | `replace-before-#412` | transitional API / legacy renderer | Active job review. Reads launch job state and stdout/stderr from the `research_ui` API boundary today. Must become React-owned or explicitly delegated before legacy renderer retirement. |
+| **Sweep Decision** | `sweep-decision` | `freeze` | transitional continuity | Rarely used sweep handoff. Keep frozen until sweep workflow matures; do not promote through `research_ui`. |
 
 ---
 
@@ -46,20 +46,59 @@ These surfaces exist but should be migrated, replaced, or eliminated in the curr
 
 ## research_ui dependency map
 
-| Surface | Depends on research_ui? | Mode |
-|---------|------------------------|------|
-| Runs | ❌ No | Fully native |
-| Run detail | ❌ No | Fully native (reads from `outputs/runs/`) |
-| Artifacts | ❌ No | Integrated into Run Detail; reads from `outputs/` |
-| Compare | ❌ No | Fully native |
-| Candidates | ❌ No | Fully native |
-| Paper Ops | ❌ No | Native-hosted wrapper (existing `renderPaperOpsTab()` logic) |
-| System | ❌ No | Native-hosted wrapper (existing `renderSystemTab()` logic) |
-| Experiments | ❌ No | Native-hosted wrapper (existing `renderExperimentsTab()` logic) |
-| Launch | partial | Native workstation capability with `research_ui` continuity for browser-backed job/launch flows not yet replaced |
-| Job | ✅ Yes | Iframe → `/launch` |
-| Sweep Decision | ✅ Yes | Iframe → `/launch` |
-| iFrame | varies | Arbitrary URL |
+| Area | Current dependency | Classification | Cutoff decision |
+|------|--------------------|----------------|-----------------|
+| Runs | None; reads run index and local artifacts | Canonical native | Keep native. Do not reintroduce browser ownership. |
+| Run detail / Artifacts | None for core path; reads `outputs/runs/` | Canonical native | Keep integrated in Run Detail. |
+| Compare | None | Canonical native | Keep native. |
+| Candidates | None | Canonical native | Keep native. |
+| Paper Ops | Uses API payloads when a server is reachable, otherwise native/local state | Transitional API input | Keep native surface. Browser ops links are continuity-only and removable once native job/paper continuity is sufficient. |
+| System | Shows `research_ui` reachability and links | Transitional diagnostics | Keep diagnostics, but do not treat `research_ui` as shell owner. |
+| Experiments | Local configs/sweeps; launch actions still submit through API | Transitional launch API | Keep native inspection. Launch submission needs a native/contracted path before #412. |
+| Launch | Form/assistant commands submit to `/api/launch-control` | Transitional execution API | Allowed only as supervised execution continuity until a native Launch contract exists. |
+| Job / Launch Review | Job state and logs come from `research_ui` launch records | Replace before #412 | Must become React-owned or explicitly delegated before removing legacy renderer. |
+| Sweep Decision | Frozen handoff surface | Deprecated / continuity-only | Do not expand. Remove or re-scope during legacy retirement. |
+| Generic iframe | Arbitrary browser surface | Deprecated / continuity-only | Do not promote. Candidate for #412 deletion unless kept as explicit external utility. |
+| `smoke:real-path` | Requires reachable `research_ui` server | CI/runtime continuity | Keep as API/reachability validation, not product ownership validation. |
+
+## research_ui cutoff decision
+
+`research_ui` remains allowed only as an external continuity and API boundary for:
+
+- real-path smoke and runtime reachability checks
+- launch/job execution APIs that do not yet have a native replacement
+- paper, broker, Stepbit, and launch-control payloads while the desktop still reads them through server endpoints
+- browser-backed fallback links during the transition
+
+`research_ui` must not be treated as:
+
+- the target shell architecture
+- the Launch product owner
+- the canonical workstation UI
+- the owner of Job review UX
+- the place for new desktop product behavior
+
+Before #412 can retire the legacy shell renderer, every remaining `research_ui` dependency must be either:
+
+- preserved explicitly as an external API dependency, or
+- replaced by a native/React-owned surface, or
+- marked as safe to delete with the legacy renderer.
+
+## #412 deletion boundaries
+
+#412 may delete or remove from the primary runtime only after these conditions are true:
+
+- React has native or React-owned handling for Job / Launch Review tabs, including stdout, stderr, status, linked run, and artifacts.
+- Launch submission has an explicit native contract or an intentionally documented transitional API boundary.
+- Browser links such as `Open research_ui`, `Browser ops`, and `Browser view` are no longer primary actions.
+- `smoke:real-path` is documented as API/reachability validation, not evidence that browser UI owns the product.
+- `legacy.html` and `app-legacy.js` no longer own any required release path that React cannot reproduce or intentionally delegate.
+
+#412 must not remove:
+
+- `research_ui/server.py` if desktop still relies on its API endpoints
+- real-path smoke reachability while it remains the only end-to-end server validation
+- launch/job API support unless a native replacement exists
 
 ---
 
