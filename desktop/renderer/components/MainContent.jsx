@@ -2,6 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import { RunsPane } from './RunsPane';
 import { ComparePane } from './ComparePane';
 import { CandidatesPane } from './CandidatesPane';
+import { RunDetailPane } from './RunDetailPane';
+import { TabsBar } from './TabsBar';
 
 /**
  * MainContent - Main content area that:
@@ -22,7 +24,7 @@ export default function MainContent({ activeTab, allTabs, onTabChange }) {
   useEffect(() => {
     if (
       activeTab &&
-      !['runs', 'compare', 'candidates'].includes(activeTab.kind)
+      !['runs', 'compare', 'candidates', 'run', 'artifacts'].includes(activeTab.kind)
     ) {
       // Legacy surfaces (paper, system, experiments, job, run, artifacts, iframe, etc.)
       // remain rendered by the legacy app.js via the DOM
@@ -34,7 +36,7 @@ export default function MainContent({ activeTab, allTabs, onTabChange }) {
 
   if (!activeTab) {
     return (
-      <main className="main-content">
+      <main id="tab-content" className="main-content">
         <div className="tab-placeholder">
           <h2>No surface open yet</h2>
           <p>Create or open a run, comparison, or candidates surface to get started.</p>
@@ -44,14 +46,16 @@ export default function MainContent({ activeTab, allTabs, onTabChange }) {
   }
 
   return (
-    <main className="main-content">
+    <main id="tab-content" className="main-content">
+      <TabsBar />
       {/* React surfaces */}
       {activeTab.kind === 'runs' && <RunsPane tab={activeTab} />}
       {activeTab.kind === 'compare' && <ComparePane tab={activeTab} />}
       {activeTab.kind === 'candidates' && <CandidatesPane tab={activeTab} />}
+      {(activeTab.kind === 'run' || activeTab.kind === 'artifacts') && <RunDetailPane tab={activeTab} />}
 
       {/* Legacy surfaces - rendered via DOM container */}
-      {!['runs', 'compare', 'candidates'].includes(activeTab.kind) && (
+      {!['runs', 'compare', 'candidates', 'run', 'artifacts'].includes(activeTab.kind) && (
         <div
           ref={legacyContainerRef}
           className="legacy-surface-container"

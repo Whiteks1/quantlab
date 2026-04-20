@@ -160,7 +160,7 @@ function RunsTable({ runs }) {
   }
 
   return (
-    <div className="runs-table">
+    <div id="workflow-runs-list" className="runs-table">
       <table>
         <thead>
           <tr>
@@ -203,6 +203,7 @@ function RunRow({ run, isSelected, isCandidate }) {
           checked={isSelected}
           disabled={disableSelection}
           onChange={() => toggleRunSelection(run.run_id)}
+          data-select-run={run.run_id}
         />
       </td>
       <td className="col-id">
@@ -224,8 +225,16 @@ function RunRow({ run, isSelected, isCandidate }) {
         <button
           className="ghost-btn mini"
           onClick={() => openTab('run', run.run_id)}
+          data-open-run={run.run_id}
         >
           Open
+        </button>
+        <button
+          className="ghost-btn mini"
+          onClick={() => openTab('run', run.run_id)}
+          data-open-artifacts={run.run_id}
+        >
+          Explore
         </button>
         <button
           className="ghost-btn mini"
@@ -266,6 +275,7 @@ function RunsSpotlightCard({ run, baselineId }) {
  * Decision queue card showing candidate/shortlist/comparison readiness
  */
 function RunsDecisionQueueCard({ candidateCount, shortlistCount, compareReady }) {
+  const { openTab } = useQuantLab();
   return (
     <div className="artifact-panel">
       <div className="section-label">Decision queue</div>
@@ -278,6 +288,16 @@ function RunsDecisionQueueCard({ candidateCount, shortlistCount, compareReady })
         <dt>Compare ready</dt>
         <dd>{compareReady ? 'Yes' : 'No'}</dd>
       </dl>
+      <div style={{ marginTop: '15px' }}>
+        <button 
+          id="workflow-open-compare" 
+          className="ghost-btn" 
+          disabled={!compareReady}
+          onClick={() => openTab('shortlist-compare')}
+        >
+          Compare
+        </button>
+      </div>
     </div>
   );
 }

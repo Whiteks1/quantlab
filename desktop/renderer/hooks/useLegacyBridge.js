@@ -88,6 +88,22 @@ export function useLegacyBridge() {
       },
       [legacyState]
     ),
+    setActiveTab: useCallback(
+      (tabId) => callLegacyFunction('setActiveTab', tabId),
+      [callLegacyFunction]
+    ),
+    openTab: useCallback(
+      (...args) => callLegacyFunction('openTab', ...args),
+      [callLegacyFunction]
+    ),
+    closeTab: useCallback(
+      (tabId) => callLegacyFunction('closeTab', tabId),
+      [callLegacyFunction]
+    ),
+    setBaseline: useCallback(
+      (runId) => callLegacyFunction('setBaseline', runId),
+      [callLegacyFunction]
+    ),
   };
 
   // Subscribe to state changes via polling (simple approach)
@@ -145,6 +161,16 @@ export function useLegacyDataAccessors() {
       // eslint-disable-next-line no-undef
       return typeof loadRunDetail === 'function' ? loadRunDetail(runId) : Promise.resolve(null);
     }, []),
+    
+    getRunRelatedJobs: useCallback((runId) => {
+      // eslint-disable-next-line no-undef
+      return typeof getRunRelatedJobs === 'function' ? getRunRelatedJobs(runId) : [];
+    }, []),
+    
+    getSweepDecisionEntriesForRun: useCallback((runId) => {
+      // eslint-disable-next-line no-undef
+      return typeof getSweepDecisionEntriesForRun === 'function' ? getSweepDecisionEntriesForRun(runId) : [];
+    }, []),
   };
 }
 
@@ -168,6 +194,16 @@ export function useLegacyDecision() {
       return typeof isShortlistedRun === 'function' ? isShortlistedRun(runId) : false;
     }, []),
     
+    getCandidateEntry: useCallback((store, runId) => {
+      // eslint-disable-next-line no-undef
+      return typeof getCandidateEntry === 'function' ? getCandidateEntry(store, runId) : null;
+    }, []),
+    
+    summarizeCandidateState: useCallback((store, runId) => {
+      // eslint-disable-next-line no-undef
+      return typeof summarizeCandidateState === 'function' ? summarizeCandidateState(store, runId) : "unknown";
+    }, []),
+
     getCandidateEntriesResolved: useCallback(() => {
       // eslint-disable-next-line no-undef
       return typeof getCandidateEntriesResolved === 'function' ? getCandidateEntriesResolved() : [];

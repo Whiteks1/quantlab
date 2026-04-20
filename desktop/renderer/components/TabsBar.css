@@ -1,0 +1,39 @@
+.tabs-bar {
+  padding: 12px 24px 0 24px;
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+  min-height: 48px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+
+.tabs-bar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tabs-bar::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+
+/* Ensure tab pills have proper cursor/hover that might be missing in global if it was designed for buttons */
+.tab-pill {
+  cursor: pointer;
+}
+
+.tab-pill span {
+  pointer-events: none; /* Let the button handle clicks */
+}
+
+.tab-pill .tab-close {
+  pointer-events: auto; /* Except the close button */
+  margin-left: 8px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.tab-pill .tab-close:hover {
+  opacity: 1;
+}
