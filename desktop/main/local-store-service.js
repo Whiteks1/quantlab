@@ -215,11 +215,11 @@ function createLocalStoreService({
   }
 
   function assertPathInsideProject(targetPath) {
-    const resolvedProjectRoot = path.resolve(projectRoot);
+    const resolvedProjectRoot = fs.realpathSync(path.resolve(projectRoot));
     const rawTarget = String(targetPath || "").trim();
     const resolvedTarget = path.isAbsolute(rawTarget)
-      ? path.resolve(rawTarget)
-      : path.resolve(projectRoot, rawTarget);
+      ? fs.realpathSync(path.resolve(rawTarget))
+      : fs.realpathSync(path.resolve(projectRoot, rawTarget));
     const relative = path.relative(resolvedProjectRoot, resolvedTarget);
     if (!resolvedTarget || relative.startsWith("..") || (path.isAbsolute(relative) && relative === resolvedTarget)) {
       throw new Error("Requested path is outside the QuantLab workspace.");
@@ -288,6 +288,14 @@ function createLocalStoreService({
 
     async function walk(currentPath, depth) {
       if (entries.length >= maxDirectoryEntries) return;
+
+      try {
+        const stat = await fsp.stat(currentPath);
+        if (!stat.isDirectory()) return;
+      } catch (err) {
+        return; // Path doesn't exist
+      }
+
       const dirEntries = await fsp.readdir(currentPath, { withFileTypes: true });
       for (const dirEntry of dirEntries) {
         if (entries.length >= maxDirectoryEntries) break;
@@ -317,16 +325,22 @@ function createLocalStoreService({
   }
 
   async function readProjectJson(targetPath) {
-    const safePath = assertPathInsideProject(targetPath);
-    return readJsonFile(safePath);
+    try {
+      const safePath = assertPathInsideProject(targetPath);
+      return await readJsonFile(safePath);
+    } catch (error) {
+      if (error && (error.code === "ENOENT" || error.message?.includes("ENOENT"))) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async function readJsonFile(targetPath) {
+    const raw = await fsp.readFile(targetPath, "utf8");
     try {
-      const raw = await fsp.readFile(targetPath, "utf8");
       return JSON.parse(raw);
     } catch (error) {
-      if (error && error.code === "ENOENT") return null;
       throw new Error(`Failed to parse JSON at ${path.relative(projectRoot, targetPath)}: ${error.message}`);
     }
   }

@@ -1,37 +1,9 @@
 // @ts-check
 
 /**
- * @param {{ fsp: typeof import("fs/promises"), stepbitAppConfigPath: string }} options
+ * @param {object} _options  (kept for API compatibility — no longer reads stepbit-app config)
  */
-function createStepbitService({ fsp, stepbitAppConfigPath }) {
-  function parseYamlSectionValue(raw, sectionName, keyName) {
-    const sectionPattern = new RegExp(`^${sectionName}:\\s*$([\\s\\S]*?)(?=^\\S|\\Z)`, "m");
-    const sectionMatch = String(raw || "").match(sectionPattern);
-    if (!sectionMatch) return "";
-    const keyPattern = new RegExp(`^\\s*${keyName}:\\s*(.+)\\s*$`, "m");
-    const keyMatch = sectionMatch[1].match(keyPattern);
-    return keyMatch ? keyMatch[1].trim() : "";
-  }
-
-  function normalizeStepbitHost(rawHost) {
-    const host = String(rawHost || "").trim();
-    if (!host) return "127.0.0.1";
-    return host.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
-  }
-
-  function normalizeStepbitPort(rawPort) {
-    const port = Number.parseInt(String(rawPort || "").trim(), 10);
-    return Number.isFinite(port) && port > 0 ? port : 7860;
-  }
-
-  async function readStepbitAppConfig() {
-    const raw = await fsp.readFile(stepbitAppConfigPath, "utf8");
-    return {
-      apiKey: parseYamlSectionValue(raw, "api_keys", "stepbit"),
-      host: normalizeStepbitHost(parseYamlSectionValue(raw, "stepbit", "host")),
-      port: normalizeStepbitPort(parseYamlSectionValue(raw, "stepbit", "port")),
-    };
-  }
+function createStepbitService(_options) {
 
   function extractStepbitDelta(payload) {
     if (!payload || typeof payload !== "object") return "";
@@ -89,39 +61,63 @@ function createStepbitService({ fsp, stepbitAppConfigPath }) {
     const prompt = typeof payload?.prompt === "string" ? payload.prompt.trim() : "";
     if (!prompt) throw new Error("Stepbit prompt is required.");
 
-    const config = await readStepbitAppConfig();
-    if (!config.apiKey) {
-      throw new Error("Stepbit API key is missing from stepbit-app/config.yaml.");
+    // Route through stepbit-core OpenAI-compatible endpoint.
+    const STEPBIT_CORE_URL = String(process.env.STEPBIT_CORE_URL || "http://127.0.0.1:3000").trim();
+    const STEPBIT_CORE_API_KEY = String(process.env.STEPBIT_CORE_API_KEY || "").trim();
+    if (!STEPBIT_CORE_API_KEY) {
+      throw new Error("STEPBIT_CORE_API_KEY is required.");
     }
 
-    const endpoint = `http://${config.host}:${config.port}/ai/completions`;
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": config.apiKey,
-      },
-      body: JSON.stringify({ prompt }),
-    });
+    const messages =
+      Array.isArray(payload?.messages) && payload.messages.length > 0
+        ? payload.messages
+        : [{ role: "user", content: prompt }];
+
+    const endpoint = `${STEPBIT_CORE_URL}/v1/chat/completions`;
+
+    let response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${STEPBIT_CORE_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "default",
+          messages,
+          stream: true,
+        }),
+      });
+    } catch (networkError) {
+      throw new Error(
+        `stepbit-core is not reachable at ${STEPBIT_CORE_URL}. ` +
+        `Make sure the stack is running. (${networkError?.message || networkError})`
+      );
+    }
 
     if (!response.ok) {
-      let errorMessage = `Stepbit request failed (${response.status}).`;
+      let errorMessage = `stepbit-core request failed (${response.status}).`;
       try {
         const body = await response.text();
         const parsed = body ? JSON.parse(body) : null;
-        if (parsed?.error) errorMessage = parsed.error;
+        if (parsed?.error) {
+          errorMessage = typeof parsed.error === "string"
+            ? parsed.error
+            : JSON.stringify(parsed.error);
+        }
       } catch (_error) {
         // Ignore body parse failures and return the HTTP-derived message.
       }
       if (response.status === 401) {
-        throw new Error("Stepbit rejected the local API key from config.yaml.");
+        throw new Error("stepbit-core rejected the API key. Check STEPBIT_CORE_API_KEY.");
       }
       throw new Error(errorMessage);
     }
 
     const result = await readStepbitSseResponse(response);
     if (!result.content) {
-      throw new Error("Stepbit returned no final content for this request.");
+      throw new Error("stepbit-core returned no content for this request.");
     }
     return {
       ...result,

@@ -128,14 +128,7 @@ async function readResponseData(response) {
  *   },
  * }} options
  */
-function registerIpcHandlers({
-  ipcMain,
-  shell,
-  workspace,
-  localStores,
-  researchUi,
-  stepbit,
-}) {
+function registerIpcHandlers({ ipcMain, shell, workspace, localStores, researchUi, stepbit }) {
   ipcMain.handle(GET_WORKSPACE_STATE_CHANNEL, async () => workspace.getState());
 
   ipcMain.handle(REQUEST_JSON_CHANNEL, async (_event, relativePath) => {
@@ -174,33 +167,18 @@ function registerIpcHandlers({
     }
   });
 
-  ipcMain.handle(GET_CANDIDATES_STORE_CHANNEL, async () =>
-    localStores.readCandidatesStore(),
-  );
-  ipcMain.handle(SAVE_CANDIDATES_STORE_CHANNEL, async (_event, payload) =>
-    localStores.writeCandidatesStore(payload),
-  );
+  ipcMain.handle(GET_CANDIDATES_STORE_CHANNEL, async () => localStores.readCandidatesStore());
+  ipcMain.handle(SAVE_CANDIDATES_STORE_CHANNEL, async (_event, payload) => localStores.writeCandidatesStore(payload));
 
-  ipcMain.handle(GET_SWEEP_DECISION_STORE_CHANNEL, async () =>
-    localStores.readSweepDecisionStore(),
-  );
-  ipcMain.handle(SAVE_SWEEP_DECISION_STORE_CHANNEL, async (_event, payload) =>
-    localStores.writeSweepDecisionStore(payload),
-  );
+  ipcMain.handle(GET_SWEEP_DECISION_STORE_CHANNEL, async () => localStores.readSweepDecisionStore());
+  ipcMain.handle(SAVE_SWEEP_DECISION_STORE_CHANNEL, async (_event, payload) => localStores.writeSweepDecisionStore(payload));
 
-  ipcMain.handle(GET_SHELL_WORKSPACE_STORE_CHANNEL, async () =>
-    localStores.readShellWorkspaceStore(),
-  );
-  ipcMain.handle(SAVE_SHELL_WORKSPACE_STORE_CHANNEL, async (_event, payload) =>
-    localStores.writeShellWorkspaceStore(payload),
-  );
+  ipcMain.handle(GET_SHELL_WORKSPACE_STORE_CHANNEL, async () => localStores.readShellWorkspaceStore());
+  ipcMain.handle(SAVE_SHELL_WORKSPACE_STORE_CHANNEL, async (_event, payload) => localStores.writeShellWorkspaceStore(payload));
 
-  ipcMain.handle(
-    LIST_DIRECTORY_CHANNEL,
-    async (_event, targetPath, maxDepth = 2) => {
-      return localStores.listDirectoryEntries(targetPath, maxDepth);
-    },
-  );
+  ipcMain.handle(LIST_DIRECTORY_CHANNEL, async (_event, targetPath, maxDepth = 2) => {
+    return localStores.listDirectoryEntries(targetPath, maxDepth);
+  });
 
   ipcMain.handle(READ_PROJECT_TEXT_CHANNEL, async (_event, targetPath) => {
     return localStores.readProjectText(targetPath);
@@ -260,7 +238,12 @@ function registerIpcHandlers({
   });
 
   ipcMain.handle(ASK_STEPBIT_CHAT_CHANNEL, async (_event, payload) => {
-    return stepbit.askChat(payload);
+    try {
+      return await stepbit.askChat(payload);
+    } catch (error) {
+      // Re-throw as a plain Error so Electron IPC serializes the message correctly.
+      throw new Error(error?.message || String(error));
+    }
   });
 }
 

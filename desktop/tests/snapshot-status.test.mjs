@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { describeSnapshotRefresh } from "../renderer/modules/tab-renderers.js";
+import { describeSnapshotRefresh } from "../shared/snapshot-status.mjs";
 
 const ISO_TIME = "2026-04-10T14:00:00.000Z";
 
