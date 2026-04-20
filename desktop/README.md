@@ -20,9 +20,13 @@ From the repository root:
 
 ```powershell
 cd desktop
-npm install
+npm ci
 npm start
 ```
+
+`desktop/package-lock.json` is intentionally committed. Use `npm ci` for
+reproducible installs; update the lockfile only when `desktop/package.json`
+changes or an explicit dependency-policy issue requires it.
 
 Smoke check:
 
