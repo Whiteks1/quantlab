@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import Topbar from './Topbar.jsx';
 import Sidebar from './Sidebar.jsx';
 import MainContent from './MainContent.jsx';
@@ -15,12 +15,12 @@ import {
  * - Sidebar with navigation
  * - MainContent area for surfaces (Runs, Compare, Candidates)
  * 
- * Bridges to the legacy app.js state and provides context to all surfaces.
+ * Provides React-owned state through the preload bridge without app-legacy.js.
  */
 export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  // Build context value that bridges to legacy state
+  // Build context value owned by the React runtime.
   const contextValue = useQuantLabContextValue();
 
   React.useEffect(() => {
@@ -54,24 +54,30 @@ export default function App() {
     window.__quantlab.rendererMode = 'react';
   }
 
+  const currentSurface = activeTab?.navKind || activeTab?.kind || 'system';
+
   const handleTabChange = (tabId) => {
     contextValue.setActiveTab(tabId);
+  };
+
+  const handleNavigate = (surfaceId) => {
+    contextValue.openTab(surfaceId);
   };
 
   return (
     <QuantLabContextProvider value={contextValue}>
       <div className="app-container">
         <Topbar
-          currentSurface={activeTab?.kind}
+          currentSurface={currentSurface}
           onToggleSidebar={handleToggleSidebar}
           isSidebarCollapsed={isSidebarCollapsed}
         />
 
         <div className="app-main-area">
           <Sidebar
-            currentSurface={activeTab?.kind}
+            currentSurface={currentSurface}
             allTabs={allTabs}
-            onNavigate={handleTabChange}
+            onNavigate={handleNavigate}
             isCollapsed={isSidebarCollapsed}
           />
 

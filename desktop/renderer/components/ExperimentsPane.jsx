@@ -12,8 +12,8 @@ import { useQuantLabContext } from './QuantLabContext';
  * - Config launch actions
  * - Sweep file inspection
  * 
- * Renders via dangerouslySetInnerHTML (temporary bridge to existing render functions).
- * Action button wiring handled by legacy app-legacy.js event delegation.
+ * Renders via dangerouslySetInnerHTML as an adapter around the existing
+ * renderer function while state ownership stays in React.
  */
 export function ExperimentsPane({ tab }) {
   const contextValue = useQuantLabContext();
@@ -27,9 +27,14 @@ export function ExperimentsPane({ tab }) {
         { status: 'idle', configs: [], sweeps: [], error: null },
       sweepDecision: state?.sweepDecision || {},
       sweepDecisionStore: state?.sweepDecisionStore || {},
-      findRun: (id) => (state?.runs || []).find(r => r.run_id === id),
-      findSweepDecisionRow: (id) => 
-        (state?.sweepDecisionStore?.entries || []).find(e => e.entry_id === id),
+      findRun: contextValue?.findRun || (() => null),
+      findSweepDecisionRow: (id) => {
+        for (const sweep of state?.experimentsWorkspace?.sweeps || []) {
+          const row = (sweep.decisionRows || []).find((entry) => entry.entry_id === id);
+          if (row) return { ...row, sweep };
+        }
+        return null;
+      },
     };
 
     try {
@@ -41,7 +46,9 @@ export function ExperimentsPane({ tab }) {
     }
   }, [
     state?.experimentsWorkspace,
+    state?.sweepDecision,
     state?.sweepDecisionStore,
+    contextValue?.findRun,
     tab?.selectedConfigPath,
   ]);
 
