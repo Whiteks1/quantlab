@@ -13,8 +13,8 @@ import { useQuantLabContext } from './QuantLabContext';
  * - Broker alert summary
  * - Paper and operational state
  * 
- * Renders via dangerouslySetInnerHTML (temporary bridge to existing render functions).
- * Action button wiring handled by legacy app-legacy.js event delegation.
+ * Renders via dangerouslySetInnerHTML as an adapter around the existing
+ * renderer function while state ownership stays in React.
  */
 export function SystemPane({ tab }) {
   const contextValue = useQuantLabContext();
@@ -27,14 +27,12 @@ export function SystemPane({ tab }) {
       workspace: state?.workspace || {},
       snapshotStatus: state?.snapshotStatus || {},
       snapshot: state?.snapshot || {},
-      getRuns: () => state?.runs || [],
-      getLatestRun: () => 
-        (state?.runs || [])[0] || null,
-      getLatestFailedJob: () => 
-        (state?.launchControl?.jobs || []).find(j => j.status === 'failed'),
-      decision: state?.decision || {},
+      getRuns: contextValue?.getRuns || (() => []),
+      getLatestRun: contextValue?.getLatestRun || (() => null),
+      getLatestFailedJob: contextValue?.getLatestFailedJob || (() => null),
+      decision: contextValue?.decision || {},
       store: state?.decisionStore || {},
-      findRun: (id) => (state?.runs || []).find(r => r.run_id === id),
+      findRun: contextValue?.findRun || (() => null),
       maxLogPreviewChars: 500,
     };
 
@@ -49,7 +47,12 @@ export function SystemPane({ tab }) {
     state?.workspace,
     state?.snapshotStatus,
     state?.snapshot,
-    state?.runs,
+    state?.decisionStore,
+    contextValue?.decision,
+    contextValue?.getRuns,
+    contextValue?.getLatestRun,
+    contextValue?.getLatestFailedJob,
+    contextValue?.findRun,
   ]);
 
   return (

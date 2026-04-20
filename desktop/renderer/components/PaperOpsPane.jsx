@@ -11,8 +11,8 @@ import { useQuantLabContext } from './QuantLabContext';
  * - Decision queue (candidates, shortlist, baseline)
  * - Operational continuity cards ("Now / Watch / Next")
  * 
- * Renders via dangerouslySetInnerHTML (temporary bridge to existing render functions).
- * Action button wiring handled by legacy app-legacy.js event delegation.
+ * Renders via dangerouslySetInnerHTML as an adapter around the existing
+ * renderer function while state ownership stays in React.
  */
 export function PaperOpsPane({ tab }) {
   const contextValue = useQuantLabContext();
@@ -24,15 +24,12 @@ export function PaperOpsPane({ tab }) {
     const ctx = {
       snapshot: state?.snapshot || {},
       store: state?.decisionStore || {},
-      decision: state?.decision || {},
-      getJobs: () => state?.launchControl?.jobs || [],
-      getLatestFailedJob: () => 
-        (state?.launchControl?.jobs || []).find(j => j.status === 'failed'),
-      getLatestRun: () => 
-        (state?.runs || [])[0] || null,
-      getDecisionCompareRunIds: () => 
-        state?.decisionCompare?.runIds || [],
-      findRun: (id) => (state?.runs || []).find(r => r.run_id === id),
+      decision: contextValue?.decision || {},
+      getJobs: contextValue?.getJobs || (() => []),
+      getLatestFailedJob: contextValue?.getLatestFailedJob || (() => null),
+      getLatestRun: contextValue?.getLatestRun || (() => null),
+      getDecisionCompareRunIds: contextValue?.decision?.getDecisionCompareRunIds || (() => []),
+      findRun: contextValue?.findRun || (() => null),
     };
 
     try {
@@ -44,10 +41,12 @@ export function PaperOpsPane({ tab }) {
     }
   }, [
     state?.snapshot,
-    state?.runs,
     state?.decisionStore,
-    state?.launchControl?.jobs,
-    state?.decisionCompare?.runIds,
+    contextValue?.decision,
+    contextValue?.getJobs,
+    contextValue?.getLatestFailedJob,
+    contextValue?.getLatestRun,
+    contextValue?.findRun,
   ]);
 
   return (

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { RunsPane } from './RunsPane';
 import { ComparePane } from './ComparePane';
 import { CandidatesPane } from './CandidatesPane';
@@ -11,32 +11,16 @@ import { ExperimentsPane } from './ExperimentsPane';
 /**
  * MainContent - Main content area that:
  * - Mounts React-based surfaces (Runs, Compare, Candidates)
- * - Provides container for legacy surface HTML (other surfaces, iframes)
+ * - Shows explicit paused placeholders for surfaces not owned in this slice
  * - Manages surface tab context and active tab rendering
  * 
  * Surfaces are mounted based on activeTab.kind:
  * - 'runs': RunsPane
  * - 'compare': ComparePane
  * - 'candidates': CandidatesPane
- * - Other kinds: rendered via legacy HTML or iframes
+ * - Other kinds: explicit React-owned pause state
  */
 export default function MainContent({ activeTab, allTabs, onTabChange }) {
-  const legacyContainerRef = useRef(null);
-
-  // Re-render legacy content when non-React tabs are active
-  useEffect(() => {
-    if (
-      activeTab &&
-      !['runs', 'compare', 'candidates', 'run', 'artifacts', 'paper', 'system', 'experiments'].includes(activeTab.kind)
-    ) {
-      // Legacy surfaces (paper, system, experiments, job, run, artifacts, iframe, etc.)
-      // remain rendered by the legacy app.js via the DOM
-      if (window.__quantlab?.renderLegacyTab) {
-        window.__quantlab.renderLegacyTab(activeTab);
-      }
-    }
-  }, [activeTab]);
-
   if (!activeTab) {
     return (
       <main id="tab-content" className="main-content">
@@ -60,17 +44,22 @@ export default function MainContent({ activeTab, allTabs, onTabChange }) {
       {activeTab.kind === 'system' && <SystemPane tab={activeTab} />}
       {activeTab.kind === 'experiments' && <ExperimentsPane tab={activeTab} />}
 
-      {/* Legacy surfaces - rendered via DOM container */}
       {!['runs', 'compare', 'candidates', 'run', 'artifacts', 'paper', 'system', 'experiments'].includes(activeTab.kind) && (
-        <div
-          ref={legacyContainerRef}
-          className="legacy-surface-container"
-          data-tab-id={activeTab.id}
-          data-tab-kind={activeTab.kind}
-        >
-          {/* Legacy content will be mounted here by app-legacy.js */}
-        </div>
+        <PausedSurfacePane tab={activeTab} />
       )}
     </main>
+  );
+}
+
+function PausedSurfacePane({ tab }) {
+  return (
+    <div className="tab-shell tab-placeholder" data-tab-kind={tab.kind}>
+      <div className="section-label">React runtime boundary</div>
+      <h2>{tab.title || 'Surface paused'}</h2>
+      <p>
+        This surface is visible in the React-owned shell, but its product
+        expansion remains out of scope for #430.
+      </p>
+    </div>
   );
 }
