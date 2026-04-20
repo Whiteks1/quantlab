@@ -5,6 +5,7 @@ import { CandidatesPane } from './CandidatesPane';
 import { RunDetailPane } from './RunDetailPane';
 import { TabsBar } from './TabsBar';
 import { PaperOpsPane } from './PaperOpsPane';
+import { SystemPane } from './SystemPane';
 
 /**
  * MainContent - Main content area that:
@@ -25,7 +26,7 @@ export default function MainContent({ activeTab, allTabs, onTabChange }) {
   useEffect(() => {
     if (
       activeTab &&
-      !['runs', 'compare', 'candidates', 'run', 'artifacts', 'paper'].includes(activeTab.kind)
+      !['runs', 'compare', 'candidates', 'run', 'artifacts', 'paper', 'system'].includes(activeTab.kind)
     ) {
       // Legacy surfaces (paper, system, experiments, job, run, artifacts, iframe, etc.)
       // remain rendered by the legacy app.js via the DOM
@@ -55,9 +56,10 @@ export default function MainContent({ activeTab, allTabs, onTabChange }) {
       {activeTab.kind === 'candidates' && <CandidatesPane tab={activeTab} />}
       {(activeTab.kind === 'run' || activeTab.kind === 'artifacts') && <RunDetailPane tab={activeTab} />}
       {activeTab.kind === 'paper' && <PaperOpsPane tab={activeTab} />}
+      {activeTab.kind === 'system' && <SystemPane tab={activeTab} />}
 
       {/* Legacy surfaces - rendered via DOM container */}
-      {!['runs', 'compare', 'candidates', 'run', 'artifacts', 'paper'].includes(activeTab.kind) && (
+      {!['runs', 'compare', 'candidates', 'run', 'artifacts', 'paper', 'system'].includes(activeTab.kind) && (
         <div
           ref={legacyContainerRef}
           className="legacy-surface-container"
