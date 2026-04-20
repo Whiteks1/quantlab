@@ -1,40 +1,103 @@
-# QuantLab Research Brand Guidelines
+# QuantLab Research Brand System
 
-## Brand architecture
+Status: binding source of truth
 
-- Umbrella ecosystem: QuantLab
-- Research product: QuantLab Research
-- Internal engine: QuantLab Core
-- Sibling signal product: QuantPulse
+This is the approved source of truth for brand decisions across Desktop, layout,
+copy, docs, and integrations.
 
-## Positioning
+## 1. What QuantLab Research Is
 
-QuantLab Research is a local-first quantitative lab for reproducible research, disciplined paper validation, and supervised execution.
+QuantLab Research is not:
 
-It is built on QuantLab Core, the internal engine that makes hypotheses, configurations, runs, artifacts, and outcomes explicit, traceable, and reviewable. QuantPulse exists alongside it as a sibling signal product inside the QuantLab ecosystem. The goal is not narrative polish, but research clarity, operational discipline, and controlled progression from validation to execution.
+- a trading platform
+- a fintech dashboard
+- a generic AI product
+- a market shell
 
-## Taglines
+QuantLab Research is:
 
-- Reproducible research. Supervised execution.
-- Explicit hypotheses. Traceable runs. Reviewable outcomes.
-- QuantPulse surfaces context. QuantLab Research requires the evidence.
-- Operational research, not market theater.
-
-## Architecture rule
-
-- Do not present QuantPulse as an internal submodule of QuantLab Research.
-- Do not collapse QuantLab Research, QuantLab Core, and QuantPulse into one vague product label.
-- Keep QuantLab Research as the primary product name on public research surfaces.
-
-## Brand principles
-
+- a quantitative research system
 - local-first
 - reproducible
 - traceable
 - supervised
 - operational
 
-## Voice
+Core framing:
+
+- system of evidence
+- research workstation
+- validation surface
+- controlled progression toward execution
+
+Brand rule:
+
+QuantLab Research must feel like a technical research instrument, not a trading
+product.
+
+## 2. Brand Architecture
+
+Three-layer architecture is fixed:
+
+- Quant Pulse: signals, hypotheses, upstream context
+- QuantLab Core: engine, evidence, execution logic
+- QuantLab Research: public interface, validation layer, workstation
+
+Approved ecosystem phrase:
+
+> Quant Pulse proposes the hypothesis. QuantLab Core requires the evidence.
+
+Naming rule:
+
+- external/product-facing: QuantLab Research
+- architecture/engine: QuantLab Core
+- upstream signal/editorial layer: Quant Pulse
+
+Do not blur these roles.
+
+## 3. Positioning
+
+QuantLab Research is positioned as:
+
+- a local-first quantitative lab
+- a reproducible research system
+- a supervised execution environment
+- a disciplined validation platform
+
+It does not aim for:
+
+- narrative hype
+- inflated automation
+- AI or trading theater
+- generic fintech product behavior
+
+It does aim for:
+
+- research clarity
+- traceability
+- evidence
+- disciplined validation
+- controlled progression toward execution
+
+Approved mental model:
+
+Operational research, not market theater.
+
+Evidence over narrative.
+
+## 4. Core Message Set
+
+Approved message lines:
+
+- Reproducible research. Supervised execution.
+- Explicit hypotheses. Traceable runs. Reviewable outcomes.
+- Operational research, not market theater.
+- Evidence over narrative.
+
+These lines are brand-safe. Do not replace them with hypey fintech or AI
+language.
+
+## 5. Brand Voice
 
 Use:
 
@@ -42,73 +105,181 @@ Use:
 - technical
 - verifiable
 - sober
-- evidence-driven
+- evidence-based
 
 Avoid:
 
-- corporate theater
-- inflated autonomy
-- unsupported claims
 - generic fintech language
-- hype-driven trading language
+- AI hype language
+- trading hype
+- unverifiable claims
+- empty corporate tone
 
-## Visual direction
+Copy rule:
 
-QuantLab Research should feel like a dark analytical instrument:
+If the sentence sounds like SaaS marketing, crypto marketing, or AI marketing,
+it is probably wrong for QuantLab Research.
 
-- research workstation
-- evidence surface
-- artifact viewer
-- operational panel
+## 6. Visual Direction
 
-### Visual cues
+Approved visual concept:
+
+> Dark analytical instrument
+
+The interface should feel like:
+
+- a research workstation
+- an artifact viewer
+- an operational panel
+- a modular validation system
+
+Visual characteristics:
 
 - dark mineral backgrounds
 - restrained blue, cyan, and mint accents
-- visible structure and hierarchy
+- clear hierarchy
 - modular panels
-- metric and artifact blocks
+- metric blocks
+- visible structure: grid and layout
 - monospace labels for technical context
 
-## Color tokens
+Avoid visually:
 
-```css
-:root {
-  --ql-bg: #0A0F17;
-  --ql-bg-soft: #111827;
-  --ql-surface: #161F2E;
-  --ql-surface-raised: #1B2638;
-  --ql-border: #2A3548;
-  --ql-divider: #334155;
+- trading charts as identity
+- candlesticks
+- crypto/fintech iconography
+- market dashboard aesthetics
+- excessive glow
+- shiny AI product effects
 
-  --ql-text: #F5F7FB;
-  --ql-text-secondary: #C5CEDB;
-  --ql-text-muted: #7F8A9D;
+Golden rule:
 
-  --ql-accent-evidence: #5AA9FF;
-  --ql-accent-signal: #35D6FF;
-  --ql-accent-validation: #39D98A;
+The brand should not try to look pretty. It should be semantically correct.
 
-  --ql-warning: #F2B94B;
-  --ql-risk: #F58A45;
-  --ql-critical: #E85D75;
-}
-```
+If it looks like a trading app, fintech SaaS, or generic AI shell, it is wrong.
 
-## Typography
+If it looks like a research system, technical instrument, or evidence surface,
+it is correct.
 
-- Sans: Inter
-- Mono: IBM Plex Mono
+## 7. Logo And Symbol Direction
 
-Use mono for:
+Approved symbol concept:
 
-- run IDs
-- hashes
-- configs
-- labels
-- JSON and artifact context
+Q structural + system + validation
 
-## Framing rule
+The symbol should suggest:
 
-No corporate theater. No inflated autonomy. No unsupported claims.
-Prefer explicit research, explicit artifacts, and supervised progression.
+- module
+- container
+- system
+- validation process
+
+Correct visual ideas:
+
+- grid/panel logic
+- simple internal divisions
+- subtle validation signal
+- clean geometry
+
+Explicitly rejected:
+
+- growth charts
+- market bars or market lines
+- trading iconography
+- excessive internal detail
+- glow-dependent identity
+
+## 8. Desktop Convergence Rule
+
+For Desktop convergence, the approved rule is:
+
+- structure/layout organization may borrow from Ecosystem
+- visual identity, tone, and semantic framing must remain QuantLab Research
+
+Meaning:
+
+- keep the stronger structural layout from Ecosystem where useful
+- preserve the QuantLab personal/QuantLab Research visual language
+- never let Ecosystem structure turn QuantLab into a fintech/trading shell
+
+One-line convergence rule:
+
+Adopt Ecosystem structure only insofar as it does not violate the approved
+QuantLab Research brand system: dark analytical instrument, evidence-first,
+non-trading, non-fintech, non-AI-hype.
+
+## 9. Product Hierarchy Inside The Shell
+
+QuantLab remains the protagonist.
+
+Primary shell surfaces should remain QuantLab surfaces:
+
+- System
+- Launch
+- Runs
+- Candidates
+- Compare
+- Paper Ops
+- Assistant
+
+Integrations are secondary, not protagonists.
+
+### Stepbit
+
+Stepbit may live in the shell as a support/integration boundary, not as the
+center of the product.
+
+### Quant Pulse
+
+Quant Pulse may appear as a contextual signal/input layer, not as a dominant
+product surface.
+
+### Risk Calculator
+
+Risk calculator may exist as an embedded utility inside Launch or
+execution-related surfaces, not as a top-level product area.
+
+## 10. Assistant Rule
+
+Assistant must remain unified.
+
+Single Assistant pane, with selectable target:
+
+- QuantLab
+- Stepbit
+
+Default target:
+
+- QuantLab
+
+This preserves one conversational surface while allowing Stepbit integration
+without turning Stepbit into a competing product inside the shell.
+
+Do not create two protagonist copilots.
+
+## 11. Decision Filter For Future UI Work
+
+Before adding or changing any UI surface, ask:
+
+Does this strengthen QuantLab Research as:
+
+- a reproducible research system,
+- an evidence surface,
+- a traceable workstation,
+- and a supervised validation environment?
+
+If not, it should not become a primary brand or UX element.
+
+## 12. Implementation Rule
+
+All future decisions for:
+
+- desktop
+- branding
+- layout
+- docs
+- copy
+- integration surfaces
+
+must preserve this approved QuantLab Research brand system unless replaced by an
+explicit ADR.
