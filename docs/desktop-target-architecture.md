@@ -69,6 +69,8 @@ This means #412 is not a blind deletion task. It can only remove legacy renderer
 
 #412 must not remove `research_ui/server.py`, real-path smoke reachability, or launch/job API support while desktop still depends on those endpoints.
 
+Issue #436 narrows the remaining Launch blocker by moving Job / Launch Review ownership into React while keeping `/api/launch-control` as the explicit transitional data boundary. This does not make React the default runtime and does not authorize legacy renderer deletion.
+
 ## Why
 
 The desktop now spans shell bootstrap, preload, shared contracts, browser continuity, and future native workstation surfaces. Without an explicit target architecture, each migration slice would risk reopening the same debates:

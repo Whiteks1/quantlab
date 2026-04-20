@@ -29,7 +29,7 @@ These surfaces exist and function but are not the primary focus of the current p
 | **System** | `system` | `keep` | desktop-native | Native-hosted (via #410). Uses existing render logic from `renderSystemTab()`. Runtime diagnostics, workspace status, API refresh, logs. No iframe. |
 | **Experiments** | `experiments` | `keep` | desktop-native | Native-hosted (via #410). Uses existing render logic from `renderExperimentsTab()`. Config catalog, sweep leaderboards, decision tracking. No iframe. |
 | **Launch** | none / future `launch` | `target-state` | desktop-native capability | First-class workstation capability, not a separate product identity. Current release surface keeps the shell workflow panel and assistant commands. Future native React work may promote it to a dedicated surface only if it preserves supervised execution and evidence continuity. |
-| **Job / Launch Review** | `job` | `replace-before-#412` | transitional API / legacy renderer | Active job review. Reads launch job state and stdout/stderr from the `research_ui` API boundary today. Must become React-owned or explicitly delegated before legacy renderer retirement. |
+| **Job / Launch Review** | `job` | `keep` | React-owned with transitional Launch API | Active job review. Reads launch job state and stdout/stderr from the `research_ui` API boundary while React owns the review surface. |
 | **Sweep Decision** | `sweep-decision` | `freeze` | transitional continuity | Rarely used sweep handoff. Keep frozen until sweep workflow matures; do not promote through `research_ui`. |
 
 ---
@@ -56,7 +56,7 @@ These surfaces exist but should be migrated, replaced, or eliminated in the curr
 | System | Shows `research_ui` reachability and links | Transitional diagnostics | Keep diagnostics, but do not treat `research_ui` as shell owner. |
 | Experiments | Local configs/sweeps; launch actions still submit through API | Transitional launch API | Keep native inspection. Launch submission needs a native/contracted path before #412. |
 | Launch | Form/assistant commands submit to `/api/launch-control` | Transitional execution API | Allowed only as supervised execution continuity until a native Launch contract exists. |
-| Job / Launch Review | Job state and logs come from `research_ui` launch records | Replace before #412 | Must become React-owned or explicitly delegated before removing legacy renderer. |
+| Job / Launch Review | Job state and logs come from `research_ui` launch records | React-owned review surface / transitional API input | React owns the review UX; the launch/job data source remains an explicit API boundary before #412. |
 | Sweep Decision | Frozen handoff surface | Deprecated / continuity-only | Do not expand. Remove or re-scope during legacy retirement. |
 | Generic iframe | Arbitrary browser surface | Deprecated / continuity-only | Do not promote. Candidate for #412 deletion unless kept as explicit external utility. |
 | `smoke:real-path` | Requires reachable `research_ui` server | CI/runtime continuity | Keep as API/reachability validation, not product ownership validation. |
@@ -83,6 +83,8 @@ Before #412 can retire the legacy shell renderer, every remaining `research_ui` 
 - preserved explicitly as an external API dependency, or
 - replaced by a native/React-owned surface, or
 - marked as safe to delete with the legacy renderer.
+
+Issue #436 moves Job / Launch Review into the second category: React owns the review surface, while launch/job data remains preserved as an explicit transitional API dependency.
 
 ## #412 deletion boundaries
 

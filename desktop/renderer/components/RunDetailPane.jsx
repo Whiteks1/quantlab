@@ -338,6 +338,11 @@ export function RunDetailPane({ tab }) {
               <dt>Launch review</dt><dd>{latestRelatedJob?.request_id || "None"}</dd>
             </dl>
             <div className="workflow-actions" style={{ marginTop: '12px' }}>
+              {latestRelatedJob?.request_id && (
+                <button className="ghost-btn" onClick={() => openTab('job', latestRelatedJob.request_id)}>
+                  Open launch review
+                </button>
+              )}
               {detail.reportUrl && (
                 <button className="ghost-btn" onClick={() => {
                   // eslint-disable-next-line no-undef

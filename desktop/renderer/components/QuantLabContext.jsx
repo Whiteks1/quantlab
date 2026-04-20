@@ -133,6 +133,15 @@ async function requestOptionalJson(relativePath) {
   }
 }
 
+async function requestOptionalText(relativePath) {
+  if (!relativePath) return '';
+  try {
+    return await getBridge().requestText(relativePath);
+  } catch (_error) {
+    return '';
+  }
+}
+
 async function loadRunsRegistry(workspace) {
   let source = 'none';
   let primaryError = null;
@@ -280,6 +289,10 @@ export function useQuantLabContextValue() {
       ? state.snapshot.launchControl.jobs
       : [];
   }, [state.snapshot]);
+
+  const findJob = useCallback((requestId) => {
+    return getJobs().find((job) => job.request_id === requestId) || null;
+  }, [getJobs]);
 
   const getLatestRun = useCallback(() => getRuns()[0] || null, [getRuns]);
   const getLatestFailedJob = useCallback(() => {
@@ -468,6 +481,68 @@ export function useQuantLabContextValue() {
     });
   }, [findRun, upsertTab]);
 
+  const refreshJobTab = useCallback(async (requestId, fallbackJob = null) => {
+    if (!requestId) return;
+    const job = findJob(requestId) || fallbackJob;
+    if (!job) return;
+    const tabId = `job:${requestId}`;
+
+    try {
+      const [stdoutText, stderrText] = await Promise.all([
+        requestOptionalText(job.stdout_href),
+        requestOptionalText(job.stderr_href),
+      ]);
+      upsertTab({
+        id: tabId,
+        kind: 'job',
+        navKind: 'launch',
+        title: `Job ${requestId}`,
+        requestId,
+        jobId: requestId,
+        status: 'ready',
+        job: findJob(requestId) || job,
+        stdoutText,
+        stderrText,
+        error: null,
+      });
+    } catch (error) {
+      upsertTab({
+        id: tabId,
+        kind: 'job',
+        navKind: 'launch',
+        title: `Job ${requestId}`,
+        requestId,
+        jobId: requestId,
+        status: 'error',
+        job,
+        stdoutText: '',
+        stderrText: '',
+        error: error.message || 'Could not load job logs.',
+      });
+    }
+  }, [findJob, upsertTab]);
+
+  const openJobTab = useCallback(async (requestId) => {
+    if (!requestId) return;
+    const job = findJob(requestId);
+    if (!job) return;
+    const tabId = `job:${requestId}`;
+    upsertTab({
+      id: tabId,
+      kind: 'job',
+      navKind: 'launch',
+      title: `Job ${requestId}`,
+      requestId,
+      jobId: requestId,
+      status: 'loading',
+      job,
+      stdoutText: '',
+      stderrText: '',
+      error: null,
+    });
+    await refreshJobTab(requestId, job);
+  }, [findJob, refreshJobTab, upsertTab]);
+
   const openTab = useCallback((kind, arg, href) => {
     if (kind === 'run') {
       openRunDetailTab(arg);
@@ -483,6 +558,10 @@ export function useQuantLabContextValue() {
     }
     if (kind === 'compare') {
       openCompareSelectionTab(state.selectedRunIds, 'selected runs');
+      return;
+    }
+    if (kind === 'job') {
+      openJobTab(arg);
       return;
     }
 
@@ -541,6 +620,7 @@ export function useQuantLabContextValue() {
   }, [
     decision,
     openCompareSelectionTab,
+    openJobTab,
     openRunDetailTab,
     state.experimentsWorkspace,
     state.selectedRunIds,
@@ -706,12 +786,15 @@ export function useQuantLabContextValue() {
     findRun,
     getSelectedRuns,
     getJobs,
+    findJob,
     getLatestFailedJob,
     getRunRelatedJobs,
     getSweepDecisionEntriesForRun,
     loadRunDetail,
     decision,
     openTab,
+    openJobTab,
+    refreshJobTab,
     closeTab,
     setActiveTab,
     toggleRunSelection,
@@ -726,12 +809,15 @@ export function useQuantLabContextValue() {
     findRun,
     getSelectedRuns,
     getJobs,
+    findJob,
     getLatestFailedJob,
     getRunRelatedJobs,
     getSweepDecisionEntriesForRun,
     loadRunDetail,
     decision,
     openTab,
+    openJobTab,
+    refreshJobTab,
     closeTab,
     setActiveTab,
     toggleRunSelection,
