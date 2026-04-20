@@ -24,9 +24,17 @@ export default function App() {
   const contextValue = useQuantLabContextValue();
 
   React.useEffect(() => {
-    if (window.__quantlab) {
-      window.__quantlab.rendererMode = 'react';
-    }
+    window.__quantlab = window.__quantlab || {};
+    window.__quantlab.rendererMode = 'react';
+    window.__quantlab.reactShell = {
+      rendererMode: 'react',
+      reactRoot: document.getElementById('react-root'),
+    };
+    window.__quantlab.getShellState = () => ({
+      rendererMode: 'react',
+      reactRoot: document.getElementById('react-root'),
+      currentSurface: window.__quantlab?.reactShell?.currentSurface || 'runs',
+    });
   }, []);
 
   if (!contextValue?.state) {
@@ -50,11 +58,11 @@ export default function App() {
 
   const allTabs = contextValue.state?.tabs || [];
 
-  if (window.__quantlab) {
-    window.__quantlab.rendererMode = 'react';
-  }
-
   const currentSurface = activeTab?.navKind || activeTab?.kind || 'system';
+
+  if (window.__quantlab?.reactShell) {
+    window.__quantlab.reactShell.currentSurface = currentSurface;
+  }
 
   const handleTabChange = (tabId) => {
     contextValue.setActiveTab(tabId);
@@ -66,7 +74,7 @@ export default function App() {
 
   return (
     <QuantLabContextProvider value={contextValue}>
-      <div className="app-container">
+      <div className="app-container" data-renderer-mode="react" data-smoke="react-shell">
         <Topbar
           currentSurface={currentSurface}
           onToggleSidebar={handleToggleSidebar}

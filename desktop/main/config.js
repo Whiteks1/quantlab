@@ -9,6 +9,7 @@ const SERVER_SCRIPT = path.join(PROJECT_ROOT, "research_ui", "server.py");
 const OUTPUTS_ROOT = process.env.QUANTLAB_DESKTOP_OUTPUTS_ROOT
   ? path.resolve(process.env.QUANTLAB_DESKTOP_OUTPUTS_ROOT)
   : path.join(PROJECT_ROOT, "outputs");
+const ALLOWED_LOCAL_ROOTS = [PROJECT_ROOT, OUTPUTS_ROOT];
 const DESKTOP_OUTPUTS_ROOT = path.join(OUTPUTS_ROOT, "desktop");
 const CANDIDATES_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "candidates_shortlist.json");
 const SWEEP_DECISION_STORE_PATH = path.join(DESKTOP_OUTPUTS_ROOT, "sweep_decision_handoff.json");
@@ -34,6 +35,7 @@ module.exports = {
   WORKSPACE_ROOT,
   SERVER_SCRIPT,
   OUTPUTS_ROOT,
+  ALLOWED_LOCAL_ROOTS,
   DESKTOP_OUTPUTS_ROOT,
   CANDIDATES_STORE_PATH,
   SWEEP_DECISION_STORE_PATH,

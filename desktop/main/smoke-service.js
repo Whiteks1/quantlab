@@ -95,6 +95,7 @@ function createSmokeService({
           return active && active.dataset ? active.dataset.tabId || "" : "";
         };
         const getTabContent = () => document.getElementById("tab-content");
+        const rendererMode = window.__quantlab?.getShellState?.()?.rendererMode || window.__quantlab?.rendererMode || "unknown";
         const status = {
           runs: false,
           runDetail: false,
@@ -168,18 +169,33 @@ function createSmokeService({
         status.candidates = activeTabId() === "candidates" && Boolean(document.querySelector(".candidates-shell") || document.querySelector(".candidates-tab"));
         if (!status.candidates) failures.push("candidates surface unavailable");
 
+        if (rendererMode === "react") {
+          click('.nav-item[data-action="open-runs"]');
+          await waitFor(() => activeTabId() === "runs-native" || Boolean(document.querySelector(".runs-tab")), 5000, 100);
+        }
+
         const selectionInputs = Array.from(document.querySelectorAll("#workflow-runs-list input[data-select-run]"))
           .filter((node) => !node.disabled);
         status.selectableRunCount = selectionInputs.length;
         const compareButton = document.getElementById("workflow-open-compare");
-        if (selectionInputs.length >= 2 && compareButton && !compareButton.disabled) {
+        const compareNavButton = document.querySelector('.nav-item[data-action="open-compare"]');
+        if (selectionInputs.length >= 2 && (rendererMode === "react" ? compareNavButton : (compareButton && !compareButton.disabled))) {
           selectionInputs.slice(0, 2).forEach((input) => {
             if (input.checked) return;
-            input.checked = true;
-            input.dispatchEvent(new Event("change", { bubbles: true }));
+            if (rendererMode === "react") {
+              input.dispatchEvent(new MouseEvent("click", {
+                bubbles: true,
+                cancelable: true,
+                view: window,
+              }));
+            } else {
+              input.checked = true;
+              input.dispatchEvent(new Event("change", { bubbles: true }));
+            }
           });
-          await sleep(120);
-          compareButton.dispatchEvent(new MouseEvent("click", {
+          await waitFor(() => Array.from(document.querySelectorAll("#workflow-runs-list input[data-select-run]")).filter((input) => input.checked).length >= 2, 2000, 100);
+          const compareTrigger = rendererMode === "react" ? compareNavButton : compareButton;
+          compareTrigger.dispatchEvent(new MouseEvent("click", {
             bubbles: true,
             cancelable: true,
             view: window,
@@ -291,6 +307,8 @@ function createSmokeService({
             const shellState = window.__quantlab?.getShellState?.() || {};
             const rendererMode = shellState.rendererMode || window.__quantlab?.rendererMode || "unknown";
             const legacyShell = document.getElementById("legacy-shell");
+            const reactRoot = document.getElementById("react-root");
+            const reactShell = document.querySelector('[data-smoke="react-shell"]');
             const tabContent = document.getElementById("tab-content");
             const tabsBar = document.getElementById("tabs-bar");
             const workspaceGrid = document.querySelector(".workspace-grid");
@@ -299,10 +317,10 @@ function createSmokeService({
               && !legacyShell.classList.contains("hidden")
               && getComputedStyle(legacyShell).display !== "none"
             );
-            const domReady = Boolean(document.body && (legacyShell || document.getElementById("react-root")));
+            const domReady = Boolean(document.body && (legacyShell || reactRoot));
             const workbenchReady = rendererMode === "legacy"
               ? Boolean(legacyVisible && tabContent && tabsBar && workspaceGrid)
-              : Boolean(document.getElementById("react-root"));
+              : Boolean(reactRoot && reactShell && tabContent && tabsBar);
             return {
               rendererMode,
               domReady,
