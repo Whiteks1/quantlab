@@ -28,14 +28,12 @@ import {
   uniqueRunIds as dedupeRunIds,
 } from "./modules/utils.js";
 import {
-  renderArtifactsTab as renderArtifactsTabView,
   renderCandidatesTab as renderCandidatesTabView,
   renderCompareTab as renderCompareTabView,
   renderExperimentsTab as renderExperimentsTabView,
   renderJobTab as renderJobTabView,
   renderPaperOpsTab as renderPaperOpsTabView,
   renderRunsTab as renderRunsTabView,
-  renderRunTab as renderRunTabView,
   renderSystemTab as renderSystemTabView,
   renderSweepDecisionTab as renderSweepDecisionTabView,
 } from "./modules/tab-renderers.js";
@@ -499,7 +497,7 @@ function normalizeShellTab(tab) {
   }
   if (base.kind === "run" || base.kind === "artifacts") {
     if (typeof tab.runId !== "string" || !tab.runId) return null;
-    return { ...base, runId: tab.runId };
+    return { ...base, runId: tab.runId, subview: typeof tab.subview === "string" ? tab.subview : "" };
   }
   if (base.kind === "runs" || base.kind === "paper" || base.kind === "system") return base;
   if (base.kind === "compare") {
@@ -1023,12 +1021,8 @@ function renderTabs() {
     renderMarkupInto(elements.tabContent, renderSweepDecisionTab(activeTab));
   } else if (activeTab.kind === "runs") {
     renderMarkupInto(elements.tabContent, renderRunsTab(activeTab));
-  } else if (activeTab.kind === "run") {
-    renderMarkupInto(elements.tabContent, renderRunTab(activeTab));
   } else if (activeTab.kind === "compare") {
     renderMarkupInto(elements.tabContent, renderCompareTab(activeTab));
-  } else if (activeTab.kind === "artifacts") {
-    renderMarkupInto(elements.tabContent, renderArtifactsTab(activeTab));
   } else if (activeTab.kind === "candidates") {
     renderMarkupInto(elements.tabContent, renderCandidatesTab(activeTab));
   } else if (activeTab.kind === "paper") {
@@ -1845,19 +1839,53 @@ function openLatestRunTab() {
   pushMessage("assistant", `Opened the latest indexed run: ${latestRun.run_id}.`);
 }
 
-async function openRunDetailTab(runId) {
+async function openRunDetailTab(runId, options = {}) {
+  const { subview = "" } = options;
   const run = findRun(runId);
   if (!run) {
     pushMessage("assistant", `Run ${runId} is not present in the current registry snapshot.`);
     return;
   }
   const tabId = `run:${runId}`;
-  upsertTab({ id: tabId, kind: "run", navKind: "runs", title: `Run ${run.run_id}`, runId, status: "loading", detail: null, error: null });
+  const title = subview === "artifacts" ? `Artifacts: ${run.run_id}` : `Run ${run.run_id}`;
+  
+  upsertTab({ 
+    id: tabId, 
+    kind: "run", 
+    navKind: "runs", 
+    title, 
+    runId, 
+    subview,
+    status: "loading", 
+    detail: null, 
+    error: null 
+  });
+  
   try {
     const detail = await loadRunDetail(runId);
-    upsertTab({ id: tabId, kind: "run", navKind: "runs", title: `Run ${run.run_id}`, runId, status: "ready", detail, error: null });
+    upsertTab({ 
+      id: tabId, 
+      kind: "run", 
+      navKind: "runs", 
+      title, 
+      runId, 
+      subview,
+      status: "ready", 
+      detail, 
+      error: null 
+    });
   } catch (error) {
-    upsertTab({ id: tabId, kind: "run", navKind: "runs", title: `Run ${run.run_id}`, runId, status: "error", detail: null, error: error.message || "Could not load run detail." });
+    upsertTab({ 
+      id: tabId, 
+      kind: "run", 
+      navKind: "runs", 
+      title, 
+      runId, 
+      subview,
+      status: "error", 
+      detail: null, 
+      error: error.message || "Could not load run detail." 
+    });
     pushMessage("assistant", error.message || `Could not load run ${runId}.`);
   }
 }
@@ -1967,21 +1995,7 @@ function openArtifactsForPreferredRun() {
 }
 
 async function openArtifactsTabForRun(runId) {
-  const run = findRun(runId);
-  if (!run) {
-    pushMessage("assistant", `Run ${runId} is not present in the current registry snapshot.`);
-    return;
-  }
-  const tabId = `artifacts:${runId}`;
-  upsertTab({ id: tabId, kind: "artifacts", navKind: "runs", title: `Artifacts ${runId}`, runId, status: "loading", detail: null, error: null });
-  try {
-    const detail = await loadRunDetail(runId);
-    upsertTab({ id: tabId, kind: "artifacts", navKind: "runs", title: `Artifacts ${runId}`, runId, status: "ready", detail, error: null });
-    pushMessage("assistant", `Opened artifacts for ${runId}.`);
-  } catch (error) {
-    upsertTab({ id: tabId, kind: "artifacts", navKind: "runs", title: `Artifacts ${runId}`, runId, status: "error", detail: null, error: error.message || "Could not read canonical artifacts." });
-    pushMessage("assistant", error.message || `Could not read artifacts for ${runId}.`);
-  }
+  return openRunDetailTab(runId, { subview: "artifacts" });
 }
 
 async function openJobTab(requestId) {
@@ -2416,9 +2430,6 @@ function extractRunIdAfterPrefix(prompt, prefix) {
   return prompt.trim().slice(prefix.length).trim();
 }
 
-function renderRunTab(tab) {
-  return renderRunTabView(tab, getRendererContext());
-}
 
 function renderRunsTab(tab) {
   return renderRunsTabView(tab, getRendererContext());
@@ -2434,10 +2445,6 @@ function renderSweepDecisionTab(tab) {
 
 function renderCompareTab(tab) {
   return renderCompareTabView(tab, getRendererContext());
-}
-
-function renderArtifactsTab(tab) {
-  return renderArtifactsTabView(tab, getRendererContext());
 }
 
 function renderCandidatesTab(tab) {

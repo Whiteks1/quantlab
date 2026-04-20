@@ -23,6 +23,12 @@ export default function App() {
   // Build context value that bridges to legacy state
   const contextValue = useQuantLabContextValue();
 
+  React.useEffect(() => {
+    if (window.__quantlab) {
+      window.__quantlab.rendererMode = 'react';
+    }
+  }, []);
+
   if (!contextValue?.state) {
     return (
       <div className="app-container loading">
@@ -44,6 +50,10 @@ export default function App() {
 
   const allTabs = contextValue.state?.tabs || [];
 
+  if (window.__quantlab) {
+    window.__quantlab.rendererMode = 'react';
+  }
+
   const handleTabChange = (tabId) => {
     contextValue.setActiveTab(tabId);
   };
@@ -52,16 +62,16 @@ export default function App() {
     <QuantLabContextProvider value={contextValue}>
       <div className="app-container">
         <Topbar
-          activeTab={activeTab}
+          currentSurface={activeTab?.kind}
           onToggleSidebar={handleToggleSidebar}
           isSidebarCollapsed={isSidebarCollapsed}
         />
 
         <div className="app-main-area">
           <Sidebar
-            activeTab={activeTab}
+            currentSurface={activeTab?.kind}
             allTabs={allTabs}
-            onTabChange={handleTabChange}
+            onNavigate={handleTabChange}
             isCollapsed={isSidebarCollapsed}
           />
 

@@ -94,7 +94,7 @@ function createSmokeService({
           const active = document.querySelector("#tabs-bar .tab-pill.is-active");
           return active && active.dataset ? active.dataset.tabId || "" : "";
         };
-        const tabContent = document.getElementById("tab-content");
+        const getTabContent = () => document.getElementById("tab-content");
         const status = {
           runs: false,
           runDetail: false,
@@ -109,9 +109,9 @@ function createSmokeService({
 
         const openedRuns = click('.nav-item[data-action="open-runs"]');
         if (openedRuns) {
-          await waitFor(() => activeTabId() === "runs-native" || Boolean(tabContent && tabContent.querySelector(".runs-tab")));
+          await waitFor(() => activeTabId() === "runs-native" || Boolean(getTabContent() && getTabContent().querySelector(".runs-tab")));
         }
-        status.runs = Boolean(tabContent && tabContent.querySelector(".runs-tab"));
+        status.runs = Boolean(document.querySelector(".runs-tab"));
         if (!status.runs) failures.push("runs surface missing");
 
         const runOpenButtons = Array.from(document.querySelectorAll("#workflow-runs-list [data-open-run]"));
@@ -124,15 +124,20 @@ function createSmokeService({
           }));
           await waitFor(() => activeTabId().startsWith("run:"), 5000, 100);
           await waitFor(() => {
-            const placeholder = tabContent ? tabContent.querySelector(".tab-placeholder") : null;
+            const placeholder = document.querySelector(".tab-placeholder");
             const text = placeholder ? String(placeholder.textContent || "") : "";
             return !placeholder || !/reading canonical run detail/i.test(text);
           }, 5000, 120);
-          const runText = tabContent ? String(tabContent.textContent || "").trim() : "";
-          status.runDetail = activeTabId().startsWith("run:") && Boolean(runText);
-          if (!status.runDetail) failures.push("run detail unavailable");
+          const runText = document.body ? String(document.body.textContent || "").trim() : "";
+          const rawActiveId = activeTabId();
+          status.runDetail = rawActiveId.startsWith("run:") && Boolean(document.querySelector(".run-detail-shell"));
+          if (!status.runDetail) {
+            const hasTabsBar = Boolean(document.getElementById("tabs-bar"));
+            const html = document.body.innerHTML.slice(0, 500);
+            failures.push('run detail unavailable (activeId="' + rawActiveId + '", hasTabsBar=' + hasTabsBar + ', hasShell=' + Boolean(document.querySelector(".run-detail-shell")) + ')');
+          }
 
-          const openArtifactsButton = tabContent ? tabContent.querySelector("[data-open-artifacts]") : null;
+          const openArtifactsButton = document.querySelector("[data-open-artifacts]");
           if (openArtifactsButton || runOpenButtons[0]) {
             const artifactsTrigger = openArtifactsButton || document.querySelector("#workflow-runs-list [data-open-artifacts]");
             artifactsTrigger?.dispatchEvent(new MouseEvent("click", {
@@ -140,11 +145,14 @@ function createSmokeService({
               cancelable: true,
               view: window,
             }));
-            await waitFor(() => activeTabId().startsWith("artifacts:"), 5000, 100);
+            // In the consolidated view, artifacts are in the run detail tab.
+            // We wait for the artifact explorer section to be visible.
+            await waitFor(() => Boolean(document.querySelector(".artifact-list")), 5000, 100);
             await sleep(120);
           }
-          const artifactText = tabContent ? String(tabContent.textContent || "").trim() : "";
-          status.artifacts = activeTabId().startsWith("artifacts:") && Boolean(artifactText);
+          const artifactText = document.body ? String(document.body.textContent || "").trim() : "";
+          const hasArtifactList = Boolean(document.querySelector(".artifact-list"));
+          status.artifacts = (activeTabId().startsWith("artifacts:") || (activeTabId().startsWith("run:") && hasArtifactList)) && Boolean(artifactText);
           if (!status.artifacts) failures.push("artifacts unavailable");
         } else {
           const hasExplicitEmptyState = Boolean(document.querySelector("#workflow-runs-list .empty-state"));
@@ -157,7 +165,7 @@ function createSmokeService({
         if (openedCandidates) {
           await waitFor(() => activeTabId() === "candidates");
         }
-        status.candidates = activeTabId() === "candidates" && Boolean(tabContent && tabContent.textContent && tabContent.textContent.trim());
+        status.candidates = activeTabId() === "candidates" && Boolean(document.querySelector(".candidates-shell") || document.querySelector(".candidates-tab"));
         if (!status.candidates) failures.push("candidates surface unavailable");
 
         const selectionInputs = Array.from(document.querySelectorAll("#workflow-runs-list input[data-select-run]"))
@@ -355,9 +363,8 @@ function createSmokeService({
         result.error = `desktop renderer safety check failed: renderer=${result.rendererMode}, domReady=${result.domReady}, workbenchReady=${result.workbenchReady}`;
       }
       if (!result.happyPathReady) {
-        result.error = result.error
-          || `desktop happy-path check failed (runs=${result.happyPathRunsReady}, runDetail=${result.happyPathRunDetailReady}, artifacts=${result.happyPathArtifactsReady}, candidates=${result.happyPathCandidatesReady}, compare=${result.happyPathCompareReady}, runCount=${result.happyPathRunCount}, selectableRuns=${result.happyPathSelectableRunCount})`
-          + `${happyPath.happyPathMessage ? `: ${happyPath.happyPathMessage}` : ""}`;
+        const happyPathError = `desktop happy-path check failed (runs=${result.happyPathRunsReady}, runDetail=${result.happyPathRunDetailReady}, artifacts=${result.happyPathArtifactsReady}, candidates=${result.happyPathCandidatesReady}, compare=${result.happyPathCompareReady}, runCount=${result.happyPathRunCount}, selectableRuns=${result.happyPathSelectableRunCount})${happyPath.happyPathMessage ? `: ${happyPath.happyPathMessage}` : ""}`;
+        result.error = result.error ? `${result.error} | ${happyPathError}` : happyPathError;
       }
     } catch (error) {
       result.error = error.message;

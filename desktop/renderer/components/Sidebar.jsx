@@ -52,6 +52,7 @@ export default function Sidebar({ currentSurface, onNavigate, isCollapsed }) {
                 className={`nav-item ${currentSurface === item.id ? 'is-active' : ''}`}
                 onClick={() => onNavigate(item.id)}
                 title={item.label}
+                data-action={`open-${item.id}`}
               >
                 <span className="nav-icon">{item.label.charAt(0)}</span>
                 <span className="nav-label">{item.label}</span>
