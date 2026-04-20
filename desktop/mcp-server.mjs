@@ -29,14 +29,42 @@ function truncateText(text) {
   return `${text.slice(0, MAX_OUTPUT_CHARS)}\n...[truncated]`;
 }
 
-function resolveOutputsPath(relativePath) {
-  const requested = relativePath || "";
-  const resolvedPath = path.resolve(OUTPUTS_ROOT, requested);
-  const relative = path.relative(OUTPUTS_ROOT, resolvedPath);
+async function toCanonicalPath(targetPath) {
+  try {
+    return await fs.realpath(targetPath);
+  } catch {
+    return path.resolve(targetPath);
+  }
+}
+
+function isPathOutsideRoot(relativePath) {
+  return relativePath.startsWith("..") || path.isAbsolute(relativePath);
+}
+
+async function resolvePathInsideRoot(rootPath, requestedPath, label) {
+  const resolvedPath = path.resolve(rootPath, requestedPath || "");
+  const [canonicalRoot, canonicalTarget] = await Promise.all([
+    toCanonicalPath(rootPath),
+    toCanonicalPath(resolvedPath),
+  ]);
+  const relative = path.relative(canonicalRoot, canonicalTarget);
+  if (isPathOutsideRoot(relative)) {
+    throw new Error(`Refusing to access outside ${label}: ${requestedPath}`);
+  }
+  return canonicalTarget;
+}
+
+async function resolveOutputsPath(relativePath) {
+  const targetPath = await resolvePathInsideRoot(
+    OUTPUTS_ROOT,
+    relativePath,
+    "outputs/",
+  );
+  const relative = path.relative(await toCanonicalPath(OUTPUTS_ROOT), targetPath);
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new Error(`Refusing to access outside outputs/: ${relativePath}`);
   }
-  return resolvedPath;
+  return targetPath;
 }
 
 function formatBytes(size) {
@@ -114,7 +142,7 @@ async function runPythonCli(args, timeoutMs = 120000) {
 }
 
 async function listOutputs(relativePath = "", entryKind = "all") {
-  const targetPath = resolveOutputsPath(relativePath);
+  const targetPath = await resolveOutputsPath(relativePath);
   const stat = await fs.stat(targetPath);
   if (!stat.isDirectory()) {
     throw new Error(`Not a directory under outputs/: ${relativePath || "."}`);
@@ -160,7 +188,7 @@ async function listOutputs(relativePath = "", entryKind = "all") {
 }
 
 async function readOutputsArtifact(relativePath) {
-  const targetPath = resolveOutputsPath(relativePath);
+  const targetPath = await resolveOutputsPath(relativePath);
   const stat = await fs.stat(targetPath);
   if (stat.isDirectory()) {
     throw new Error(`Expected a file under outputs/, got directory: ${relativePath}`);
@@ -256,9 +284,14 @@ async function main() {
       relative_path: z.string().describe("Path relative to the QuantLab repository root"),
     },
   }, async ({ relative_path }) => {
-    const resolvedPath = path.resolve(PROJECT_ROOT, relative_path);
-    const relative = path.relative(PROJECT_ROOT, resolvedPath);
-    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    let resolvedPath = "";
+    try {
+      resolvedPath = await resolvePathInsideRoot(
+        PROJECT_ROOT,
+        relative_path,
+        "the QuantLab repository",
+      );
+    } catch {
       return {
         content: [
           {
