@@ -6,6 +6,17 @@ const { spawn } = require("child_process");
 /** @typedef {import("../shared/models/smoke").SmokeMode} SmokeMode */
 /** @typedef {import("../shared/models/smoke").SmokeResult} SmokeResult */
 
+function parseSmokeRenderer(argv) {
+  const rawRenderer = argv
+    .map((entry) => String(entry || "").trim())
+    .find((entry) => entry.startsWith("--renderer="))
+    ?.slice("--renderer=".length);
+  if (!rawRenderer || rawRenderer === "legacy" || rawRenderer === "react") {
+    return rawRenderer || "legacy";
+  }
+  throw new Error(`Unsupported desktop smoke renderer: ${rawRenderer}`);
+}
+
 function parseSmokeMode(argv) {
   const rawMode = argv
     .map((entry) => String(entry || "").trim())
@@ -18,7 +29,9 @@ function parseSmokeMode(argv) {
 }
 
 async function main() {
-  const mode = parseSmokeMode(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  const mode = parseSmokeMode(argv);
+  const renderer = parseSmokeRenderer(argv);
   const desktopRoot = path.resolve(__dirname, "..");
   const electronBinary = require("electron");
   const electronArgs = process.platform === "linux" ? ["--no-sandbox", "."] : ["."];
@@ -161,6 +174,7 @@ async function main() {
         QUANTLAB_DESKTOP_SMOKE_MODE: mode,
         QUANTLAB_DESKTOP_SMOKE_OUTPUT: outputPath,
         QUANTLAB_DESKTOP_OUTPUTS_ROOT: desktopOutputsRoot,
+        ...(renderer === "react" ? { QUANTLAB_DESKTOP_RENDERER: "react" } : {}),
         ...(mode === "fallback" ? { QUANTLAB_DESKTOP_DISABLE_SERVER_BOOT: "1" } : {}),
       },
     });
@@ -224,7 +238,7 @@ async function main() {
           && result.workbenchReady
           && result.happyPathReady
           && result.shellReady
-          && result.rendererMode === "legacy"
+          && result.rendererMode === renderer
         );
 
     if (!passed) {

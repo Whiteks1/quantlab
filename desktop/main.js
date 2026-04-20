@@ -36,6 +36,8 @@ const localStores = createLocalStoreService({
   fsp,
   path,
   projectRoot: config.PROJECT_ROOT,
+  outputsRoot: config.OUTPUTS_ROOT,
+  allowedLocalRoots: config.ALLOWED_LOCAL_ROOTS,
   candidatesStorePath: config.CANDIDATES_STORE_PATH,
   sweepDecisionStorePath: config.SWEEP_DECISION_STORE_PATH,
   workspaceStorePath: config.WORKSPACE_STORE_PATH,

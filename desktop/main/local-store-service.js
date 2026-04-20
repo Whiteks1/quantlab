@@ -6,6 +6,8 @@
  *   fsp: typeof import("fs/promises"),
  *   path: typeof import("path"),
  *   projectRoot: string,
+ *   outputsRoot: string,
+ *   allowedLocalRoots: string[],
  *   candidatesStorePath: string,
  *   sweepDecisionStorePath: string,
  *   workspaceStorePath: string,
@@ -17,6 +19,8 @@ function createLocalStoreService({
   fsp,
   path,
   projectRoot,
+  outputsRoot,
+  allowedLocalRoots,
   candidatesStorePath,
   sweepDecisionStorePath,
   workspaceStorePath,
@@ -215,13 +219,28 @@ function createLocalStoreService({
   }
 
   function assertPathInsideProject(targetPath) {
-    const resolvedProjectRoot = fs.realpathSync(path.resolve(projectRoot));
+    const resolvedRoots = (Array.isArray(allowedLocalRoots) && allowedLocalRoots.length
+      ? allowedLocalRoots
+      : [projectRoot])
+      .map((rootPath) => fs.realpathSync(path.resolve(rootPath)));
     const rawTarget = String(targetPath || "").trim();
+    const normalizedTarget = rawTarget.replace(/\\/g, "/");
+    const basePath = !path.isAbsolute(rawTarget) && normalizedTarget.startsWith("outputs/")
+      ? outputsRoot
+      : projectRoot;
+    const relativeTarget = normalizedTarget.startsWith("outputs/")
+      ? normalizedTarget.slice("outputs/".length)
+      : rawTarget;
     const resolvedTarget = path.isAbsolute(rawTarget)
       ? fs.realpathSync(path.resolve(rawTarget))
-      : fs.realpathSync(path.resolve(projectRoot, rawTarget));
-    const relative = path.relative(resolvedProjectRoot, resolvedTarget);
-    if (!resolvedTarget || relative.startsWith("..") || (path.isAbsolute(relative) && relative === resolvedTarget)) {
+      : fs.realpathSync(path.resolve(basePath, relativeTarget));
+    const insideAllowedRoot = resolvedRoots.some((resolvedRoot) => {
+      const relative = path.relative(resolvedRoot, resolvedTarget);
+      return Boolean(resolvedTarget)
+        && !relative.startsWith("..")
+        && !(path.isAbsolute(relative) && relative === resolvedTarget);
+    });
+    if (!insideAllowedRoot) {
       throw new Error("Requested path is outside the QuantLab workspace.");
     }
     return resolvedTarget;
@@ -282,8 +301,16 @@ function createLocalStoreService({
   }
 
   async function listDirectoryEntries(targetPath, maxDepth = 2) {
-    const rootPath = assertPathInsideProject(targetPath);
-    /** @type {Array<{ path: string, kind: string, size: number, depth: number, mtimeMs: number }>} */
+    let rootPath = "";
+    try {
+      rootPath = assertPathInsideProject(targetPath);
+    } catch (error) {
+      if (error && (error.code === "ENOENT" || error.message?.includes("ENOENT"))) {
+        return { entries: [], truncated: false };
+      }
+      throw error;
+    }
+    /** @type {Array<{ path: string, relative_path: string, name: string, kind: string, size_bytes: number, depth: number, modified_at: string }>} */
     const entries = [];
 
     async function walk(currentPath, depth) {
@@ -303,11 +330,13 @@ function createLocalStoreService({
         const stat = await fsp.stat(resolved);
         const relativePath = path.relative(projectRoot, resolved).replace(/\\/g, "/");
         entries.push({
-          path: relativePath,
+          path: resolved,
+          relative_path: relativePath,
+          name: dirEntry.name,
           kind: dirEntry.isDirectory() ? "directory" : "file",
-          size: stat.size,
+          size_bytes: stat.size,
           depth,
-          mtimeMs: stat.mtimeMs,
+          modified_at: stat.mtime.toISOString(),
         });
         if (dirEntry.isDirectory() && depth < maxDepth) {
           await walk(resolved, depth + 1);
@@ -316,7 +345,10 @@ function createLocalStoreService({
     }
 
     await walk(rootPath, 0);
-    return entries;
+    return {
+      entries,
+      truncated: entries.length >= maxDirectoryEntries,
+    };
   }
 
   async function readProjectText(targetPath) {

@@ -12,6 +12,7 @@
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "smoke": "npm run smoke:fallback",
     "smoke:fallback": "npm run build && node scripts/smoke.js --mode=fallback",
+    "smoke:react:fallback": "npm run build && node scripts/smoke.js --mode=fallback --renderer=react",
     "smoke:real-path": "npm run build && node scripts/smoke.js --mode=real-path",
     "mcp": "node mcp-server.mjs"
   },
