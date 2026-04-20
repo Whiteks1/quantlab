@@ -33,6 +33,7 @@ import {
   renderExperimentsTab as renderExperimentsTabView,
   renderJobTab as renderJobTabView,
   renderPaperOpsTab as renderPaperOpsTabView,
+  renderRunTab as renderRunTabView,
   renderRunsTab as renderRunsTabView,
   renderSystemTab as renderSystemTabView,
   renderSweepDecisionTab as renderSweepDecisionTabView,
@@ -1021,6 +1022,8 @@ function renderTabs() {
     renderMarkupInto(elements.tabContent, renderSweepDecisionTab(activeTab));
   } else if (activeTab.kind === "runs") {
     renderMarkupInto(elements.tabContent, renderRunsTab(activeTab));
+  } else if (activeTab.kind === "run") {
+    renderMarkupInto(elements.tabContent, renderRunTab(activeTab));
   } else if (activeTab.kind === "compare") {
     renderMarkupInto(elements.tabContent, renderCompareTab(activeTab));
   } else if (activeTab.kind === "candidates") {
@@ -2430,6 +2433,9 @@ function extractRunIdAfterPrefix(prompt, prefix) {
   return prompt.trim().slice(prefix.length).trim();
 }
 
+function renderRunTab(tab) {
+  return renderRunTabView(tab, getRendererContext());
+}
 
 function renderRunsTab(tab) {
   return renderRunsTabView(tab, getRendererContext());
