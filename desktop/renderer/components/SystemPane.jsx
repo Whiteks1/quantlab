@@ -21,6 +21,34 @@ export function SystemPane({ tab }) {
   const state = contextValue?.state || {};
   const [html, setHtml] = useState('');
 
+  const handleSurfaceClick = (event) => {
+    const target = event.target?.closest?.('[data-open-job], [data-open-run], [data-open-job-artifacts], [data-open-job-link], [data-open-external]');
+    if (!target) return;
+
+    const { openJob, openRun, openJobArtifacts, openJobLink, openExternal } = target.dataset;
+    if (openJob) {
+      event.preventDefault();
+      contextValue?.openTab?.('job', openJob);
+    } else if (openRun) {
+      event.preventDefault();
+      contextValue?.openTab?.('run', openRun);
+    } else if (openJobArtifacts) {
+      event.preventDefault();
+      const job = contextValue?.findJob?.(openJobArtifacts);
+      if (job?.run_id) {
+        contextValue?.openTab?.('artifacts', job.run_id);
+      } else if (job?.artifacts_href && typeof window.quantlabDesktop?.openExternal === 'function') {
+        window.quantlabDesktop.openExternal(job.artifacts_href);
+      }
+    } else if (openJobLink || openExternal) {
+      event.preventDefault();
+      const href = openJobLink || openExternal;
+      if (typeof window.quantlabDesktop?.openExternal === 'function') {
+        window.quantlabDesktop.openExternal(href);
+      }
+    }
+  };
+
   useEffect(() => {
     // Build context object for renderSystemTab
     const ctx = {
@@ -58,6 +86,7 @@ export function SystemPane({ tab }) {
   return (
     <div 
       className="pane-wrapper system-pane"
+      onClick={handleSurfaceClick}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

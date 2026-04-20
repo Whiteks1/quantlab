@@ -7,6 +7,7 @@ import { TabsBar } from './TabsBar';
 import { PaperOpsPane } from './PaperOpsPane';
 import { SystemPane } from './SystemPane';
 import { ExperimentsPane } from './ExperimentsPane';
+import { JobLaunchReviewPane } from './JobLaunchReviewPane';
 
 /**
  * MainContent - Main content area that:
@@ -43,8 +44,9 @@ export default function MainContent({ activeTab, allTabs, onTabChange }) {
       {activeTab.kind === 'paper' && <PaperOpsPane tab={activeTab} />}
       {activeTab.kind === 'system' && <SystemPane tab={activeTab} />}
       {activeTab.kind === 'experiments' && <ExperimentsPane tab={activeTab} />}
+      {activeTab.kind === 'job' && <JobLaunchReviewPane tab={activeTab} />}
 
-      {!['runs', 'compare', 'candidates', 'run', 'artifacts', 'paper', 'system', 'experiments'].includes(activeTab.kind) && (
+      {!['runs', 'compare', 'candidates', 'run', 'artifacts', 'paper', 'system', 'experiments', 'job'].includes(activeTab.kind) && (
         <PausedSurfacePane tab={activeTab} />
       )}
     </main>
