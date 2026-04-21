@@ -195,6 +195,39 @@ Paper sessions are excluded from this shared run index.
 
 They are intended as the read-only shared registry for browsing and integration.
 
+## Learned-Model Experiment Artifacts
+
+Learned-model research uses a separate proposed artifact root:
+
+```text
+outputs/model_runs/<model_run_id>/
+```
+
+This root is intentionally separate from:
+
+- `outputs/runs/<run_id>/`
+- `outputs/paper_sessions/<session_id>/`
+
+The initial N.0 contract defines these required artifacts:
+
+```text
+outputs/model_runs/<model_run_id>/
+  dataset_manifest.json
+  feature_manifest.json
+  model_config.json
+  training_summary.json
+```
+
+These artifacts do not replace `report.json`.
+
+For N.0:
+
+- `training_summary.json` is the primary learned-model summary artifact
+- future downstream strategy or backtest evaluation may produce normal QuantLab `report.json` artifacts
+- learned-model outputs must not become paper or execution actions without downstream validation and promotion gates
+
+For the detailed N.0 contract, see [learned-model-artifact-contract.md](./learned-model-artifact-contract.md).
+
 ## Paper Session Status Contract
 
 `session_status.json` is the canonical lifecycle artifact for paper sessions.

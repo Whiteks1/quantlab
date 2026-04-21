@@ -4,9 +4,9 @@ This roadmap updates the original QuantLab plan to reflect the current product a
 
 Public product framing:
 
-- QuantLab should now be read as a `web3 app` in direction
-- but still as a supervised execution system in maturity
-- the roadmap therefore prioritizes execution safety, signer correctness, and operator control before broader onchain runtime power
+- QuantLab should be read as a local-first quantitative research and supervised execution system
+- it may support modern execution venues, including web3-native venues, without becoming a crypto or AI marketing shell
+- the roadmap therefore prioritizes execution safety, signer correctness, evidence quality, and operator control before broader venue or automation power
 
 QuantLab should continue to evolve in this order:
 
@@ -62,6 +62,7 @@ QuantLab has already completed most of the original research foundation and quan
 
 - broad multi-venue live routing beyond the first implemented boundary
 - automated live trading
+- learned-model production promotion
 
 ## Stage A - Foundations
 
@@ -507,6 +508,178 @@ Exit condition:
 
 - strategy promotion, execution, monitoring, and rollback all behave like one coherent operating system rather than a collection of scripts
 
+## Parallel Neural Research Track
+
+Status: proposed
+
+This track does not replace the main execution and safety roadmap.
+
+It extends QuantLab from a laboratory of explicit strategies into a laboratory of explicit strategies and learned models.
+
+Strategic rule:
+
+- Neural Track = research discipline expansion, not product repositioning
+- QuantLab should not be reframed as an AI trading platform
+- learned models must meet the same or stricter standards of reproducibility, comparability, auditability, and promotion discipline as rule-based strategies
+
+Authority rule:
+
+- QuantLab owns dataset definition, feature definition, model validation, artifact contracts, and promotion criteria
+- Stepbit may later orchestrate learned-model workflows, but must not own modeling authority
+- Quant Pulse may later provide upstream hypotheses or signal context, but must not certify learned-model validity
+
+### Stage N.0 - Neural Research Foundations
+
+Status: proposed
+
+Goal:
+
+- define the minimum artifact contracts and evaluation discipline needed before learned-model research is implemented
+
+Scope:
+
+- `dataset_manifest.json`
+- `feature_manifest.json`
+- `model_config.json`
+- `training_summary.json`
+- temporal split requirements
+- random seed discipline
+- dataset and feature traceability
+- baseline comparison rules
+- non-promotion rules
+
+Exit condition:
+
+- QuantLab can describe what a valid learned-model experiment must emit before any training loop, ML dependency, or neural architecture is introduced
+
+See also:
+
+- [learned-model-artifact-contract.md](./learned-model-artifact-contract.md)
+
+### Stage N.1 - Baseline Model Track
+
+Status: proposed, blocked by N.0
+
+Goal:
+
+- introduce classical ML baselines before neural expansion so learned-model claims have a disciplined comparison floor
+
+Scope:
+
+- logistic regression, random forest, gradient boosting, or equivalent baseline models
+- temporal targets and horizon definitions
+- train / validation / test splits over time
+- comparison with existing rule-based baselines
+- reporting that combines model metrics and downstream market metrics
+
+Exit condition:
+
+- QuantLab can compare rule-based strategies and classical ML models on the same datasets and temporal splits with canonical outputs
+
+### Stage N.2 - Neural Baseline Support
+
+Status: proposed, blocked by N.0 and N.1
+
+Goal:
+
+- add initial neural architectures only after artifact contracts and ML baselines exist
+
+Scope:
+
+- MLP for tabular features
+- GRU/LSTM for simple sequence windows
+- reproducible training loops
+- regularization and early stopping
+- training and validation metric capture
+- artifact persistence for model checkpoints and evaluation summaries
+
+Exit condition:
+
+- QuantLab can train, re-evaluate, and compare a simple neural baseline with traceable artifacts and deterministic experiment metadata
+
+### Stage N.3 - Temporal Validation and Market Realism
+
+Status: proposed
+
+Goal:
+
+- evaluate learned models as market systems rather than static predictive exercises
+
+Scope:
+
+- walk-forward validation for models
+- leakage checks
+- rolling retraining windows
+- regime-aware comparison
+- score-to-signal translation discipline
+- downstream backtest evaluation from model outputs
+- out-of-sample comparison against rule-based and ML baselines
+
+Exit condition:
+
+- QuantLab can evaluate learned models under realistic temporal conditions without methodological ambiguity
+
+### Stage N.4 - Model-to-Strategy Translation
+
+Status: proposed
+
+Goal:
+
+- convert learned-model outputs into reviewable research or execution hypotheses instead of opaque score streams
+
+Scope:
+
+- probability or score thresholding
+- conviction bands
+- regime filters
+- horizon mapping
+- invalidation conditions for learned strategies
+- translation from model output into research actions, paper actions, or bounded draft `ExecutionIntent` candidates
+
+Exit condition:
+
+- learned models produce strategy-relevant, reviewable hypotheses or actions that can be audited and compared like explicit strategies
+
+### Stage N.5 - Paper Promotion for Learned Models
+
+Status: proposed, blocked by N.0 through N.4
+
+Goal:
+
+- allow learned strategies to reach paper mode only under strict comparison and stability discipline
+
+Scope:
+
+- learned-model promotion policy
+- required comparison against rule-based and ML baselines
+- stability thresholds
+- drawdown, turnover, and operational cost gates
+- canonical model-risk artifacts
+- operator-facing promotion runbook for learned strategies
+
+Exit condition:
+
+- QuantLab can promote a learned strategy into paper trading without weakening its evidence standards or operator review requirements
+
+### Stage N.6 - Orchestrated Neural Research
+
+Status: long-term proposed
+
+Goal:
+
+- let Stepbit orchestrate learned-model research pipelines while keeping QuantLab as the authority over data, training, validation, and evidence
+
+Scope:
+
+- build-dataset -> train -> validate -> compare -> report workflow chaining
+- retries and scheduling for training workflows
+- archive and promotion routing
+- optional integration with Quant Pulse as an upstream feature or hypothesis source
+
+Exit condition:
+
+- Stepbit can coordinate learned-model research pipelines while QuantLab remains the canonical owner of experiment definition, evaluation logic, and artifacts
+
 ## Recommended Execution Order
 
 From the current strategic position, the most rational order is:
@@ -515,10 +688,16 @@ From the current strategic position, the most rational order is:
 2. continue `Stage C.1` paper-trading polish where it directly improves promotion discipline, runbooks, and paper-to-broker readiness
 3. continue the Desktop/UI operator workspace track where it reduces review ambiguity or improves promotion visibility across research, paper, and broker evidence
 4. continue `Stage O` producer-side stabilization only where real integration friction requires it
-5. harden `Stage O.1` integration fixtures only if consumer feedback justifies them
-6. avoid reopening `Stage D.0` / `D.1` as primary stages unless a real hardening gap proves the current boundary insufficient
-7. pass an explicit `Stage D.3` micro-live promotion gate before opening `Stage E`
-8. only then move into `Stage F` controlled automation
+5. open `Stage N.0` to define dataset, feature, model, and training-summary contracts for learned-model research
+6. implement `Stage N.1` so classical ML baselines exist before neural expansion
+7. implement `Stage N.2` for simple neural baselines only after N.0 and N.1
+8. harden `Stage N.3` before any learned-model promotion claims
+9. implement `Stage N.4` to make model outputs strategy-relevant and auditable
+10. implement `Stage N.5` before any learned model is allowed into serious paper evaluation
+11. continue `Stage O.1`, `Stage O.2`, and later `Stage N.6` only when real integration or orchestration value justifies them
+12. avoid reopening `Stage D.0` / `D.1` as primary stages unless a real hardening gap proves the current boundary insufficient
+13. pass an explicit `Stage D.3` micro-live promotion gate before opening `Stage E`
+14. only then move into `Stage F` controlled automation
 
 ## What Should Not Happen Early
 
@@ -528,12 +707,16 @@ From the current strategic position, the most rational order is:
 - no expansion of external orchestration before the paper and safety layers are operationally trustworthy
 - no new venue or operator-workspace expansion that is disconnected from credible supervised-corridor evidence
 - no collapsing of QuantLab and Stepbit responsibilities into one codebase
+- no learned-model promotion before reproducible dataset, feature, and evaluation contracts exist
+- no neural-network claims without baseline comparison against explicit strategies and classical ML
+- no treating predictive accuracy as sufficient evidence for market usefulness
 
 ## Related Documents
 
 - [README.md](../README.md)
 - [cli.md](./cli.md)
 - [run-artifact-contract.md](./run-artifact-contract.md)
+- [learned-model-artifact-contract.md](./learned-model-artifact-contract.md)
 - [stepbit-io-v1.md](./stepbit-io-v1.md)
 - [stepbit-integration.md](./stepbit-integration.md)
 - [quantlab-stepbit-boundaries.md](./quantlab-stepbit-boundaries.md)

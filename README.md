@@ -50,7 +50,7 @@ Execution venue strategy note:
 - `Hyperliquid` is the active execution venue direction
 - `Kraken` remains implemented compatibility / history, not the active next target
 - `Bitget` is a later optional comparison venue, after Hyperliquid, not the next default target
-  - this is why `QuantLab Research web3 app` is now the right public direction, even though the product is still earlier in runtime maturity than that label's end-state implies
+- public positioning should describe QuantLab as a local-first quantitative research and supervised execution system with support for modern execution venues, including web3-native venues
 - `BrokerAdapter` remains the current code name, but the architecture should now be read as an execution-venue boundary, not only a CEX-style broker boundary
 - a minimal `ExecutionContext` layer now exists in code so future venue work can model signer and routing semantics without overloading `ExecutionIntent`
 - local signer-backed Hyperliquid action signing, supervised submit artifacts, canonical submit sessions, direct post-submit status, richer fill/close reconciliation, a bounded continuous-supervision surface, and a first supervised cancel boundary now exist
@@ -287,6 +287,7 @@ See also:
 - [docs/pretrade-calculator-boundary.md](./docs/pretrade-calculator-boundary.md)
 - [docs/pretrade-handoff-intake.md](./docs/pretrade-handoff-intake.md)
 - [docs/roadmap.md](./docs/roadmap.md)
+- [docs/learned-model-artifact-contract.md](./docs/learned-model-artifact-contract.md)
 - [docs/workflow-operativo-codex.md](./docs/workflow-operativo-codex.md)
 - [docs/quant-pulse-quantlab-contract.md](./docs/quant-pulse-quantlab-contract.md)
 - [docs/run-artifact-contract.md](./docs/run-artifact-contract.md)
