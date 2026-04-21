@@ -1,35 +1,101 @@
-# Casos de Uso Detallados: IA + QuantLab
+# QuantLab Use Cases
 
-La integración con **Stepbit-core** transforma a QuantLab de una herramienta de análisis pasivo a un laboratorio de investigación autónomo y reactivo.
+This document describes bounded use cases for QuantLab with optional Stepbit support.
 
-## 1. El Estratega Autónomo (Búsqueda de Alfa)
-**Objetivo**: Automatizar el proceso de prueba y error en el diseño de estrategias.
-- **Flujo**:
-    1. El usuario entrega una idea vaga: *"Quiero una estrategia de reversión a la media con RSI"*.
-    2. El **Planner** de Stepbit genera una lista de parámetros candidatos (ej: RSI 10, 14, 21; periodos de MA 20, 50, 100).
-    3. Stepbit invoca a QuantLab en bucle para ejecutar backtests de todas las combinaciones.
-    4. El agente de IA analiza el `report.json` de cada ejecución, descartando aquellas con alto drawdown y seleccionando las de mayor Profit Factor.
-    5. **Resultado**: Una recomendación final con parámetros optimizados y justificación estadística.
+QuantLab remains the evidence authority. Stepbit may assist with orchestration, repeated workflows, and interpretation, but it must not become the owner of strategy validity, risk policy, broker authority, or execution decisions.
 
-## 2. Guardián de Riesgo Dinámico (Vigilancia 24/7)
-**Objetivo**: Reaccionar a condiciones de mercado en tiempo real sin intervención humana.
-- **Flujo**:
-    1. Un script de QuantLab (ej: `track_market.py`) vigila el precio.
-    2. Al detectar un evento (ej: volatilidad extrema detectada por el ATR), envía un `SyncEvent` al **EventBus** de Stepbit.
-    3. Stepbit tiene un **Trigger** configurado: si el evento es `market.volatility_high`, lanzar el Reasoning Graph de "Liquidación Gradual".
-    4. La IA evalúa la posición actual del portfolio (vía `portfolio_report`) y decide si cerrar posiciones o mover el Stop Loss.
+## 1. Supervised Strategy Research Loop
 
-## 3. Generación de Reportes Ejecutivos mediante IA
-**Objetivo**: Traducir métricas técnicas a lenguaje natural y decisiones de negocio.
-- **Flujo**:
-    1. QuantLab genera gráficas de equity y archivos JSON de métricas.
-    2. Stepbit toma estos artefactos y los pasa por su motor de razonamiento junto con el contexto del mercado (noticias, sentimiento).
-    3. **Resultado**: Un reporte Markdown diario en `outputs/daily_summary.md` que explica no solo *qué* pasó, sino *por qué* y si la estrategia sigue siendo válida según las condiciones actuales.
+Goal:
 
-## 4. Backtesting Distribuido en el Cluster
-**Objetivo**: Reducir el tiempo de optimización (Sweep) de horas a minutos.
-- **Flujo**:
-    1. El **Controller** de Stepbit divide una tarea de "Sweep" de 10,000 iteraciones en 10 bloques de 1,000.
-    2. Envía cada bloque a un **Worker** diferente en la red local.
-    3. Cada Worker ejecuta su instancia local de QuantLab.
-    4. Los resultados se agregan en el Controller, que presenta la "frontera de eficiencia" consolidada.
+- speed up research iteration without moving validation authority out of QuantLab
+
+Flow:
+
+1. The operator defines a research question, for example a mean-reversion idea with RSI.
+2. Stepbit may propose candidate parameter sets or workflow steps.
+3. QuantLab runs the backtests and produces canonical artifacts.
+4. The operator reviews `report.json`, run metrics, drawdown, stability, and artifacts.
+5. Stepbit may summarize trade-offs, but QuantLab artifacts remain the source of truth.
+
+Result:
+
+- a reviewable research shortlist, not an autonomous trading decision
+
+## 2. Paper-Session Review And Promotion Discipline
+
+Goal:
+
+- use automation support to reduce paper-session ambiguity while preserving operator control
+
+Flow:
+
+1. QuantLab produces paper-session artifacts and status files.
+2. Stepbit may watch for missing artifacts, stale status, or review tasks.
+3. The operator reviews the paper runbook, session status, metrics, and failure reasons.
+4. Any promotion decision remains manual and evidence-based.
+
+Result:
+
+- clearer paper-to-broker readiness without weakening promotion gates
+
+## 3. Broker-Safety And Submit Review Support
+
+Goal:
+
+- help the operator inspect supervised broker-submit evidence without granting autonomous authority
+
+Flow:
+
+1. QuantLab produces submit, reconciliation, alert, and supervision artifacts.
+2. Stepbit may summarize the latest state or route the operator to relevant files.
+3. The operator verifies ambiguity, rejected orders, fills, cancellations, and alert status.
+4. QuantLab safety policy and broker boundaries remain authoritative.
+
+Result:
+
+- faster operator review of broker-facing evidence, not automated live trading
+
+## 4. Research Report Generation
+
+Goal:
+
+- convert QuantLab artifacts into readable summaries without changing the underlying evidence
+
+Flow:
+
+1. QuantLab generates run, comparison, paper, or broker artifacts.
+2. Stepbit may prepare a Markdown summary with links to the canonical files.
+3. The summary must cite the source artifacts and must not invent state changes, promotions, or executions.
+
+Result:
+
+- human-readable reporting over QuantLab evidence
+
+## 5. Future Learned-Model Research Assistance
+
+Goal:
+
+- support learned-model research only after artifact contracts and evaluation discipline exist
+
+Flow:
+
+1. QuantLab defines dataset, feature, model, and training-summary artifacts.
+2. Stepbit may later orchestrate build-dataset -> train -> validate -> compare workflows.
+3. QuantLab remains responsible for dataset validity, feature definitions, model evaluation, and promotion rules.
+4. Learned-model outputs cannot become paper or execution actions without downstream validation.
+
+Result:
+
+- disciplined learned-model research, not AI trading automation
+
+## Non-Goals
+
+These use cases must not become:
+
+- autonomous live trading
+- Stepbit-owned strategy authority
+- Stepbit-owned risk policy
+- broker execution without QuantLab preflight and operator supervision
+- learned-model promotion without N.0/N.1/N.2 evidence discipline
+- marketing claims detached from canonical artifacts
