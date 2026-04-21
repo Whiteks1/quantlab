@@ -23,6 +23,21 @@ Launch remains part of the QuantLab Research workstation flow, not a separate pr
 
 The legacy workstation remains the v0.1 release surface. `research_ui` and browser-backed paths are continuity mechanisms only; they are not the long-term shell architecture.
 
+## 2026-04-21 Clarification: Desktop v1 Release Boundary
+
+`#442` defines Desktop v1 as a release-state boundary, not as a new implementation slice.
+
+Desktop v1 is a functional operator workstation with explicit transitional boundaries. Legacy remains the default release runtime where still required for complete operator flow. React is a validated selectable runtime and the canonical future direction, but not yet the default release path.
+
+This means Desktop v1 does not require pretending the migration is complete. It requires an honest operator release state:
+
+- `npm start` remains the default release runtime while complete operator flow still depends on legacy-backed paths.
+- `npm run start:react` remains the validated selectable React runtime.
+- React remains the canonical future shell direction.
+- Making React the default runtime is post-v1 unless the remaining Launch / operator-flow boundary is resolved explicitly.
+- `#412` must not be interpreted as broad legacy deletion until its preconditions are satisfied or the issue is re-scoped.
+- `#266` remains post-v1 unless it is recut into a much smaller release-alignment slice.
+
 ## Operational Guardrails
 To enforce this architectural division, the following rules apply immediately:
 
