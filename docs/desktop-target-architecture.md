@@ -71,6 +71,21 @@ This means #412 is not a blind deletion task. It can only remove legacy renderer
 
 Issue #436 narrows the remaining Launch blocker by moving Job / Launch Review ownership into React while keeping `/api/launch-control` as the explicit transitional data boundary. This does not make React the default runtime and does not authorize legacy renderer deletion.
 
+## 2026-04-21 Update: Desktop v1 Release Boundary
+
+Issue #442 defines Desktop v1 as a functional operator workstation with explicit transitional boundaries.
+
+Legacy remains the default release runtime where still required for complete operator flow. React is a validated selectable runtime and the canonical future direction, but not yet the default release path.
+
+This release boundary keeps the migration honest:
+
+- Desktop v1 can ship without deleting the legacy shell renderer.
+- Desktop v1 can ship without making React the default runtime.
+- React remains the canonical future direction and should continue to receive migrated surfaces through narrow slices.
+- `research_ui` remains a transitional API and reachability boundary, not the product owner.
+- #412 is post-v1 cleanup or a re-scoped cleanup slice unless its remaining preconditions are satisfied explicitly.
+- #266 is post-v1 unless it is recut into a much smaller release-alignment issue.
+
 ## Why
 
 The desktop now spans shell bootstrap, preload, shared contracts, browser continuity, and future native workstation surfaces. Without an explicit target architecture, each migration slice would risk reopening the same debates:

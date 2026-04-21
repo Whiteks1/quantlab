@@ -1,6 +1,6 @@
 # QuantLab Desktop — Product Surfaces Inventory
 
-> Last updated: 2026-04-20  
+> Last updated: 2026-04-21
 > Status: authoritative. Update this file when surfaces change ownership or status.
 
 ---
@@ -86,6 +86,18 @@ Before #412 can retire the legacy shell renderer, every remaining `research_ui` 
 
 Issue #436 moves Job / Launch Review into the second category: React owns the review surface, while launch/job data remains preserved as an explicit transitional API dependency.
 
+## Desktop v1 release boundary
+
+Desktop v1 is a functional operator workstation with explicit transitional boundaries. Legacy remains the default release runtime where still required for complete operator flow. React is a validated selectable runtime and the canonical future direction, but not yet the default release path.
+
+For this inventory, that means:
+
+- release-critical operator flow may still rely on legacy-backed paths
+- React-owned surfaces remain canonical future direction and validated selectable runtime coverage
+- `research_ui` remains a transitional API and reachability boundary, not product ownership
+- making React the default runtime is not required to declare Desktop v1
+- removing the legacy shell renderer is not required to declare Desktop v1
+
 ## #412 deletion boundaries
 
 #412 may delete or remove from the primary runtime only after these conditions are true:
@@ -114,15 +126,13 @@ Launch should remain visible and operationally important, but it must be framed 
 
 ---
 
-## Next implementation slices (ordered by dependency)
+## Desktop v1 classification
 
-These are the viable issues from the current backlog, in execution order:
+Current backlog classification for Desktop v1 closure:
 
-1. **#262** — design tokens and base panels (foundation for all native surfaces)
-2. **#263** — harden runs table (primary workspace surface)
-3. **#264** — native run detail workspace (evidence rail depth)
-4. **#265** — artifact explorer around canonical outputs
-5. **#266** — minimal hypothesis builder
+- **#442** — v1 release-state definition. This document records the release boundary; no code or runtime switch is implied.
+- **#412** — needs re-scope or split. It must not be executed as broad deletion while legacy still owns required release flow.
+- **#266** — post-v1 unless recut into a much smaller release-alignment slice. It must not expand Desktop v1 closure into new hypothesis-builder product work.
 
 ---
 
