@@ -20,11 +20,12 @@ The primary job of the UI is to help an operator:
 ## Core References
 
 The useful inspiration is not one product copied literally.
-It is a weighted blend of several mature patterns:
+These are structural references only. They are not brand, positioning, or
+product-identity references.
 
-### 1. MLflow as the primary structural reference
+### 1. Artifact/run tracking as the primary structural reference
 
-Use MLflow as the main model for:
+Use mature experiment-tracking products as references for:
 
 - experiments
 - runs
@@ -35,26 +36,26 @@ Use MLflow as the main model for:
 
 This is the closest match to QuantLab's actual artifact model.
 
-### 2. QuantConnect as the workflow framing reference
+### 2. Quantitative workflow as the flow reference
 
-Use QuantConnect for the sense of product flow:
+Use quantitative research platforms only for the sense of workflow progression:
 
 - research
 - backtesting
 - optimization / comparison
-- live trading
+- supervised operational review
 
-This helps QuantLab feel like a coherent quantitative workflow, not a pile of pages.
+This helps QuantLab feel like a coherent quantitative workflow, not a pile of pages. It does not make QuantLab a broker terminal or live-trading product.
 
-### 3. Weights & Biases as the comparison/workspace reference
+### 3. Analytical workspace as the comparison reference
 
-Use W&B for:
+Use analytical workspace products as references for:
 
 - side-by-side comparisons
 - analytical workspaces
 - flexible table-first analysis
 
-Do not copy W&B literally.
+Do not copy these products literally.
 Borrow the idea that comparison is a first-class action, not a decorative extra.
 
 ### 4. FreqUI / Freqtrade as the operational reference
@@ -74,14 +75,16 @@ It must not dominate the research UI.
 
 QuantLab should be:
 
-- 70% analytics SaaS structure
-- 20% premium fintech / AI lab visual identity
-- 10% restrained web3 futurism
+- a dark analytical instrument
+- a research workstation
+- an evidence surface
+- a supervised operational panel when execution context matters
 
 That means:
 
 - structure must stay classical and usable
-- visual identity can still feel modern, dark, technical, and premium
+- visual identity can feel modern, dark, technical, and precise
+- venue awareness and learned-model support must remain secondary to evidence, traceability, and operator control
 
 ## Information Hierarchy
 
@@ -191,6 +194,7 @@ Use:
 Avoid:
 
 - crypto-neon overload
+- fintech or generic AI product cues
 - chart obsession
 - dense widget walls
 - decorative copy without function
