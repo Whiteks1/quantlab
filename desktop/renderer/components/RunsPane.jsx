@@ -289,11 +289,11 @@ function RunsDecisionQueueCard({ candidateCount, shortlistCount, compareReady })
         <dd>{compareReady ? 'Yes' : 'No'}</dd>
       </dl>
       <div style={{ marginTop: '15px' }}>
-        <button 
-          id="workflow-open-compare" 
-          className="ghost-btn" 
+        <button
+          id="workflow-open-compare"
+          className="ghost-btn"
           disabled={!compareReady}
-          onClick={() => openTab('shortlist-compare')}
+          onClick={() => openTab({ kind: 'compare', runIds: decision.getDecisionCompareRunIds(), label: 'decision runs' })}
         >
           Compare
         </button>

@@ -424,6 +424,7 @@ export function useQuantLabContextValue() {
   }, []);
 
   const openRunDetailTab = useCallback(async (runId, options = {}) => {
+    if (!runId) return; // Guard: runId must be a non-empty string (#451)
     const run = findRun(runId);
     if (!run) return;
     const subview = options.subview || '';
@@ -543,28 +544,57 @@ export function useQuantLabContextValue() {
     await refreshJobTab(requestId, job);
   }, [findJob, refreshJobTab, upsertTab]);
 
-  const openTab = useCallback((kind, arg, href) => {
+  /**
+   * openTab — unified tab-open API.
+   *
+   * Preferred (object form):
+   *   openTab({ kind: 'run', runId })
+   *   openTab({ kind: 'compare', runIds: [...], label: '...' })
+   *   openTab({ kind: 'job', requestId })
+   *   openTab({ kind: 'system' })   // surface tabs need no extra payload
+   *
+   * Legacy positional shim (still accepted, will be removed in #455):
+   *   openTab('run', runId)
+   *   openTab('job', requestId)
+   *   openTab('launch', title, href)
+   *
+   * 'shortlist-compare' is no longer a valid kind (#450).
+   * Use openTab({ kind: 'compare', runIds: decision.getDecisionCompareRunIds() }) instead.
+   */
+  const openTab = useCallback((kindOrTab, arg, href) => {
+    // Object form: openTab({ kind, ... })
+    const isObj = kindOrTab !== null && typeof kindOrTab === 'object';
+    const kind = isObj ? kindOrTab.kind : kindOrTab;
+
     if (kind === 'run') {
-      openRunDetailTab(arg);
+      const runId = isObj ? kindOrTab.runId : arg;
+      if (!runId) return; // Guard: prevents run:undefined tabs (#451)
+      openRunDetailTab(runId);
       return;
     }
     if (kind === 'artifacts') {
-      openRunDetailTab(arg, { subview: 'artifacts' });
-      return;
-    }
-    if (kind === 'shortlist-compare') {
-      openCompareSelectionTab(decision.getDecisionCompareRunIds(), 'decision runs');
+      const runId = isObj ? kindOrTab.runId : arg;
+      if (!runId) return;
+      openRunDetailTab(runId, { subview: 'artifacts' });
       return;
     }
     if (kind === 'compare') {
-      openCompareSelectionTab(state.selectedRunIds, 'selected runs');
+      // Object form carries explicit runIds; positional falls back to selectedRunIds.
+      const runIds = isObj && Array.isArray(kindOrTab.runIds)
+        ? kindOrTab.runIds
+        : state.selectedRunIds;
+      const label = (isObj && kindOrTab.label) || 'selected runs';
+      openCompareSelectionTab(runIds, label);
       return;
     }
     if (kind === 'job') {
-      openJobTab(arg);
+      const requestId = isObj ? kindOrTab.requestId : arg;
+      if (!requestId) return;
+      openJobTab(requestId);
       return;
     }
 
+    // Surface tabs (no payload beyond optional title/href)
     const surfaceTabs = {
       system: { id: 'system', kind: 'system', navKind: 'system', title: 'System' },
       experiments: {
@@ -579,8 +609,14 @@ export function useQuantLabContextValue() {
         id: 'launch',
         kind: 'launch',
         navKind: 'launch',
-        title: arg || 'Launch',
-        href,
+        title: (isObj ? kindOrTab.title : arg) || 'Launch',
+        href: isObj ? kindOrTab.href : href,
+      },
+      hypothesis: {
+        id: 'hypothesis',
+        kind: 'hypothesis',
+        navKind: 'hypothesis',
+        title: 'Hypothesis Builder',
       },
       runs: createRunsTab(),
       candidates: {
@@ -589,6 +625,7 @@ export function useQuantLabContextValue() {
         navKind: 'candidates',
         title: 'Candidates',
       },
+      // 'ops' positional alias kept for backward compat during #455 migration
       ops: {
         id: 'paper-ops',
         kind: 'paper',
