@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Topbar from './Topbar.jsx';
 import Sidebar from './Sidebar.jsx';
-import MainContent from './MainContent.jsx';
+import MainContent from './MainContent';
 import {
   QuantLabContextProvider,
   useQuantLabContextValue,
