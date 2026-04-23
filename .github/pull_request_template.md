@@ -22,9 +22,19 @@ This PR does not:
 ## Validation
 
 Validated with:
-- ``
-- ``
-- ``
+- `npm run typecheck`
+- `npm run smoke:fallback`
+- [ ] React runtime tested manually (`QUANTLAB_DESKTOP_RENDERER=react`)
+- [ ] Legacy runtime not regressed (`npm run start`)
+
+## Desktop migration checklist (skip if not applicable)
+
+- [ ] No new `dangerouslySetInnerHTML` added.
+- [ ] No new positional `openTab(type, ...)` calls (use object form `openTab({ kind, ... })`).
+- [ ] New tab kinds added to `MainContent.jsx` switch/dispatch.
+- [ ] New tab kinds included in `TabType` discriminated union.
+- [ ] `assertNever` exhaustiveness guard not broken.
+- [ ] Suppressed type errors reference an issue number and a TODO comment.
 
 ## Duplication Check
 
@@ -36,6 +46,8 @@ Validated with:
 
 - Note any compatibility impact, if any.
 - Note any operational or behavioral risk, if any.
+- For desktop: note if legacy runtime behavior changes.
+- For desktop: note if research_ui API surface changes.
 
 ## Notes
 
@@ -44,3 +56,4 @@ Validated with:
 - Prefer one issue closure per PR when possible.
 - If this PR only aligns docs or contracts, say so explicitly.
 - If multiple agents touched the repo, note the file ownership boundaries.
+- For React migration slices: confirm which runtime (legacy / React / both) was tested.

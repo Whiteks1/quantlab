@@ -5,6 +5,7 @@
   "description": "QuantLab Desktop shell for research, runtime visibility, and bounded AI assistance.",
   "main": "main.js",
   "scripts": {
+    "prestart": "node -e \"const fs=require('fs'),p=require('path');const d=p.join(__dirname,'renderer','dist','index.html');if(!fs.existsSync(d)){console.error('\\n[quantlab-desktop] renderer/dist/index.html not found.\\nRun: npm run build\\n');process.exit(1);}\"",
     "start": "electron .",
     "start:react": "npm run build && cross-env QUANTLAB_DESKTOP_RENDERER=react electron .",
     "dev": "concurrently \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env NODE_ENV=development QUANTLAB_DESKTOP_RENDERER=react electron .\"",

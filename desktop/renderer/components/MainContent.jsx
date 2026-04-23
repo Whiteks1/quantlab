@@ -8,6 +8,7 @@ import { PaperOpsPane } from './PaperOpsPane';
 import { SystemPane } from './SystemPane';
 import { ExperimentsPane } from './ExperimentsPane';
 import { JobLaunchReviewPane } from './JobLaunchReviewPane';
+import { AssistantPane } from './AssistantPane';
 
 /**
  * MainContent - Main content area that:
@@ -45,8 +46,13 @@ export default function MainContent({ activeTab, allTabs, onTabChange }) {
       {activeTab.kind === 'system' && <SystemPane tab={activeTab} />}
       {activeTab.kind === 'experiments' && <ExperimentsPane tab={activeTab} />}
       {activeTab.kind === 'job' && <JobLaunchReviewPane tab={activeTab} />}
+      {activeTab.kind === 'assistant' && <AssistantPane tab={activeTab} />}
 
-      {!['runs', 'compare', 'candidates', 'run', 'artifacts', 'paper', 'system', 'experiments', 'job'].includes(activeTab.kind) && (
+      {/* Stub surfaces — guarded placeholders pending full implementation */}
+      {activeTab.kind === 'launch' && <StubSurfacePane tab={activeTab} issueRef="#412" description="Native Launch surface is a post-v1 milestone. Use the research_ui launch flow in the meantime." />}
+      {activeTab.kind === 'hypothesis' && <StubSurfacePane tab={activeTab} issueRef="#266" description="Hypothesis Builder is planned. Implementation tracked in #266." />}
+
+      {!['runs', 'compare', 'candidates', 'run', 'artifacts', 'paper', 'system', 'experiments', 'job', 'assistant', 'launch', 'hypothesis'].includes(activeTab.kind) && (
         <PausedSurfacePane tab={activeTab} />
       )}
     </main>
@@ -62,6 +68,16 @@ function PausedSurfacePane({ tab }) {
         This surface is visible in the React-owned shell, but its product
         expansion remains out of scope for #430.
       </p>
+    </div>
+  );
+}
+
+function StubSurfacePane({ tab, issueRef, description }) {
+  return (
+    <div className="tab-shell tab-placeholder" data-tab-kind={tab.kind}>
+      <div className="section-label">Coming soon — {issueRef}</div>
+      <h2>{tab.title || tab.kind}</h2>
+      <p>{description}</p>
     </div>
   );
 }

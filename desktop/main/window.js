@@ -34,12 +34,21 @@ function createMainWindow({ BrowserWindow, desktopRoot, isSmokeRun, onClosed }) 
     mainWindow.loadURL("http://127.0.0.1:5173");
   } else {
     const distEntry = path.join(desktopRoot, "renderer", "dist", "index.html");
-    const sourceEntry = path.join(desktopRoot, "renderer", "index.html");
     const legacyEntry = path.join(desktopRoot, "renderer", "legacy.html");
-    const entry = useReactRenderer
-      ? (fs.existsSync(distEntry) ? distEntry : sourceEntry)
-      : legacyEntry;
-    mainWindow.loadFile(entry);
+
+    if (useReactRenderer && !fs.existsSync(distEntry)) {
+      // renderer/dist/ is empty — production React mode requires a prior build.
+      // Fall back to legacy and surface a visible warning instead of silently loading the wrong renderer.
+      console.error(
+        "[quantlab-desktop] renderer/dist/index.html not found. " +
+        "React renderer requested but not built. Falling back to legacy. " +
+        "Run `npm run build` before starting in React release mode."
+      );
+      mainWindow.loadFile(legacyEntry);
+    } else {
+      const entry = useReactRenderer ? distEntry : legacyEntry;
+      mainWindow.loadFile(entry);
+    }
   }
   if (!isSmokeRun) {
     mainWindow.once("ready-to-show", () => {
