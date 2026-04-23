@@ -107,7 +107,7 @@ export function JobLaunchReviewPane({ tab }) {
 
   const openArtifacts = () => {
     if (job.run_id) {
-      openTab('artifacts', job.run_id);
+      openTab({ kind: 'artifacts', runId: job.run_id });
       return;
     }
     openExternal(job.artifacts_href);
@@ -128,7 +128,7 @@ export function JobLaunchReviewPane({ tab }) {
             Refresh logs
           </button>
           {job.run_id && (
-            <button className="ghost-btn" type="button" onClick={() => openTab('run', job.run_id)}>
+            <button className="ghost-btn" type="button" onClick={() => openTab({ kind: 'run', runId: job.run_id })}>
               Open run
             </button>
           )}

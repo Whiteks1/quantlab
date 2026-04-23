@@ -625,13 +625,6 @@ export function useQuantLabContextValue() {
         navKind: 'candidates',
         title: 'Candidates',
       },
-      // 'ops' positional alias kept for backward compat during #455 migration
-      ops: {
-        id: 'paper-ops',
-        kind: 'paper',
-        navKind: 'paper-ops',
-        title: 'Paper Ops',
-      },
       paper: {
         id: 'paper-ops',
         kind: 'paper',
