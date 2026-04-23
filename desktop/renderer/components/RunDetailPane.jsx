@@ -323,7 +323,7 @@ export function RunDetailPane({ tab }) {
             </div>
             {hasDecisionPeers && (
               <div style={{ marginTop: '15px' }}>
-                 <button className="ghost-btn" onClick={() => openTab('shortlist-compare')}>Compare peers</button>
+                 <button className="ghost-btn" onClick={() => openTab({ kind: 'compare', runIds: decision.getDecisionCompareRunIds(), label: 'decision peers' })}>Compare peers</button>
               </div>
             )}
           </section>
