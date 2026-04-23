@@ -228,7 +228,7 @@ function CandidateCard({ entry, isBaseline }) {
       <div className="candidate-actions">
         <button
           className="ghost-btn mini"
-          onClick={() => openTab('run', run.run_id)}
+          onClick={() => openTab({ kind: 'run', runId: run.run_id })}
         >
           Open run
         </button>

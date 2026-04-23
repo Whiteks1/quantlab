@@ -62,19 +62,19 @@ export function RunsPane({ tab }) {
         <div className="artifact-actions">
           <button
             className="ghost-btn"
-            onClick={() => openTab('launch', 'Launch', '#/launch')}
+            onClick={() => openTab({ kind: 'launch', title: 'Launch', href: '#/launch' })}
           >
             Open legacy view
           </button>
           <button
             className="ghost-btn"
-            onClick={() => openTab('candidates', 'Candidates', undefined)}
+            onClick={() => openTab({ kind: 'candidates' })}
           >
             Open candidates
           </button>
           <button
             className="ghost-btn"
-            onClick={() => openTab('ops', 'Paper Ops', undefined)}
+            onClick={() => openTab({ kind: 'paper' })}
           >
             Open paper ops
           </button>
@@ -224,14 +224,14 @@ function RunRow({ run, isSelected, isCandidate }) {
       <td className="col-actions">
         <button
           className="ghost-btn mini"
-          onClick={() => openTab('run', run.run_id)}
+          onClick={() => openTab({ kind: 'run', runId: run.run_id })}
           data-open-run={run.run_id}
         >
           Open
         </button>
         <button
           className="ghost-btn mini"
-          onClick={() => openTab('run', run.run_id)}
+          onClick={() => openTab({ kind: 'run', runId: run.run_id })}
           data-open-artifacts={run.run_id}
         >
           Explore

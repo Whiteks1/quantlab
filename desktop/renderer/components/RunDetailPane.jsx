@@ -339,7 +339,7 @@ export function RunDetailPane({ tab }) {
             </dl>
             <div className="workflow-actions" style={{ marginTop: '12px' }}>
               {latestRelatedJob?.request_id && (
-                <button className="ghost-btn" onClick={() => openTab('job', latestRelatedJob.request_id)}>
+                <button className="ghost-btn" onClick={() => openTab({ kind: 'job', requestId: latestRelatedJob.request_id })}>
                   Open launch review
                 </button>
               )}

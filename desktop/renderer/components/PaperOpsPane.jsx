@@ -26,15 +26,15 @@ export function PaperOpsPane({ tab }) {
     const { openJob, openRun, openJobArtifacts, openJobLink, openExternal } = target.dataset;
     if (openJob) {
       event.preventDefault();
-      contextValue?.openTab?.('job', openJob);
+      contextValue?.openTab?.({ kind: 'job', requestId: openJob });
     } else if (openRun) {
       event.preventDefault();
-      contextValue?.openTab?.('run', openRun);
+      contextValue?.openTab?.({ kind: 'run', runId: openRun });
     } else if (openJobArtifacts) {
       event.preventDefault();
       const job = contextValue?.findJob?.(openJobArtifacts);
       if (job?.run_id) {
-        contextValue?.openTab?.('artifacts', job.run_id);
+        contextValue?.openTab?.({ kind: 'artifacts', runId: job.run_id });
       } else if (job?.artifacts_href && typeof window.quantlabDesktop?.openExternal === 'function') {
         window.quantlabDesktop.openExternal(job.artifacts_href);
       }

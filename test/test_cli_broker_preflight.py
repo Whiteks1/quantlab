@@ -678,6 +678,13 @@ def test_hyperliquid_submit_session_refuses_duplicate_replay(monkeypatch, tmp_pa
         return _Fake()
 
     monkeypatch.setattr(module.HyperliquidBrokerAdapter, "build_submit_report", fake_submit)
+    generated_session_ids = iter(
+        (
+            "20260423_204530_hyperliquid_submit_a",
+            "20260423_204531_hyperliquid_submit_b",
+        )
+    )
+    monkeypatch.setattr(module, "generate_run_id", lambda *_args, **_kwargs: next(generated_session_ids))
 
     root_dir = tmp_path / "hyperliquid_submits"
     args = _make_args(
