@@ -21,6 +21,7 @@
     "renderer/app.js",
     "renderer/src/**/*",
     "renderer/components/**/*.jsx",
+    "renderer/components/**/*.tsx",
     "shared/**/*.ts",
     "types/**/*.d.ts",
     "vite.config.ts"
