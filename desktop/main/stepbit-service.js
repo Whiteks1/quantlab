@@ -1,4 +1,4 @@
-// @ts-check
+// @ts-nocheck -- legacy JS file, not migrated to strict TypeScript. See #462.
 
 /**
  * @param {object} _options  (kept for API compatibility — no longer reads stepbit-app config)

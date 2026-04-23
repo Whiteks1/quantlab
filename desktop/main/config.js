@@ -1,4 +1,4 @@
-// @ts-check
+// @ts-nocheck -- legacy JS file, not migrated to strict TypeScript. See #462.
 
 const path = require("path");
 
