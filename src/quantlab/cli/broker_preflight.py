@@ -10,6 +10,7 @@ from pathlib import Path
 
 from quantlab.brokers import ExecutionContext, HyperliquidBrokerAdapter, KrakenBrokerAdapter
 from quantlab.brokers.session_store import (
+    HYPERLIQUID_SUBMIT_METADATA_FILENAME,
     HYPERLIQUID_SUBMIT_RESPONSE_FILENAME,
     BrokerOrderValidationStore,
     HyperliquidSubmitStore,
@@ -216,6 +217,21 @@ def handle_broker_preflight_commands(args) -> dict[str, object] | bool:
             },
         )
         root_dir = Path(getattr(args, "hyperliquid_submit_sessions_root", None) or "outputs/hyperliquid_submits").resolve()
+        replay_response_path, replay_response = _find_existing_hyperliquid_submit_response_by_request_id(root_dir, request_id)
+        if replay_response_path is not None:
+            replay_session_id = replay_response_path.parent.name
+            replay_state = None
+            if isinstance(replay_response, dict):
+                replay_state = replay_response.get("submit_state")
+            message = (
+                f"Hyperliquid submit session '{replay_session_id}' already has a persisted submit response at "
+                f"{replay_response_path}. Refusing to replay supervised submit; inspect or reconcile the "
+                "existing session instead."
+            )
+            if replay_state:
+                message = f"{message} Existing submit_state: {replay_state}."
+            raise ConfigError(message)
+
         store = HyperliquidSubmitStore(session_id, base_dir=str(root_dir))
         existing_response_path, existing_response = _load_existing_hyperliquid_submit_response(store)
         if existing_response_path is not None:
@@ -512,6 +528,49 @@ def _load_existing_hyperliquid_submit_response(
     except json.JSONDecodeError:
         payload = None
     return response_path.resolve(), payload if isinstance(payload, dict) else None
+
+
+def _find_existing_hyperliquid_submit_response_by_request_id(
+    root_dir: Path,
+    request_id: object,
+) -> tuple[Path | None, dict[str, object] | None]:
+    if not isinstance(request_id, str) or not request_id.strip():
+        return None, None
+    if not root_dir.exists():
+        return None, None
+
+    for session_path in sorted(root_dir.iterdir()):
+        if not session_path.is_dir():
+            continue
+        metadata_path = session_path / HYPERLIQUID_SUBMIT_METADATA_FILENAME
+        if not metadata_path.exists() or not metadata_path.is_file():
+            continue
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as fh:
+                metadata_payload = json.load(fh)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(metadata_payload, dict):
+            continue
+        if metadata_payload.get("request_id") != request_id:
+            continue
+
+        response_path = session_path / HYPERLIQUID_SUBMIT_RESPONSE_FILENAME
+        if not response_path.exists() or not response_path.is_file():
+            continue
+
+        response_payload: dict[str, object] | None = None
+        try:
+            with open(response_path, "r", encoding="utf-8") as fh:
+                loaded_payload = json.load(fh)
+            if isinstance(loaded_payload, dict):
+                response_payload = loaded_payload
+        except json.JSONDecodeError:
+            response_payload = None
+
+        return response_path.resolve(), response_payload
+
+    return None, None
 
 
 def _build_execution_context_from_args(args) -> ExecutionContext | None:
