@@ -45,6 +45,31 @@ For public web work, also read:
   - `docs/landing-governance.md`
   - `landing/AGENTS.md`
 
+## Desktop Non-Negotiables (Agent Policy)
+
+These rules are mandatory for any change under `desktop/`.
+
+- Keep IPC hardening in place for request paths:
+  - Normalize and validate `relativePath` (no absolute URLs, must start with `/`).
+  - Require local token protection (`X-QuantLab-Token`) for sensitive POST routes.
+  - Do not remove these guards without an explicit ADR.
+- Never ship hardcoded default API keys or credentials in desktop runtime code.
+  - Environment variables may be optional for local endpoints, but secrets must be required when used for auth.
+- Desktop smoke must represent the real operator happy path.
+  - `smoke:fallback` and `smoke:real-path` must both pass before merge.
+  - Do not keep legacy-only selectors/assertions when UI structure has migrated.
+- Keep test imports aligned with current code layout.
+  - If a module is migrated or removed, update tests in the same PR.
+  - A broken test import path is treated as a blocking regression.
+- Treat filesystem boundaries as security boundaries.
+  - Use canonical path checks (`realpath`) for repo/workspace guards.
+  - `resolve + relative` alone is not sufficient when symlinks are possible.
+- Do not log sensitive IPC payloads or raw responses.
+  - Avoid full request bodies, tokens, prompts, or raw response excerpts in logs.
+  - Keep logs minimal and operational.
+- If a PR only has minor merge conflicts in CI/workflow files, resolve and merge quickly.
+  - If failing checks indicate behavioral regressions (for example smoke happy-path failures), fix before merge.
+
 ## Before Implementing
 
 1. Read `.agents/project-brief.md`.

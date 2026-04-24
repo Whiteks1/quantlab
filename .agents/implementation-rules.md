@@ -30,6 +30,23 @@
 - Documentation (docstrings) is required for public functions and modules.
 - If behavior or contracts change, validate the change against existing tests before considering the work complete.
 
+## Desktop Security and Reliability Gates
+
+These gates are mandatory for work under `desktop/`:
+
+- Preserve IPC path hardening:
+  - validate and normalize request paths
+  - reject absolute URLs
+  - require `/`-prefixed relative API paths
+  - enforce local token headers for sensitive POST endpoints
+- Never use hardcoded fallback credentials (API keys, tokens, secrets) in runtime desktop services.
+- Keep smoke tests aligned with the current UI, not legacy-only selectors.
+  - `smoke:fallback` and `smoke:real-path` must pass before merge.
+- Keep tests synchronized with moved/removed modules in the same PR.
+  - broken import paths are blocking failures.
+- Enforce canonical filesystem boundary checks using `realpath` for workspace/repo guards.
+- Do not log sensitive request payloads or response bodies in IPC paths.
+
 ## Reporting and Artifacts
 - Reporting outputs in Markdown, JSON, CSV, and charts should remain consistent when they describe the same run, experiment, or portfolio.
 - Do not silently change reporting schemas or field meanings.
