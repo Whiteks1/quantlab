@@ -192,7 +192,7 @@ export function PaperOpsPane({ tab: _tab }: { tab: PaperTab }) {
   const launchSig = resolveLaunchSignal(latestJob?.status);
 
   return (
-    <div className="tab-shell">
+    <div className="tab-shell paper-ops-pane">
       {/* Header */}
       <div className="artifact-top">
         <div>
