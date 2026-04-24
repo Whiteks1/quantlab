@@ -12,7 +12,8 @@ const fs = require("fs");
  * }} options
  */
 function createMainWindow({ BrowserWindow, desktopRoot, isSmokeRun, onClosed }) {
-  const useReactRenderer = process.env.QUANTLAB_DESKTOP_RENDERER === "react";
+  // React is the default renderer. Set QUANTLAB_DESKTOP_RENDERER=legacy to opt back.
+  const useReactRenderer = process.env.QUANTLAB_DESKTOP_RENDERER !== "legacy";
   const mainWindow = new BrowserWindow({
     width: 1440,
     height: 960,
