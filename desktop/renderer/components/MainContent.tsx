@@ -11,6 +11,7 @@ import { SystemPane } from './SystemPane';
 import { ExperimentsPane } from './ExperimentsPane';
 import { JobLaunchReviewPane } from './JobLaunchReviewPane';
 import { AssistantPane } from './AssistantPane';
+import { LaunchPane } from './LaunchPane';
 
 /**
  * MainContent — routes the active tab to its React surface.
@@ -75,13 +76,7 @@ function renderSurface(tab: Tab): React.ReactElement {
     case 'assistant':
       return <AssistantPane tab={tab as any} />;
     case 'launch':
-      return (
-        <StubSurfacePane
-          tab={tab}
-          issueRef="#412"
-          description="Native Launch surface is a post-v1 milestone. Use the research_ui launch flow in the meantime."
-        />
-      );
+      return <LaunchPane tab={tab} />;
     case 'hypothesis':
       return (
         <StubSurfacePane
