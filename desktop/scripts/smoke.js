@@ -220,6 +220,15 @@ async function main() {
       );
     }
 
+    const reactParityGatePassed = renderer !== "react" || Boolean(
+      result.parityGatePassed
+      && result.happyPathSystemReady
+      && result.happyPathExperimentsReady
+      && result.happyPathPaperOpsReady
+      && result.happyPathAssistantReady
+      && result.happyPathLaunchReady
+    );
+
     const passed =
       mode === "real-path"
         ? (
@@ -228,6 +237,7 @@ async function main() {
           && result.domReady
           && result.workbenchReady
           && result.happyPathReady
+          && reactParityGatePassed
           && result.serverReady
           && result.apiReady
         )
@@ -237,6 +247,7 @@ async function main() {
           && result.domReady
           && result.workbenchReady
           && result.happyPathReady
+          && reactParityGatePassed
           && result.shellReady
           && result.rendererMode === renderer
         );
@@ -279,6 +290,22 @@ async function main() {
             ? `Desktop smoke fallback passed via ${result.serverUrl}`
             : "Desktop smoke fallback passed via local runs fallback"),
     );
+    if (renderer === "react") {
+      console.log(
+        `React parity gate (${result.parityGateName || "react-parity-v1"}): `
+        + `runs=${Boolean(result.happyPathRunsReady)} `
+        + `runDetail=${Boolean(result.happyPathRunDetailReady)} `
+        + `artifacts=${Boolean(result.happyPathArtifactsReady)} `
+        + `candidates=${Boolean(result.happyPathCandidatesReady)} `
+        + `compare=${Boolean(result.happyPathCompareReady)} `
+        + `system=${Boolean(result.happyPathSystemReady)} `
+        + `experiments=${Boolean(result.happyPathExperimentsReady)} `
+        + `paperOps=${Boolean(result.happyPathPaperOpsReady)} `
+        + `assistant=${Boolean(result.happyPathAssistantReady)} `
+        + `launch=${Boolean(result.happyPathLaunchReady)} `
+        + `passed=${Boolean(result.parityGatePassed)}`,
+      );
+    }
   } finally {
     if (seededRunsIndex) {
       await fs.rm(smokeRunsIndexPath, { force: true }).catch(() => {});

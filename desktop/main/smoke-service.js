@@ -42,6 +42,8 @@ function createSmokeService({
    */
   function defaultResult(overrides = {}) {
     return {
+      parityGateName: "react-parity-v1",
+      parityGatePassed: false,
       bridgeReady: false,
       shellReady: false,
       domReady: false,
@@ -53,6 +55,11 @@ function createSmokeService({
       happyPathArtifactsReady: false,
       happyPathCandidatesReady: false,
       happyPathCompareReady: false,
+      happyPathSystemReady: false,
+      happyPathExperimentsReady: false,
+      happyPathPaperOpsReady: false,
+      happyPathAssistantReady: false,
+      happyPathLaunchReady: false,
       happyPathRunCount: 0,
       happyPathSelectableRunCount: 0,
       serverReady: false,
@@ -273,6 +280,11 @@ function createSmokeService({
           artifactsReady: status.artifacts,
           candidatesReady: status.candidates,
           compareReady: status.compare,
+          systemReady: status.system,
+          experimentsReady: status.experiments,
+          paperOpsReady: status.paperOps,
+          assistantReady: status.assistant,
+          launchReady: status.launch,
           runCount: status.runCount,
           selectableRunCount: status.selectableRunCount,
           message: status.message,
@@ -287,6 +299,11 @@ function createSmokeService({
       happyPathArtifactsReady: Boolean(evaluation?.artifactsReady),
       happyPathCandidatesReady: Boolean(evaluation?.candidatesReady),
       happyPathCompareReady: Boolean(evaluation?.compareReady),
+      happyPathSystemReady: Boolean(evaluation?.systemReady),
+      happyPathExperimentsReady: Boolean(evaluation?.experimentsReady),
+      happyPathPaperOpsReady: Boolean(evaluation?.paperOpsReady),
+      happyPathAssistantReady: Boolean(evaluation?.assistantReady),
+      happyPathLaunchReady: Boolean(evaluation?.launchReady),
       happyPathRunCount: Number(evaluation?.runCount || 0),
       happyPathSelectableRunCount: Number(evaluation?.selectableRunCount || 0),
       happyPathMessage: String(evaluation?.message || "").trim(),
@@ -397,8 +414,14 @@ function createSmokeService({
       result.happyPathArtifactsReady = happyPath.happyPathArtifactsReady;
       result.happyPathCandidatesReady = happyPath.happyPathCandidatesReady;
       result.happyPathCompareReady = happyPath.happyPathCompareReady;
+      result.happyPathSystemReady = happyPath.happyPathSystemReady;
+      result.happyPathExperimentsReady = happyPath.happyPathExperimentsReady;
+      result.happyPathPaperOpsReady = happyPath.happyPathPaperOpsReady;
+      result.happyPathAssistantReady = happyPath.happyPathAssistantReady;
+      result.happyPathLaunchReady = happyPath.happyPathLaunchReady;
       result.happyPathRunCount = happyPath.happyPathRunCount;
       result.happyPathSelectableRunCount = happyPath.happyPathSelectableRunCount;
+      result.parityGatePassed = result.happyPathReady;
       result.shellReady = result.bridgeReady && result.domReady && result.workbenchReady && result.happyPathReady && (
         smokeMode === "real-path"
           ? result.serverReady
@@ -417,7 +440,7 @@ function createSmokeService({
         result.error = `desktop renderer safety check failed: renderer=${result.rendererMode}, domReady=${result.domReady}, workbenchReady=${result.workbenchReady}`;
       }
       if (!result.happyPathReady) {
-        const happyPathError = `desktop happy-path check failed (runs=${result.happyPathRunsReady}, runDetail=${result.happyPathRunDetailReady}, artifacts=${result.happyPathArtifactsReady}, candidates=${result.happyPathCandidatesReady}, compare=${result.happyPathCompareReady}, runCount=${result.happyPathRunCount}, selectableRuns=${result.happyPathSelectableRunCount})${happyPath.happyPathMessage ? `: ${happyPath.happyPathMessage}` : ""}`;
+        const happyPathError = `desktop happy-path check failed (runs=${result.happyPathRunsReady}, runDetail=${result.happyPathRunDetailReady}, artifacts=${result.happyPathArtifactsReady}, candidates=${result.happyPathCandidatesReady}, compare=${result.happyPathCompareReady}, system=${result.happyPathSystemReady}, experiments=${result.happyPathExperimentsReady}, paperOps=${result.happyPathPaperOpsReady}, assistant=${result.happyPathAssistantReady}, launch=${result.happyPathLaunchReady}, runCount=${result.happyPathRunCount}, selectableRuns=${result.happyPathSelectableRunCount})${happyPath.happyPathMessage ? `: ${happyPath.happyPathMessage}` : ""}`;
         result.error = result.error ? `${result.error} | ${happyPathError}` : happyPathError;
       }
     } catch (error) {

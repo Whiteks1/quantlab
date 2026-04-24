@@ -47,6 +47,15 @@ cd desktop
 npm run smoke
 ```
 
+React parity gate (promotion proof):
+
+```powershell
+cd desktop
+npm run smoke:react:fallback
+```
+
+Gate definition: [`docs/desktop-react-parity-gate.md`](../docs/desktop-react-parity-gate.md)
+
 ## Cursor MCP
 
 This folder also exposes a local MCP server for Cursor via [`.cursor/mcp.json`](../.cursor/mcp.json).
