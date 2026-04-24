@@ -63,7 +63,7 @@ export function AssistantPane({ tab }) {
 
   if (available === false) {
     return (
-      <div className="pane-wrapper assistant-pane">
+      <div className="tab-shell assistant-pane" data-smoke="surface-assistant">
         <div className="tab-placeholder">
           <div className="section-label">Assistant — unavailable</div>
           <h2>Stepbit not configured</h2>
@@ -80,7 +80,7 @@ export function AssistantPane({ tab }) {
 
   if (available === null) {
     return (
-      <div className="pane-wrapper assistant-pane">
+      <div className="tab-shell assistant-pane" data-smoke="surface-assistant">
         <div className="tab-placeholder">
           <p>Checking Stepbit availability…</p>
         </div>
@@ -89,7 +89,7 @@ export function AssistantPane({ tab }) {
   }
 
   return (
-    <div className="pane-wrapper assistant-pane" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="tab-shell assistant-pane" data-smoke="surface-assistant" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="section-label" style={{ padding: '8px 16px' }}>Assistant — Stepbit</div>
 
       <div className="assistant-messages" style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
