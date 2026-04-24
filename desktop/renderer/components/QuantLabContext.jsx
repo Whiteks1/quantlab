@@ -753,6 +753,60 @@ export function useQuantLabContextValue() {
     });
   }, [saveCandidatesStore, state.candidatesStore]);
 
+  const saveSweepStore = useCallback(async (nextStore) => {
+    const normalized = sweepDecisionStore.normalizeSweepDecisionStore(nextStore);
+    setState((current) => ({ ...current, sweepDecisionStore: normalized }));
+    try {
+      const persisted = sweepDecisionStore.normalizeSweepDecisionStore(
+        await getBridge().saveSweepDecisionStore(normalized)
+      );
+      setState((current) => ({ ...current, sweepDecisionStore: persisted }));
+    } catch (_error) {
+      // Keep optimistic sweep decision state if persistence is temporarily unavailable.
+    }
+  }, []);
+
+  const toggleSweepEntry = useCallback(async (row) => {
+    const entryId = row?.entry_id;
+    if (!entryId) return;
+    const existing = sweepDecisionStore.getSweepDecisionEntry(state.sweepDecisionStore, entryId);
+    const entries = sweepDecisionStore.getSweepDecisionEntries(state.sweepDecisionStore)
+      .filter((e) => e.entry_id !== entryId);
+    if (!existing) {
+      entries.push({
+        entry_id: entryId,
+        sweep_run_id: row.sweep_run_id || row.sweep?.run_id || '',
+        source: row.source || 'leaderboard',
+        row_index: typeof row.row_index === 'number' ? row.row_index : 0,
+        config_path: row.config_path || '',
+        row_snapshot: row,
+        shortlisted: false,
+        note: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
+    await saveSweepStore({ ...state.sweepDecisionStore, entries, updated_at: new Date().toISOString() });
+  }, [saveSweepStore, state.sweepDecisionStore]);
+
+  const toggleSweepShortlist = useCallback(async (entryId) => {
+    const existing = sweepDecisionStore.getSweepDecisionEntry(state.sweepDecisionStore, entryId);
+    if (!existing) return;
+    const entries = sweepDecisionStore.getSweepDecisionEntries(state.sweepDecisionStore)
+      .map((e) => e.entry_id === entryId
+        ? { ...e, shortlisted: !e.shortlisted, updated_at: new Date().toISOString() }
+        : e);
+    await saveSweepStore({ ...state.sweepDecisionStore, entries, updated_at: new Date().toISOString() });
+  }, [saveSweepStore, state.sweepDecisionStore]);
+
+  const setSweepBaseline = useCallback(async (entryId) => {
+    await saveSweepStore({
+      ...state.sweepDecisionStore,
+      baseline_entry_id: entryId || null,
+      updated_at: new Date().toISOString(),
+    });
+  }, [saveSweepStore, state.sweepDecisionStore]);
+
   const refresh = useCallback(async (workspaceOverride = null) => {
     const workspace = workspaceOverride || await getBridge().getWorkspaceState();
     const [snapshotState, candidatesStore, sweepStore, experimentsWorkspace] =
@@ -820,6 +874,7 @@ export function useQuantLabContextValue() {
     getLatestFailedJob,
     getRunRelatedJobs,
     getSweepDecisionEntriesForRun,
+    findSweepDecisionRow,
     loadRunDetail,
     decision,
     openTab,
@@ -831,6 +886,9 @@ export function useQuantLabContextValue() {
     toggleCandidate,
     toggleShortlist,
     setBaseline,
+    toggleSweepEntry,
+    toggleSweepShortlist,
+    setSweepBaseline,
     refresh,
   }), [
     contextState,
@@ -843,6 +901,7 @@ export function useQuantLabContextValue() {
     getLatestFailedJob,
     getRunRelatedJobs,
     getSweepDecisionEntriesForRun,
+    findSweepDecisionRow,
     loadRunDetail,
     decision,
     openTab,
@@ -854,6 +913,9 @@ export function useQuantLabContextValue() {
     toggleCandidate,
     toggleShortlist,
     setBaseline,
+    toggleSweepEntry,
+    toggleSweepShortlist,
+    setSweepBaseline,
     refresh,
   ]);
 }
