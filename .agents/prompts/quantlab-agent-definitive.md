@@ -76,6 +76,14 @@ Validation requirements:
 - run `git diff --check`
 - run relevant CLI or artifact checks when behavior changes
 
+Desktop invariants (mandatory for `desktop/` work):
+- keep IPC request-path validation and sensitive-route token protection enabled
+- do not introduce hardcoded default API keys/tokens
+- keep smoke checks representative of current UI (fallback + real-path)
+- update tests when modules move; broken imports are blocking regressions
+- use canonical path boundary checks (`realpath`) for local filesystem guards
+- avoid logging sensitive IPC payloads or raw response contents
+
 Output requirements:
 - exact files changed
 - compact summary of the implementation
