@@ -68,11 +68,8 @@ export default function App() {
     contextValue.setActiveTab(tabId);
   };
 
-  const handleNavigate = (surfaceId) => {
-    // TODO(#455): surfaceId comes from shell-chrome.js nav items (legacy strings like
-    // 'ops', 'shortlist-compare', 'sweep-handoff'). Migrate shell-chrome to emit
-    // Tab objects so this can use the object form openTab({ kind: surfaceId }).
-    contextValue.openTab(surfaceId);
+  const handleNavigate = (tab) => {
+    contextValue.openTab(tab);
   };
 
   return (

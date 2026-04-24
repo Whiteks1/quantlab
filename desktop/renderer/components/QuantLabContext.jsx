@@ -61,6 +61,30 @@ function getBridge() {
   return window.quantlabDesktop;
 }
 
+// Valid kinds from shared/models/tab.ts — kept in sync manually.
+// If this list drifts, stale persisted tabs are silently dropped rather than crashing.
+const VALID_TAB_KINDS = new Set([
+  'runs', 'run', 'artifacts', 'compare', 'candidates',
+  'system', 'experiments', 'paper', 'job', 'assistant', 'launch', 'hypothesis',
+]);
+
+/**
+ * Guards against stale or unknown tab kinds from future persistence.
+ * Drops tabs whose kind is not in the current union; maps known legacy aliases.
+ */
+function rehydrateTabs(rawTabs) {
+  if (!Array.isArray(rawTabs)) return [];
+  return rawTabs
+    .map((tab) => {
+      if (!tab || typeof tab !== 'object') return null;
+      // Map legacy aliases that were removed from the union.
+      if (tab.kind === 'shortlist-compare') return { ...tab, kind: 'compare' };
+      if (tab.kind === 'ops') return { ...tab, kind: 'paper' };
+      return tab;
+    })
+    .filter((tab) => tab && VALID_TAB_KINDS.has(tab.kind));
+}
+
 function createRunsTab() {
   return {
     id: 'runs-native',
