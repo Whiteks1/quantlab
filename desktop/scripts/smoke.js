@@ -174,7 +174,7 @@ async function main() {
         QUANTLAB_DESKTOP_SMOKE_MODE: mode,
         QUANTLAB_DESKTOP_SMOKE_OUTPUT: outputPath,
         QUANTLAB_DESKTOP_OUTPUTS_ROOT: desktopOutputsRoot,
-        ...(renderer === "react" ? { QUANTLAB_DESKTOP_RENDERER: "react" } : {}),
+        QUANTLAB_DESKTOP_RENDERER: renderer,
         ...(mode === "fallback" ? { QUANTLAB_DESKTOP_DISABLE_SERVER_BOOT: "1" } : {}),
       },
     });

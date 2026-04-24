@@ -7,7 +7,7 @@ Current scope:
 - Electron-based shell
 - auto-starts `research_ui/server.py`
 - workstation-first sidebar and shell chrome
-- primary `Runs` / `System` work surfaces plus an assistant support lane
+- primary `Launch` workspace plus native operator surfaces (`Runs`, `Compare`, `Candidates`, `Paper Ops`, `System`, `Experiments`, `Assistant`)
 - local decision store for candidates, shortlist, and baseline
 - context tabs that combine shell-native workstation surfaces with transitional launch/job continuity
 - runtime strip for QuantLab and Stepbit visibility
@@ -18,10 +18,10 @@ This is intentionally a first block, not the final product shell.
 
 Desktop v1 is a functional operator workstation with explicit transitional boundaries.
 
-- Legacy remains the default release runtime where still required for complete operator flow.
-- React is a validated selectable runtime and the canonical future direction, but not yet the default release path.
-- `npm start` starts the current release runtime.
-- `npm run start:react` starts the selectable React runtime.
+- React is the default runtime for Desktop.
+- Legacy runtime stays available as controlled rollback (`npm run start:legacy` or `QUANTLAB_DESKTOP_RENDERER=legacy`).
+- `npm start` starts Desktop in React mode.
+- `npm run start:legacy` starts Desktop in rollback mode.
 - `research_ui` remains a transitional API and reachability boundary; it is not the target shell or canonical workspace surface.
 
 This keeps Desktop v1 honest: the product can ship as a usable operator workstation while the React migration continues through narrow slices.
@@ -55,6 +55,15 @@ npm run smoke:react:fallback
 ```
 
 Gate definition: [`docs/desktop-react-parity-gate.md`](../docs/desktop-react-parity-gate.md)
+
+Renderer rollout + rollback smoke:
+
+```powershell
+cd desktop
+npm run smoke:renderer-rollout
+```
+
+Rollback policy: [`docs/desktop-renderer-rollback.md`](../docs/desktop-renderer-rollback.md)
 
 ## Cursor MCP
 
