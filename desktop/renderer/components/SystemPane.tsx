@@ -178,7 +178,7 @@ export function SystemPane({ tab: _tab }: { tab: SystemTab }) {
   };
 
   return (
-    <div className="tab-shell system-pane">
+    <div className="tab-shell system-pane" data-smoke="surface-system">
       {/* Header */}
       <div className="artifact-top">
         <div>
@@ -213,7 +213,7 @@ export function SystemPane({ tab: _tab }: { tab: SystemTab }) {
         <SummaryCard label="Launch jobs" value={fmt(Array.isArray(launchControl?.jobs) ? launchControl.jobs.length : 0)} tone={jobs.length ? 'tone-positive' : 'tone-warning'} />
         <SummaryCard label="Paper state" value={paper?.available ? 'Ready' : 'Pending'} tone={paper?.available ? 'tone-positive' : 'tone-warning'} />
         <SummaryCard label="Broker alerts" value={fmt(brokerAlerts.length)} tone={brokerAlerts.length ? 'tone-negative' : broker?.available ? 'tone-positive' : 'tone-warning'} />
-        <SummaryCard label="Launch browser" value={workspace.serverUrl ? 'Available' : 'Unavailable'} tone={workspace.serverUrl ? 'tone-positive' : 'tone-warning'} />
+        <SummaryCard label="Launch workspace" value={workspace.serverUrl ? 'Connected' : 'Degraded'} tone={workspace.serverUrl ? 'tone-positive' : 'tone-warning'} />
         <SummaryCard label="Stepbit frontend" value={liveUrls.frontend_reachable ? 'Attached' : 'Detached'} tone={liveUrls.frontend_reachable ? 'tone-positive' : 'tone-warning'} />
         <SummaryCard label="Stepbit core" value={liveUrls.core_ready ? 'Ready' : liveUrls.core_reachable ? 'Partial' : 'Detached'} tone={liveUrls.core_ready ? 'tone-positive' : liveUrls.core_reachable ? 'tone-warning' : 'tone-negative'} />
       </div>
@@ -228,7 +228,7 @@ export function SystemPane({ tab: _tab }: { tab: SystemTab }) {
             <MetricRow label="Workspace state" value={wsSig.label} tone={wsSig.tone} />
             <MetricRow label="Server URL" value={workspace.serverUrl ?? 'pending'} />
             <MetricRow label="Server source" value={titleCase(workspace.source ?? 'unknown')} />
-            <MetricRow label="Launch browser surface" value={workspace.serverUrl ? 'Available (browser transitional)' : 'Unavailable (runtime offline)'} tone={workspace.serverUrl ? 'tone-positive' : 'tone-warning'} />
+            <MetricRow label="Launch workspace surface" value={workspace.serverUrl ? 'Connected' : 'Degraded (runtime offline)'} tone={workspace.serverUrl ? 'tone-positive' : 'tone-warning'} />
             <MetricRow label="Refresh state" value={ssSig.label} tone={ssSig.tone} />
             <MetricRow label="Last refresh" value={ssSig.lastSuccessAt} />
             <MetricRow label="Consecutive refresh errors" value={fmt(snapshotStatus.consecutiveErrors ?? 0)} />
@@ -252,7 +252,7 @@ export function SystemPane({ tab: _tab }: { tab: SystemTab }) {
               ))}
             </div>
           ) : (
-            <div className="empty-state">No addressable browser surfaces are visible yet. This is expected while runtime is booting or when the shell is running local-only fallback.</div>
+            <div className="empty-state">No runtime-linked surfaces are visible yet. This is expected while runtime is booting or when the shell is running local-only fallback.</div>
           )}
         </section>
 

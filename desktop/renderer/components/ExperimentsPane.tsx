@@ -271,7 +271,7 @@ export function ExperimentsPane({ tab }: { tab: ExperimentsTab }) {
   }
 
   return (
-    <div className="tab-shell experiments-pane">
+    <div className="tab-shell experiments-pane" data-smoke="surface-experiments">
       {/* Header */}
       <div className="artifact-top">
         <div>
