@@ -174,14 +174,14 @@ export function LaunchPane({ tab: _tab }: { tab: LaunchTab }) {
           <div className="section-label">Launch control</div>
           <h3>Launch</h3>
           <div className="artifact-meta">
-            Submit run and sweep jobs, review the launch queue, and inspect individual job logs.
-            The full parameter form is available in the browser surface.
+            Primary launch surface for run and sweep execution, queue review, and job log inspection.
+            Browser runtime remains available only as a secondary bridge.
           </div>
         </div>
         <div className="artifact-actions">
           {serverUrl && (
             <button className="ghost-btn" type="button" onClick={() => openExternal('/research_ui/index.html#/launch')}>
-              Browser launch form
+              Open browser bridge
             </button>
           )}
           {latestRun?.run_id && (
@@ -220,7 +220,7 @@ export function LaunchPane({ tab: _tab }: { tab: LaunchTab }) {
           tone={latestRun?.run_id ? 'tone-positive' : 'tone-warning'}
         />
         <SummaryCard
-          label="Browser form"
+          label="Browser bridge"
           value={serverUrl ? 'Available' : 'Unavailable'}
           tone={serverUrl ? 'tone-positive' : 'tone-warning'}
         />

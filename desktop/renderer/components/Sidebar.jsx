@@ -11,9 +11,9 @@ import React from 'react';
  */
 export default function Sidebar({ currentSurface, onNavigate, isCollapsed }) {
   const navItems = [
+    { id: 'launch', label: 'Launch', icon: 'play' },
     { id: 'system', label: 'System', icon: 'settings' },
     { id: 'experiments', label: 'Experiments', icon: 'beaker' },
-    { id: 'launch', label: 'Launch', icon: 'play' },
     { id: 'runs', label: 'Runs', icon: 'list' },
     { id: 'candidates', label: 'Candidates', icon: 'trophy' },
     { id: 'compare', label: 'Compare', icon: 'scale' },

@@ -64,7 +64,7 @@ export function RunsPane({ tab }) {
             className="ghost-btn"
             onClick={() => openTab({ kind: 'launch', title: 'Launch', href: '#/launch' })}
           >
-            Open legacy view
+            Open launch surface
           </button>
           <button
             className="ghost-btn"
