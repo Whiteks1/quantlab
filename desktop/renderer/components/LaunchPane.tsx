@@ -167,7 +167,7 @@ export function LaunchPane({ tab: _tab }: { tab: LaunchTab }) {
   };
 
   return (
-    <div className="tab-shell">
+    <div className="tab-shell launch-pane">
       {/* Header */}
       <div className="artifact-top">
         <div>

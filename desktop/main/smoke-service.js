@@ -102,11 +102,32 @@ function createSmokeService({
           artifacts: false,
           candidates: false,
           compare: false,
+          system: rendererMode !== "react",
+          experiments: rendererMode !== "react",
+          paperOps: rendererMode !== "react",
+          assistant: rendererMode !== "react",
+          launch: rendererMode !== "react",
           runCount: 0,
           selectableRunCount: 0,
           message: "",
         };
         const failures = [];
+        const validateReactSurface = async (action, expectedTabId, selector, label, allowPlaceholder = false) => {
+          const clicked = click('.nav-item[data-action="' + action + '"]');
+          if (!clicked) {
+            failures.push(label + " nav unavailable");
+            return false;
+          }
+          await waitFor(() => activeTabId() === expectedTabId, 5000, 100);
+          const tabMatches = activeTabId() === expectedTabId;
+          const hasSurface = Boolean(document.querySelector(selector));
+          const hasPlaceholder = Boolean(getTabContent()?.querySelector(".tab-placeholder"));
+          const ok = tabMatches && hasSurface && (allowPlaceholder || !hasPlaceholder);
+          if (!ok) {
+            failures.push(label + " surface unavailable");
+          }
+          return ok;
+        };
 
         const openedRuns = click('.nav-item[data-action="open-runs"]');
         if (openedRuns) {
@@ -222,12 +243,27 @@ function createSmokeService({
           if (!status.compare) failures.push("compare guard missing");
         }
 
+        if (rendererMode === "react") {
+          status.system = await validateReactSurface("open-system", "system", ".system-pane", "system");
+          status.experiments = await validateReactSurface("open-experiments", "experiments", ".experiments-pane", "experiments");
+          status.paperOps = await validateReactSurface("open-paper-ops", "paper-ops", ".paper-ops-pane", "paper ops");
+          status.assistant = await validateReactSurface("open-assistant", "assistant", ".assistant-pane", "assistant", true);
+          status.launch = await validateReactSurface("open-launch", "launch", ".launch-pane", "launch");
+          click('.nav-item[data-action="open-runs"]');
+          await waitFor(() => activeTabId() === "runs-native" || Boolean(document.querySelector(".runs-tab")), 5000, 100);
+        }
+
         const ready = Boolean(
           status.runs
           && status.runDetail
           && status.artifacts
           && status.candidates
           && status.compare
+          && status.system
+          && status.experiments
+          && status.paperOps
+          && status.assistant
+          && status.launch
         );
         status.message = failures.join("; ");
         return {
