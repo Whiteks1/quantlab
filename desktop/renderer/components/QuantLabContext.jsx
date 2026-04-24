@@ -94,6 +94,15 @@ function createRunsTab() {
   };
 }
 
+function createLaunchTab() {
+  return {
+    id: 'launch',
+    kind: 'launch',
+    navKind: 'launch',
+    title: 'Launch',
+  };
+}
+
 function normalizeRunsRegistry(registry) {
   if (Array.isArray(registry)) return { runs: registry };
   if (registry && typeof registry === 'object') {
@@ -293,8 +302,8 @@ export function useQuantLabContextValue() {
     candidatesStore: decisionStore.defaultCandidatesStore(),
     sweepDecisionStore: sweepDecisionStore.defaultSweepDecisionStore(),
     selectedRunIds: [],
-    tabs: [createRunsTab()],
-    activeTabId: 'runs-native',
+    tabs: [createLaunchTab()],
+    activeTabId: 'launch',
     experimentsWorkspace: INITIAL_EXPERIMENTS,
   });
 

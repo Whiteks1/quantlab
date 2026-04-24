@@ -95,7 +95,7 @@ The server entrypoint is `mcp-server.mjs`, and the `mcp` npm script runs it dire
 - The renderer is now split into focused ES modules under `desktop/renderer/modules/` so workflow logic, decision-store helpers, and tab renderers no longer live in one file.
 - The shell can now review recent launch jobs and explain the latest failure from local stdout/stderr logs.
 - The shell now persists decision state locally in `outputs/desktop/candidates_shortlist.json`.
-- The shell now prefers `Runs` on startup when indexed run data exists and falls back to `System` while the workstation is still bootstrapping.
+- The shell now prefers `Launch` on startup so execution and queue review stay primary, while `Runs`/`System` remain one click away.
 - `Run`, `Compare`, `Artifacts`, `Candidates`, and `Paper Ops` are now shell-native tabs designed to support launch -> inspect -> compare -> decide continuity.
 - `Experiments` is now a shell-native workspace for local sweep configs and recent sweep outputs under `configs/experiments` and `outputs/sweeps`.
 - Sweep rows can now be tracked, shortlisted, baselined, and compared in a local handoff layer persisted in `outputs/desktop/sweep_decision_handoff.json`.
