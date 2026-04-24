@@ -14,6 +14,7 @@
     "smoke": "npm run smoke:react:fallback",
     "smoke:legacy:fallback": "npm run build && node scripts/smoke.js --mode=fallback",
     "smoke:react:fallback": "npm run build && node scripts/smoke.js --mode=fallback --renderer=react",
+    "smoke:renderer-rollout": "npm run smoke:react:fallback && npm run smoke:legacy:fallback",
     "smoke:real-path": "npm run build && node scripts/smoke.js --mode=real-path",
     "smoke:react:real-path": "npm run build && node scripts/smoke.js --mode=real-path --renderer=react",
     "mcp": "node mcp-server.mjs"
