@@ -1,46 +1,55 @@
 import React, { useState } from 'react';
 import Topbar from './Topbar.jsx';
 import Sidebar from './Sidebar.jsx';
-import MainContent from './MainContent';
+import MainContent from './MainContent.jsx';
 import {
   QuantLabContextProvider,
   useQuantLabContextValue,
+  RegistryProvider,
 } from './QuantLabContext.jsx';
 
 /**
- * App - Root component for the QuantLab Desktop React shell
- * 
- * Manages the overall layout and state for:
- * - Topbar with runtime status
- * - Sidebar with navigation
- * - MainContent area for surfaces (Runs, Compare, Candidates)
- * 
- * Provides React-owned state through the preload bridge without app-legacy.js.
+ * AppShell — inner shell component.
+ * Lives inside RegistryProvider so useQuantLabContextValue can call useRegistry().
  */
-export default function App() {
+function AppShell() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  // Build context value owned by the React runtime.
+  // Build the full context value (must be called unconditionally before any early return)
   const contextValue = useQuantLabContextValue();
 
   React.useEffect(() => {
-    window.__quantlab = window.__quantlab || {};
-    window.__quantlab.rendererMode = 'react';
-    window.__quantlab.reactShell = {
-      rendererMode: 'react',
-      reactRoot: document.getElementById('react-root'),
-    };
+    if (!window.__quantlab) {
+      window.__quantlab = { rendererMode: 'react' };
+    } else {
+      window.__quantlab.rendererMode = 'react';
+    }
     window.__quantlab.getShellState = () => ({
       rendererMode: 'react',
       reactRoot: document.getElementById('react-root'),
-      currentSurface: window.__quantlab?.reactShell?.currentSurface || 'runs',
+      legacyShell: document.getElementById('legacy-shell'),
+      currentSurface: window.__quantlab?.currentSurface || 'runs',
     });
   }, []);
 
-  if (!contextValue?.state) {
+  const activeTab = contextValue.state?.tabs?.find(
+    (t) => t.id === contextValue.state.activeTabId
+  ) || null;
+  const allTabs = contextValue.state?.tabs || [];
+  const currentSurface = activeTab?.navKind || activeTab?.kind || 'system';
+
+  // Expose metadata for smoke tests; kept in an effect to avoid conditional hook calls
+  React.useEffect(() => {
+    if (!window.__quantlab) return;
+    window.__quantlab.currentSurface = currentSurface;
+  }, [currentSurface]);
+
+  // Loading guard — safe here because all hooks have already been called
+  if (!contextValue?.state || !contextValue.state.isInitialized) {
     return (
       <div className="app-container loading">
         <div className="loading-message">
+          <div className="spinner"></div>
           <p>QuantLab Desktop is initializing...</p>
         </div>
       </div>
@@ -51,30 +60,13 @@ export default function App() {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
-  // Get active tab from state
-  const activeTab = contextValue.state?.tabs?.find(
-    (t) => t.id === contextValue.state.activeTabId
-  ) || null;
-
-  const allTabs = contextValue.state?.tabs || [];
-
-  const currentSurface = activeTab?.navKind || activeTab?.kind || 'system';
-
-  if (window.__quantlab?.reactShell) {
-    window.__quantlab.reactShell.currentSurface = currentSurface;
-  }
-
   const handleTabChange = (tabId) => {
     contextValue.setActiveTab(tabId);
   };
 
-  const handleNavigate = (tab) => {
-    contextValue.openTab(tab);
-  };
-
   return (
     <QuantLabContextProvider value={contextValue}>
-      <div className="app-container" data-renderer-mode="react" data-smoke="react-shell">
+      <div className="app-container">
         <Topbar
           currentSurface={currentSurface}
           onToggleSidebar={handleToggleSidebar}
@@ -84,8 +76,6 @@ export default function App() {
         <div className="app-main-area">
           <Sidebar
             currentSurface={currentSurface}
-            allTabs={allTabs}
-            onNavigate={handleNavigate}
             isCollapsed={isSidebarCollapsed}
           />
 
@@ -97,5 +87,19 @@ export default function App() {
         </div>
       </div>
     </QuantLabContextProvider>
+  );
+}
+
+/**
+ * App - Root component for the QuantLab Desktop React shell.
+ *
+ * Mounts the RegistryProvider (native data authority) as the outermost
+ * wrapper so that all hooks downstream can consume registry state.
+ */
+export default function App() {
+  return (
+    <RegistryProvider>
+      <AppShell />
+    </RegistryProvider>
   );
 }
