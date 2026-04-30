@@ -1,950 +1,260 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
-import * as decisionStore from '../modules/decision-store.js';
-import * as sweepDecisionStore from '../modules/sweep-decision-store.js';
-import { buildRunArtifactHref, uniqueRunIds } from '../modules/utils.js';
+import React, { createContext, useContext, useMemo, useState, useEffect, useCallback } from 'react';
+import {
+  useLegacyBridge,
+  useLegacyDataAccessors,
+  useLegacyDecision,
+} from '../hooks/useLegacyBridge';
+import { useRegistry } from './RegistryContext';
+export { RegistryProvider } from './RegistryContext';
 
-const CONFIG = {
-  runsIndexPath: '/outputs/runs/runs_index.json',
-  localRunsIndexPath: 'outputs/runs/runs_index.json',
-  launchControlPath: '/api/launch-control',
-  paperHealthPath: '/api/paper-sessions-health',
-  brokerHealthPath: '/api/broker-submissions-health',
-  stepbitWorkspacePath: '/api/stepbit-workspace',
-  detailArtifacts: ['report.json', 'run_report.json'],
-  experimentsConfigDir: 'configs/experiments',
-  sweepsOutputDir: 'outputs/sweeps',
-  maxCandidateCompare: 4,
-  maxExperimentsConfigs: 12,
-  maxRecentSweeps: 8,
-};
-
-const INITIAL_WORKSPACE = {
-  status: 'starting',
-  serverUrl: null,
-  logs: [],
-  error: null,
-  source: null,
-};
-
-const INITIAL_EXPERIMENTS = {
-  status: 'idle',
-  configs: [],
-  sweeps: [],
-  error: null,
-  updatedAt: null,
-};
+const bridge = window.quantlabDesktop;
 
 /**
- * QuantLabContext provides the React runtime with state, data accessors,
- * and actions without depending on app-legacy.js globals.
+ * QuantLabContext provides access to the app state, decision logic,
+ * and actions for all surface components (Runs, Compare, Candidates).
+*
+ * Populated by the App.jsx root component; surfaces consume it via useQuantLab().
  */
 export const QuantLabContext = createContext(null);
 
+/**
+ * Hook to access QuantLab state and actions in any surface component.
+ */
 export function useQuantLab() {
   const context = useContext(QuantLabContext);
   if (!context) {
-    throw new Error('useQuantLab must be called within QuantLabContext.Provider');
+    throw new Error(
+      'useQuantLab must be called within QuantLabContext.Provider'
+    );
   }
   return context;
 }
 
-export const useQuantLabContext = useQuantLab;
-
-function getBridge() {
-  return window.quantlabDesktop;
-}
-
-// Valid kinds from shared/models/tab.ts — kept in sync manually.
-// If this list drifts, stale persisted tabs are silently dropped rather than crashing.
-const VALID_TAB_KINDS = new Set([
-  'runs', 'run', 'artifacts', 'compare', 'candidates',
-  'system', 'experiments', 'paper', 'job', 'assistant', 'launch', 'hypothesis',
-]);
-
 /**
- * Guards against stale or unknown tab kinds from future persistence.
- * Drops tabs whose kind is not in the current union; maps known legacy aliases.
+ * Hook that builds the full context value by bridging to legacy state.
+ * Use this in App.jsx to populate the QuantLabContext.Provider value.
  */
-function rehydrateTabs(rawTabs) {
-  if (!Array.isArray(rawTabs)) return [];
-  return rawTabs
-    .map((tab) => {
-      if (!tab || typeof tab !== 'object') return null;
-      // Map legacy aliases that were removed from the union.
-      if (tab.kind === 'shortlist-compare') return { ...tab, kind: 'compare' };
-      if (tab.kind === 'ops') return { ...tab, kind: 'paper' };
-      return tab;
-    })
-    .filter((tab) => tab && VALID_TAB_KINDS.has(tab.kind));
-}
-
-function createRunsTab() {
-  return {
-    id: 'runs-native',
-    kind: 'runs',
-    navKind: 'runs',
-    title: 'Runs',
-  };
-}
-
-function createLaunchTab() {
-  return {
-    id: 'launch',
-    kind: 'launch',
-    navKind: 'launch',
-    title: 'Launch',
-  };
-}
-
-function normalizeRunsRegistry(registry) {
-  if (Array.isArray(registry)) return { runs: registry };
-  if (registry && typeof registry === 'object') {
-    return {
-      ...registry,
-      runs: Array.isArray(registry.runs) ? registry.runs : [],
-    };
-  }
-  return { runs: [] };
-}
-
-function createSnapshotStatus(source, error = null) {
-  if (error) {
-    return {
-      status: 'degraded',
-      error: error.message || String(error),
-      source,
-      lastSuccessAt: null,
-      consecutiveErrors: 1,
-      refreshPaused: false,
-    };
-  }
-  if (source === 'none') {
-    return {
-      status: 'idle',
-      error: null,
-      source,
-      lastSuccessAt: null,
-      consecutiveErrors: 0,
-      refreshPaused: false,
-    };
-  }
-  return {
-    status: 'ok',
-    error: null,
-    source,
-    lastSuccessAt: new Date().toISOString(),
-    consecutiveErrors: 0,
-    refreshPaused: false,
-  };
-}
-
-function joinProjectPath(basePath, fileName) {
-  const base = String(basePath || '').replace(/[\\/]+$/, '');
-  return `${base}\\${fileName}`;
-}
-
-async function readOptionalJson(targetPath) {
-  try {
-    return await getBridge().readProjectJson(targetPath);
-  } catch (_error) {
-    return null;
-  }
-}
-
-async function requestOptionalJson(relativePath) {
-  try {
-    return await getBridge().requestJson(relativePath);
-  } catch (_error) {
-    return null;
-  }
-}
-
-async function requestOptionalText(relativePath) {
-  if (!relativePath) return '';
-  try {
-    return await getBridge().requestText(relativePath);
-  } catch (_error) {
-    return '';
-  }
-}
-
-async function loadRunsRegistry(workspace) {
-  let source = 'none';
-  let primaryError = null;
-
-  if (workspace?.serverUrl) {
-    try {
-      const runsRegistry = normalizeRunsRegistry(
-        await getBridge().requestJson(CONFIG.runsIndexPath)
-      );
-      return { runsRegistry, source: 'api', primaryError: null };
-    } catch (error) {
-      primaryError = error;
-    }
-  }
-
-  try {
-    const runsRegistry = normalizeRunsRegistry(
-      await getBridge().readProjectJson(CONFIG.localRunsIndexPath)
-    );
-    source = 'local';
-    return { runsRegistry, source, primaryError };
-  } catch (error) {
-    return { runsRegistry: { runs: [] }, source, primaryError: primaryError || error };
-  }
-}
-
-async function loadSnapshot(workspace) {
-  const { runsRegistry, source, primaryError } = await loadRunsRegistry(workspace);
-  const canRequestApi = Boolean(workspace?.serverUrl);
-
-  const [launchControl, paperHealth, brokerHealth, stepbitWorkspace] = canRequestApi
-    ? await Promise.all([
-        requestOptionalJson(CONFIG.launchControlPath),
-        requestOptionalJson(CONFIG.paperHealthPath),
-        requestOptionalJson(CONFIG.brokerHealthPath),
-        requestOptionalJson(CONFIG.stepbitWorkspacePath),
-      ])
-    : [null, null, null, null];
-
-  return {
-    snapshot: {
-      runsRegistry,
-      launchControl: launchControl || { jobs: [] },
-      paperHealth: paperHealth || null,
-      brokerHealth: brokerHealth || null,
-      stepbitWorkspace: stepbitWorkspace || null,
-    },
-    snapshotStatus: createSnapshotStatus(source, primaryError),
-  };
-}
-
-async function loadExperimentsWorkspace() {
-  try {
-    const [configsListing, sweepsListing] = await Promise.all([
-      getBridge().listDirectory(CONFIG.experimentsConfigDir, 0),
-      getBridge().listDirectory(CONFIG.sweepsOutputDir, 0),
-    ]);
-
-    const configs = (configsListing.entries || [])
-      .filter((entry) => entry.kind === 'file' && /\.ya?ml$/i.test(entry.name))
-      .sort((left, right) => String(right.modified_at || '').localeCompare(String(left.modified_at || '')))
-      .slice(0, CONFIG.maxExperimentsConfigs)
-      .map((entry) => ({
-        name: entry.name,
-        path: entry.path,
-        relativePath: entry.relative_path || entry.name,
-        modifiedAt: entry.modified_at,
-        sizeBytes: entry.size_bytes,
-        previewText: '',
-      }));
-
-    const sweeps = (sweepsListing.entries || [])
-      .filter((entry) => entry.kind === 'directory' && entry.depth === 0)
-      .sort((left, right) => String(right.modified_at || '').localeCompare(String(left.modified_at || '')))
-      .slice(0, CONFIG.maxRecentSweeps)
-      .map((entry) => ({
-        run_id: entry.name,
-        path: entry.path,
-        mode: 'sweep',
-        configPath: '',
-        configName: '',
-        decisionRows: [],
-        hasStructuredData: false,
-      }));
-
-    return {
-      status: 'ready',
-      configs,
-      sweeps,
-      error: null,
-      updatedAt: new Date().toISOString(),
-    };
-  } catch (error) {
-    return {
-      ...INITIAL_EXPERIMENTS,
-      status: 'error',
-      error: error.message || String(error),
-      updatedAt: new Date().toISOString(),
-    };
-  }
-}
-
-function buildCandidateEntry(runId, existing = null) {
-  const now = new Date().toISOString();
-  return {
-    run_id: runId,
-    note: existing?.note || '',
-    shortlisted: Boolean(existing?.shortlisted),
-    created_at: existing?.created_at || now,
-    updated_at: now,
-  };
-}
-
 export function useQuantLabContextValue() {
-  const [state, setState] = useState({
-    workspace: INITIAL_WORKSPACE,
-    snapshot: {
-      runsRegistry: { runs: [] },
-      launchControl: { jobs: [] },
-      paperHealth: null,
-      brokerHealth: null,
-      stepbitWorkspace: null,
-    },
-    snapshotStatus: createSnapshotStatus('none'),
-    candidatesStore: decisionStore.defaultCandidatesStore(),
-    sweepDecisionStore: sweepDecisionStore.defaultSweepDecisionStore(),
-    selectedRunIds: [],
-    tabs: [createLaunchTab()],
-    activeTabId: 'launch',
-    experimentsWorkspace: INITIAL_EXPERIMENTS,
-  });
+  const { state: legacyState, actions: legacyActions } = useLegacyBridge();
+  const legacyDataAccessors = useLegacyDataAccessors();
+  const decision = useLegacyDecision();
 
-  const getRuns = useCallback(() => {
-    return Array.isArray(state.snapshot?.runsRegistry?.runs)
-      ? state.snapshot.runsRegistry.runs
-      : [];
-  }, [state.snapshot]);
+  // Native registry: authoritative source of run data (#412 B.1)
+  const registry = useRegistry();
 
-  const findRun = useCallback((runId) => {
-    return getRuns().find((run) => run.run_id === runId) || null;
-  }, [getRuns]);
+  // 1. Native workstation shell state (Master)
+  const [tabs, setTabs] = useState([]);
+  const [activeTabId, setActiveTabId] = useState(null);
+  const [selectedRunIds, setSelectedRunIds] = useState([]);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  const getJobs = useCallback(() => {
-    return Array.isArray(state.snapshot?.launchControl?.jobs)
-      ? state.snapshot.launchControl.jobs
-      : [];
-  }, [state.snapshot]);
-
-  const findJob = useCallback((requestId) => {
-    return getJobs().find((job) => job.request_id === requestId) || null;
-  }, [getJobs]);
-
-  const getLatestRun = useCallback(() => getRuns()[0] || null, [getRuns]);
-  const getLatestFailedJob = useCallback(() => {
-    return getJobs().find((job) => job.status === 'failed') || null;
-  }, [getJobs]);
-  const getSelectedRuns = useCallback(() => {
-    return state.selectedRunIds.map(findRun).filter(Boolean);
-  }, [state.selectedRunIds, findRun]);
-
-  const findSweepDecisionRow = useCallback((entryId) => {
-    for (const sweep of state.experimentsWorkspace.sweeps || []) {
-      const row = (sweep.decisionRows || []).find((item) => item.entry_id === entryId);
-      if (row) return { ...row, sweep };
-    }
-    return null;
-  }, [state.experimentsWorkspace]);
-
-  const decision = useMemo(() => ({
-    getCandidateEntry: (storeOrRunId, maybeRunId) => {
-      const store = maybeRunId ? storeOrRunId : state.candidatesStore;
-      const runId = maybeRunId || storeOrRunId;
-      return decisionStore.getCandidateEntry(store, runId);
-    },
-    getCandidateEntryResolved: (runId) =>
-      decisionStore.getCandidateEntryResolved(state.candidatesStore, runId, findRun),
-    getCandidateEntriesResolved: () =>
-      decisionStore.getCandidateEntriesResolved(state.candidatesStore, findRun),
-    buildMissingCandidateEntry: (runId) =>
-      decisionStore.buildMissingCandidateEntry(runId, findRun),
-    isCandidateRun: (runId) =>
-      decisionStore.isCandidateRun(state.candidatesStore, runId),
-    isShortlistedRun: (runId) =>
-      decisionStore.isShortlistedRun(state.candidatesStore, runId),
-    isBaselineRun: (runId) =>
-      decisionStore.isBaselineRun(state.candidatesStore, runId),
-    getDecisionCompareRunIds: () =>
-      decisionStore.getDecisionCompareRunIds(
-        state.candidatesStore,
-        findRun,
-        uniqueRunIds,
-        CONFIG.maxCandidateCompare
-      ),
-    summarizeCandidateState: (storeOrRunId, maybeRunId) => {
-      const store = maybeRunId ? storeOrRunId : state.candidatesStore;
-      const runId = maybeRunId || storeOrRunId;
-      return decisionStore.summarizeCandidateState(store, runId);
-    },
-  }), [state.candidatesStore, findRun]);
-
-  const sweepDecision = useMemo(() => ({
-    getEntriesResolved: (store, findLiveRow) =>
-      sweepDecisionStore.getSweepDecisionEntriesResolved(store, findLiveRow),
-    getEntry: (store, entryId) =>
-      sweepDecisionStore.getSweepDecisionEntry(store, entryId),
-    isTracked: (store, entryId) =>
-      sweepDecisionStore.isTrackedSweepEntry(store, entryId),
-    isShortlisted: (store, entryId) =>
-      sweepDecisionStore.isShortlistedSweepEntry(store, entryId),
-    isBaseline: (store, entryId) =>
-      sweepDecisionStore.isBaselineSweepEntry(store, entryId),
-    summarizeState: (store, entryId) =>
-      sweepDecisionStore.summarizeSweepDecisionState(store, entryId),
-  }), []);
-
-  const getSweepDecisionEntriesForRun = useCallback((runId) => {
-    return sweepDecisionStore
-      .getSweepDecisionEntriesResolved(state.sweepDecisionStore, findSweepDecisionRow)
-      .filter((entry) => entry.sweep_run_id === runId);
-  }, [state.sweepDecisionStore, findSweepDecisionRow]);
-
-  const getRunRelatedJobs = useCallback((runId) => {
-    return getJobs().filter((job) => {
-      const payload = job.payload || job.request || {};
-      const params = payload.params || payload;
-      return (
-        job.run_id === runId ||
-        job.linked_run_id === runId ||
-        params.run_id === runId ||
-        params.out_dir === runId
-      );
-    });
-  }, [getJobs]);
-
-  const loadRunDetail = useCallback(async (runId) => {
-    const run = findRun(runId);
-    if (!run?.path) throw new Error(`Run ${runId} has no accessible artifact path.`);
-    let detail = {
-      report: null,
-      reportUrl: null,
-      directoryEntries: [],
-      directoryTruncated: false,
-    };
-
-    for (const artifact of CONFIG.detailArtifacts) {
-      const localArtifactPath = joinProjectPath(run.path, artifact);
-      const href = buildRunArtifactHref(run.path, artifact);
-      const localReport = await readOptionalJson(localArtifactPath);
-      if (localReport) {
-        detail = { ...detail, report: localReport, reportUrl: href || localArtifactPath };
-        break;
-      }
-      if (href) {
-        const remoteReport = await requestOptionalJson(href);
-        if (remoteReport) {
-          detail = { ...detail, report: remoteReport, reportUrl: href };
-          break;
+  // 2. Initialize state from persistence layer on mount
+  useEffect(() => {
+    async function loadInitialState() {
+      try {
+        const store = await bridge.getShellWorkspaceStore();
+        if (store) {
+          setTabs(store.tabs || []);
+          setActiveTabId(store.active_tab_id || (store.tabs?.[0]?.id) || null);
+          setSelectedRunIds(store.selected_run_ids || []);
         }
+      } catch (err) {
+        console.error('Failed to load initial workstation state:', err);
+      } finally {
+        setIsInitialized(true);
       }
     }
-
-    try {
-      const listing = await getBridge().listDirectory(run.path, 2);
-      detail.directoryEntries = listing.entries || [];
-      detail.directoryTruncated = Boolean(listing.truncated);
-    } catch (_error) {
-      // Directory listing is optional evidence, not a hard runtime dependency.
-    }
-
-    return detail;
-  }, [findRun]);
-
-  const upsertTab = useCallback((tab) => {
-    setState((current) => {
-      const tabs = current.tabs.some((item) => item.id === tab.id)
-        ? current.tabs.map((item) => (item.id === tab.id ? { ...item, ...tab } : item))
-        : [...current.tabs, tab];
-      return { ...current, tabs, activeTabId: tab.id };
-    });
+    loadInitialState();
   }, []);
 
-  const openRunDetailTab = useCallback(async (runId, options = {}) => {
-    if (!runId) return; // Guard: runId must be a non-empty string (#451)
-    const run = findRun(runId);
-    if (!run) return;
-    const subview = options.subview || '';
-    const tabId = `run:${runId}`;
-    const title = subview === 'artifacts' ? `Artifacts: ${run.run_id}` : `Run ${run.run_id}`;
-    upsertTab({
-      id: tabId,
-      kind: 'run',
-      navKind: 'runs',
-      title,
-      runId,
-      subview,
-      status: 'loading',
-      detail: null,
-      error: null,
-    });
-    try {
-      const detail = await loadRunDetail(runId);
-      upsertTab({
-        id: tabId,
-        kind: 'run',
-        navKind: 'runs',
-        title,
-        runId,
-        subview,
-        status: 'ready',
-        detail,
-        error: null,
-      });
-    } catch (error) {
-      upsertTab({
-        id: tabId,
-        kind: 'run',
-        navKind: 'runs',
-        title,
-        runId,
-        subview,
-        status: 'error',
-        detail: null,
-        error: error.message || String(error),
-      });
-    }
-  }, [findRun, loadRunDetail, upsertTab]);
+  // 3. Centralized persistence: Sync to Electron whenever workstation state changes
+  useEffect(() => {
+    if (!isInitialized) return;
 
-  const openCompareSelectionTab = useCallback((runIds, label = 'selected runs') => {
-    const ids = uniqueRunIds(runIds || []).filter((runId) => findRun(runId));
-    if (ids.length < 2) return;
-    upsertTab({
-      id: `compare:${ids.join('|')}`,
-      kind: 'compare',
-      navKind: 'compare',
-      title: `Compare: ${label}`,
-      runIds: ids,
-      status: 'loading',
-    });
-  }, [findRun, upsertTab]);
-
-  const refreshJobTab = useCallback(async (requestId, fallbackJob = null) => {
-    if (!requestId) return;
-    const job = findJob(requestId) || fallbackJob;
-    if (!job) return;
-    const tabId = `job:${requestId}`;
-
-    try {
-      const [stdoutText, stderrText] = await Promise.all([
-        requestOptionalText(job.stdout_href),
-        requestOptionalText(job.stderr_href),
-      ]);
-      upsertTab({
-        id: tabId,
-        kind: 'job',
-        navKind: 'launch',
-        title: `Job ${requestId}`,
-        requestId,
-        jobId: requestId,
-        status: 'ready',
-        job: findJob(requestId) || job,
-        stdoutText,
-        stderrText,
-        error: null,
-      });
-    } catch (error) {
-      upsertTab({
-        id: tabId,
-        kind: 'job',
-        navKind: 'launch',
-        title: `Job ${requestId}`,
-        requestId,
-        jobId: requestId,
-        status: 'error',
-        job,
-        stdoutText: '',
-        stderrText: '',
-        error: error.message || 'Could not load job logs.',
-      });
-    }
-  }, [findJob, upsertTab]);
-
-  const openJobTab = useCallback(async (requestId) => {
-    if (!requestId) return;
-    const job = findJob(requestId);
-    if (!job) return;
-    const tabId = `job:${requestId}`;
-    upsertTab({
-      id: tabId,
-      kind: 'job',
-      navKind: 'launch',
-      title: `Job ${requestId}`,
-      requestId,
-      jobId: requestId,
-      status: 'loading',
-      job,
-      stdoutText: '',
-      stderrText: '',
-      error: null,
-    });
-    await refreshJobTab(requestId, job);
-  }, [findJob, refreshJobTab, upsertTab]);
-
-  /**
-   * openTab — unified tab-open API.
-   *
-   * Object form only:
-   *   openTab({ kind: 'run', runId })
-   *   openTab({ kind: 'compare', runIds: [...], label: '...' })
-   *   openTab({ kind: 'job', requestId })
-   *   openTab({ kind: 'system' })   // surface tabs need no extra payload
-   *
-   * Non-object inputs are ignored intentionally to avoid restoring
-   * positional legacy call sites in React-owned flows.
-   */
-  const openTab = useCallback((tabRequest) => {
-    if (!tabRequest || typeof tabRequest !== 'object') return;
-    const kind = tabRequest.kind;
-
-    if (kind === 'run') {
-      const runId = tabRequest.runId;
-      if (!runId) return; // Guard: prevents run:undefined tabs (#451)
-      openRunDetailTab(runId);
-      return;
-    }
-    if (kind === 'artifacts') {
-      const runId = tabRequest.runId;
-      if (!runId) return;
-      openRunDetailTab(runId, { subview: 'artifacts' });
-      return;
-    }
-    if (kind === 'compare') {
-      const runIds = Array.isArray(tabRequest.runIds)
-        ? tabRequest.runIds
-        : state.selectedRunIds;
-      const label = tabRequest.label || 'selected runs';
-      openCompareSelectionTab(runIds, label);
-      return;
-    }
-    if (kind === 'job') {
-      const requestId = tabRequest.requestId;
-      if (!requestId) return;
-      openJobTab(requestId);
-      return;
-    }
-
-    // Surface tabs (no payload beyond optional title/href)
-    const surfaceTabs = {
-      system: { id: 'system', kind: 'system', navKind: 'system', title: 'System' },
-      experiments: {
-        id: 'experiments',
-        kind: 'experiments',
-        navKind: 'experiments',
-        title: 'Experiments',
-        selectedConfigPath: state.experimentsWorkspace.configs[0]?.path || null,
-        selectedSweepId: state.experimentsWorkspace.sweeps[0]?.run_id || null,
-      },
-      launch: {
-        id: 'launch',
-        kind: 'launch',
-        navKind: 'launch',
-        title: tabRequest.title || 'Launch',
-        href: tabRequest.href,
-      },
-      hypothesis: {
-        id: 'hypothesis',
-        kind: 'hypothesis',
-        navKind: 'hypothesis',
-        title: 'Hypothesis Builder',
-      },
-      runs: createRunsTab(),
-      candidates: {
-        id: 'candidates',
-        kind: 'candidates',
-        navKind: 'candidates',
-        title: 'Candidates',
-      },
-      paper: {
-        id: 'paper-ops',
-        kind: 'paper',
-        navKind: 'paper-ops',
-        title: 'Paper Ops',
-      },
-      'paper-ops': {
-        id: 'paper-ops',
-        kind: 'paper',
-        navKind: 'paper-ops',
-        title: 'Paper Ops',
-      },
-      assistant: {
-        id: 'assistant',
-        kind: 'assistant',
-        navKind: 'assistant',
-        title: 'Assistant',
-      },
+    const store = {
+      version: 1,
+      tabs,
+      active_tab_id: activeTabId,
+      selected_run_ids: selectedRunIds,
+      // Note: We don't touch launch_form here yet to keep the slice narrow
     };
 
-    const tab = surfaceTabs[kind];
-    if (tab) upsertTab(tab);
-  }, [
-    openCompareSelectionTab,
-    openJobTab,
-    openRunDetailTab,
-    state.experimentsWorkspace,
-    state.selectedRunIds,
-    upsertTab,
-  ]);
+    bridge.saveShellWorkspaceStore(store)
+      .catch(err => console.error('Failed to persist workstation state:', err));
+  }, [tabs, activeTabId, selectedRunIds, isInitialized]);
+
+  // 4. Native actions (Simplified by centralized persistence)
+  const openTab = useCallback((kind, title, requestIdOrRunId) => {
+    setTabs(currentTabs => {
+      const existing = currentTabs.find(t =>
+        (t.kind === kind && t.requestId === requestIdOrRunId) ||
+        (t.kind === kind && t.runId === requestIdOrRunId)
+      );
+
+      if (existing) {
+        setActiveTabId(existing.id);
+        return currentTabs;
+      }
+
+      let nextId = `tab-${Date.now()}`;
+      if (kind === 'run') nextId = `run:${requestIdOrRunId}`;
+      if (kind === 'artifacts') nextId = `artifacts:${requestIdOrRunId}`;
+      if (kind === 'job') nextId = `job:${requestIdOrRunId}`;
+
+      const newTab = { id: nextId, kind, title: title || `${kind} review` };
+      if (kind === 'job') newTab.requestId = requestIdOrRunId;
+      if (kind === 'run' || kind === 'artifacts') newTab.runId = requestIdOrRunId;
+
+      setActiveTabId(nextId);
+      return [...currentTabs, newTab];
+    });
+  }, []);
 
   const closeTab = useCallback((tabId) => {
-    setState((current) => {
-      const tabs = current.tabs.filter((tab) => tab.id !== tabId);
-      const activeTabId = current.activeTabId === tabId
-        ? tabs[tabs.length - 1]?.id || null
-        : current.activeTabId;
-      return { ...current, tabs, activeTabId };
+    setTabs(currentTabs => {
+      const nextTabs = currentTabs.filter(t => t.id !== tabId);
+      if (activeTabId === tabId) {
+        setActiveTabId(nextTabs[nextTabs.length - 1]?.id || null);
+      }
+      return nextTabs;
     });
-  }, []);
+  }, [activeTabId]);
 
   const setActiveTab = useCallback((tabId) => {
-    setState((current) => {
-      const directMatch = current.tabs.some((tab) => tab.id === tabId);
-      if (directMatch) return { ...current, activeTabId: tabId };
-      return current;
+    setActiveTabId(tabId);
+  }, []);
+
+  const navigateToSurface = useCallback((kind) => {
+    setTabs(currentTabs => {
+      // Logic for selecting the "default" ID for a kind
+      // For runs, compare, candidates, paper, system, experiments, it's usually just the kind as ID
+      const surfaceIdMap = {
+        'runs': 'runs-native', // Match smoke test expectation
+        'candidates': 'candidates',
+        'compare': 'compare-selection',
+        'paper-ops': 'paper-ops',
+        'system': 'system',
+        'experiments': 'experiments',
+        'launch': 'launch'
+      };
+
+      const id = surfaceIdMap[kind] || kind;
+      const existing = currentTabs.find(t => t.id === id);
+
+      if (existing) {
+        setActiveTabId(id);
+        return currentTabs;
+      }
+
+      // Add new tab if missing
+      const titleMap = {
+        'runs': 'Runs',
+        'candidates': 'Candidates',
+        'compare': 'Compare',
+        'paper-ops': 'Paper Ops',
+        'system': 'System',
+        'experiments': 'Experiments',
+        'launch': 'Launch'
+      };
+
+      const newTab = { id, kind, title: titleMap[kind] || kind };
+      setActiveTabId(id);
+      return [...currentTabs, newTab];
     });
   }, []);
 
   const toggleRunSelection = useCallback((runId) => {
-    setState((current) => {
-      const selected = current.selectedRunIds.includes(runId);
-      const selectedRunIds = selected
-        ? current.selectedRunIds.filter((item) => item !== runId)
-        : current.selectedRunIds.length < 4
-          ? [...current.selectedRunIds, runId]
-          : current.selectedRunIds;
-      return { ...current, selectedRunIds };
-    });
+    setSelectedRunIds(current =>
+      current.includes(runId)
+        ? current.filter(id => id !== runId)
+        : [...current, runId]
+    );
   }, []);
 
-  const saveCandidatesStore = useCallback(async (nextStore) => {
-    const normalized = decisionStore.normalizeCandidatesStore(nextStore);
-    setState((current) => ({
-      ...current,
-      candidatesStore: normalized,
-    }));
-    try {
-      const persisted = decisionStore.normalizeCandidatesStore(
-        await getBridge().saveCandidatesStore(normalized)
-      );
-      setState((current) => ({
-        ...current,
-        candidatesStore: persisted,
-      }));
-    } catch (_error) {
-      // Keep optimistic local decision state if persistence is temporarily unavailable.
-    }
-  }, []);
+  // Native data accessors — read from RegistryContext, fall back to legacy globals
+  const dataAccessors = useMemo(() => ({
+    getRuns: () => registry.runs,
+    getLatestRun: () => registry.runs[registry.runs.length - 1] || null,
+    findRun: (runId) => registry.runs.find((r) => r.run_id === runId) || null,
+    getSelectedRuns: () =>
+      registry.runs.filter((r) => selectedRunIds.includes(r.run_id)),
+    // These still delegate to legacy globals for now
+    getJobs: legacyDataAccessors.getJobs,
+    getLatestFailedJob: legacyDataAccessors.getLatestFailedJob,
+    loadRunDetail: legacyDataAccessors.loadRunDetail,
+    getRunRelatedJobs: legacyDataAccessors.getRunRelatedJobs,
+    getSweepDecisionEntriesForRun: legacyDataAccessors.getSweepDecisionEntriesForRun,
+  }), [registry.runs, selectedRunIds, legacyDataAccessors]);
 
-  const toggleCandidate = useCallback(async (runId, forceValue = null) => {
-    const existing = decisionStore.getCandidateEntry(state.candidatesStore, runId);
-    const shouldExist = forceValue === null ? !existing : Boolean(forceValue);
-    const entries = decisionStore
-      .getCandidateEntries(state.candidatesStore)
-      .filter((entry) => entry.run_id !== runId);
-    if (shouldExist) entries.push(buildCandidateEntry(runId, existing));
-    await saveCandidatesStore({
-      ...state.candidatesStore,
-      entries,
-      baseline_run_id:
-        shouldExist || state.candidatesStore.baseline_run_id !== runId
-          ? state.candidatesStore.baseline_run_id
-          : null,
-      updated_at: new Date().toISOString(),
-    });
-  }, [saveCandidatesStore, state.candidatesStore]);
+  // Combine native workstation state with legacy snapshot/decision data
+  const value = useMemo(
+    () => ({
+      state: {
+        ...(legacyState || {}), // Guard against null legacyState
+        tabs,
+        activeTabId,
+        selectedRunIds,
+        isInitialized,
+        // Surface registry health for Topbar / smoke diagnostics
+        registryLoading: registry.isLoading,
+        registryError: registry.lastError,
+      },
+      ...dataAccessors,
+      decision,
+      ...legacyActions, // decision-related actions (setBaseline, etc.)
+      openTab,
+      closeTab,
+      setActiveTab,
+      navigateToSurface,
+      toggleRunSelection,
+    }),
+    [legacyState, tabs, activeTabId, selectedRunIds, isInitialized, registry.isLoading, registry.lastError, dataAccessors, decision, legacyActions, openTab, closeTab, setActiveTab, navigateToSurface, toggleRunSelection]
+  );
 
-  const toggleShortlist = useCallback(async (runId) => {
-    const existing = decisionStore.getCandidateEntry(state.candidatesStore, runId);
-    const entries = decisionStore
-      .getCandidateEntries(state.candidatesStore)
-      .filter((entry) => entry.run_id !== runId);
-    entries.push({
-      ...buildCandidateEntry(runId, existing),
-      shortlisted: !existing?.shortlisted,
-    });
-    await saveCandidatesStore({
-      ...state.candidatesStore,
-      entries,
-      updated_at: new Date().toISOString(),
-    });
-  }, [saveCandidatesStore, state.candidatesStore]);
-
-  const setBaseline = useCallback(async (runId) => {
-    let entries = decisionStore.getCandidateEntries(state.candidatesStore);
-    if (runId && !decisionStore.getCandidateEntry(state.candidatesStore, runId)) {
-      entries = [...entries, buildCandidateEntry(runId)];
-    }
-    await saveCandidatesStore({
-      ...state.candidatesStore,
-      entries,
-      baseline_run_id: runId || null,
-      updated_at: new Date().toISOString(),
-    });
-  }, [saveCandidatesStore, state.candidatesStore]);
-
-  const saveSweepStore = useCallback(async (nextStore) => {
-    const normalized = sweepDecisionStore.normalizeSweepDecisionStore(nextStore);
-    setState((current) => ({ ...current, sweepDecisionStore: normalized }));
-    try {
-      const persisted = sweepDecisionStore.normalizeSweepDecisionStore(
-        await getBridge().saveSweepDecisionStore(normalized)
-      );
-      setState((current) => ({ ...current, sweepDecisionStore: persisted }));
-    } catch (_error) {
-      // Keep optimistic sweep decision state if persistence is temporarily unavailable.
-    }
-  }, []);
-
-  const toggleSweepEntry = useCallback(async (row) => {
-    const entryId = row?.entry_id;
-    if (!entryId) return;
-    const existing = sweepDecisionStore.getSweepDecisionEntry(state.sweepDecisionStore, entryId);
-    const entries = sweepDecisionStore.getSweepDecisionEntries(state.sweepDecisionStore)
-      .filter((e) => e.entry_id !== entryId);
-    if (!existing) {
-      entries.push({
-        entry_id: entryId,
-        sweep_run_id: row.sweep_run_id || row.sweep?.run_id || '',
-        source: row.source || 'leaderboard',
-        row_index: typeof row.row_index === 'number' ? row.row_index : 0,
-        config_path: row.config_path || '',
-        row_snapshot: row,
-        shortlisted: false,
-        note: '',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-    }
-    await saveSweepStore({ ...state.sweepDecisionStore, entries, updated_at: new Date().toISOString() });
-  }, [saveSweepStore, state.sweepDecisionStore]);
-
-  const toggleSweepShortlist = useCallback(async (entryId) => {
-    const existing = sweepDecisionStore.getSweepDecisionEntry(state.sweepDecisionStore, entryId);
-    if (!existing) return;
-    const entries = sweepDecisionStore.getSweepDecisionEntries(state.sweepDecisionStore)
-      .map((e) => e.entry_id === entryId
-        ? { ...e, shortlisted: !e.shortlisted, updated_at: new Date().toISOString() }
-        : e);
-    await saveSweepStore({ ...state.sweepDecisionStore, entries, updated_at: new Date().toISOString() });
-  }, [saveSweepStore, state.sweepDecisionStore]);
-
-  const setSweepBaseline = useCallback(async (entryId) => {
-    await saveSweepStore({
-      ...state.sweepDecisionStore,
-      baseline_entry_id: entryId || null,
-      updated_at: new Date().toISOString(),
-    });
-  }, [saveSweepStore, state.sweepDecisionStore]);
-
-  const refresh = useCallback(async (workspaceOverride = null) => {
-    const workspace = workspaceOverride || await getBridge().getWorkspaceState();
-    const [snapshotState, candidatesStore, sweepStore, experimentsWorkspace] =
-      await Promise.all([
-        loadSnapshot(workspace),
-        getBridge().getCandidatesStore().then(decisionStore.normalizeCandidatesStore),
-        getBridge().getSweepDecisionStore().then(sweepDecisionStore.normalizeSweepDecisionStore),
-        loadExperimentsWorkspace(),
-      ]);
-
-    setState((current) => ({
-      ...current,
-      workspace,
-      ...snapshotState,
-      candidatesStore,
-      sweepDecisionStore: sweepStore,
-      experimentsWorkspace,
-    }));
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-
-    refresh().catch((error) => {
-      if (!mounted) return;
-      setState((current) => ({
-        ...current,
-        workspace: {
-          ...current.workspace,
-          status: 'error',
-          error: error.message || String(error),
-        },
-        snapshotStatus: createSnapshotStatus('none', error),
-      }));
-    });
-
-    const unsubscribe = getBridge().onWorkspaceState((workspace) => {
-      if (!mounted) return;
-      refresh(workspace).catch(() => {});
-    });
-
-    return () => {
-      mounted = false;
-      unsubscribe();
-    };
-  }, [refresh]);
-
-  const contextState = useMemo(() => ({
-    ...state,
-    runs: getRuns(),
-    launchControl: state.snapshot.launchControl,
-    decisionStore: state.candidatesStore,
-    decision,
-    sweepDecision,
-  }), [state, getRuns, decision, sweepDecision]);
-
-  return useMemo(() => ({
-    state: contextState,
-    getRuns,
-    getLatestRun,
-    findRun,
-    getSelectedRuns,
-    getJobs,
-    findJob,
-    getLatestFailedJob,
-    getRunRelatedJobs,
-    getSweepDecisionEntriesForRun,
-    findSweepDecisionRow,
-    loadRunDetail,
-    decision,
-    openTab,
-    openJobTab,
-    refreshJobTab,
-    closeTab,
-    setActiveTab,
-    toggleRunSelection,
-    toggleCandidate,
-    toggleShortlist,
-    setBaseline,
-    toggleSweepEntry,
-    toggleSweepShortlist,
-    setSweepBaseline,
-    refresh,
-  }), [
-    contextState,
-    getRuns,
-    getLatestRun,
-    findRun,
-    getSelectedRuns,
-    getJobs,
-    findJob,
-    getLatestFailedJob,
-    getRunRelatedJobs,
-    getSweepDecisionEntriesForRun,
-    findSweepDecisionRow,
-    loadRunDetail,
-    decision,
-    openTab,
-    openJobTab,
-    refreshJobTab,
-    closeTab,
-    setActiveTab,
-    toggleRunSelection,
-    toggleCandidate,
-    toggleShortlist,
-    setBaseline,
-    toggleSweepEntry,
-    toggleSweepShortlist,
-    setSweepBaseline,
-    refresh,
-  ]);
+  return value;
 }
 
-export const QuantLabContextProvider = ({ value, children }) => (
-  <QuantLabContext.Provider value={value}>{children}</QuantLabContext.Provider>
-);
+/**
+ * QuantLabContext.Provider wraps the entire app.
+ * Value shape:
+ * {
+ *   state: {
+ *     workspace: { status, serverUrl, error, logs },
+ *     snapshot: { runsRegistry, launchControl, paperHealth, brokerHealth, stepbitWorkspace },
+ *     candidatesStore: { baseline_run_id, candidates: [...] },
+ *     selectedRunIds: string[],
+ *     tabs: Tab[],
+ *     activeTabId: string | null,
+ *   },
+*
+ *   // Data accessors (mirrors legacy ctx functions)
+ *   getRuns: () => Run[],
+ *   getLatestRun: () => Run | null,
+ *   findRun: (runId: string) => Run | null,
+ *   getSelectedRuns: () => Run[],
+ *   getJobs: () => Job[],
+ *   getLatestFailedJob: () => Job | null,
+*
+ *   // Decision logic (access isCandidateRun, isShortlistedRun, etc.)
+ *   decision: {
+ *     isBaselineRun: (runId: string) => boolean,
+ *     isCandidateRun: (runId: string) => boolean,
+ *     isShortlistedRun: (runId: string) => boolean,
+ *     getCandidateEntriesResolved: () => CandidateEntry[],
+ *   },
+ *   // Actions to modify state
+ *   setBaseline: (runId: string) => void,
+ *   toggleCandidate: (runId: string) => void,
+ *   toggleShortlist: (runId: string) => void,
+ *   openTab: (tab: Tab) => void,
+ *   closeTab: (tabId: string) => void,
+ *   setActiveTab: (tabId: string) => void,
+ * }
+ */
+export const QuantLabContextProvider = ({ value, children }) => {
+  return (
+    <QuantLabContext.Provider value={value}>
+      {children}
+    </QuantLabContext.Provider>
+  );
+};

@@ -230,7 +230,9 @@ window.addEventListener("beforeunload", () => {
     unsubscribeWorkspaceState = null;
   }
   if (state.workspaceStoreLoaded) {
-    desktopBridge.saveShellWorkspaceStore(serializeShellWorkspaceStore()).catch(() => {});
+    if (window.__quantlab?.rendererMode !== 'react') {
+      desktopBridge.saveShellWorkspaceStore(serializeShellWorkspaceStore()).catch(() => {});
+    }
   }
 });
 
@@ -679,6 +681,9 @@ function reconcileWorkspaceTabs() {
 
 function scheduleShellWorkspacePersist() {
   if (!state.workspaceStoreLoaded) return;
+  // Guard: If React is owning the shell, legacy must not persist workstation state
+  if (window.__quantlab?.rendererMode === 'react') return;
+
   if (state.workspacePersistTimer) window.clearTimeout(state.workspacePersistTimer);
   state.workspacePersistTimer = window.setTimeout(() => {
     state.workspacePersistTimer = null;

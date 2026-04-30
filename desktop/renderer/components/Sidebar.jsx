@@ -1,4 +1,5 @@
 import React from 'react';
+import { useQuantLab } from './QuantLabContext';
 
 /**
  * Sidebar - Left navigation sidebar with:
@@ -9,11 +10,13 @@ import React from 'react';
  * 
  * Maps navigation actions to surface routing.
  */
-export default function Sidebar({ currentSurface, onNavigate, isCollapsed }) {
+export default function Sidebar({ currentSurface, isCollapsed }) {
+  const { navigateToSurface } = useQuantLab();
+
   const navItems = [
-    { id: 'launch', label: 'Launch', icon: 'play' },
     { id: 'system', label: 'System', icon: 'settings' },
     { id: 'experiments', label: 'Experiments', icon: 'beaker' },
+    { id: 'launch', label: 'Launch', icon: 'play' },
     { id: 'runs', label: 'Runs', icon: 'list' },
     { id: 'candidates', label: 'Candidates', icon: 'trophy' },
     { id: 'compare', label: 'Compare', icon: 'scale' },
@@ -50,7 +53,7 @@ export default function Sidebar({ currentSurface, onNavigate, isCollapsed }) {
               <button
                 key={item.id}
                 className={`nav-item ${currentSurface === item.id ? 'is-active' : ''}`}
-                onClick={() => onNavigate({ kind: item.id })}
+                onClick={() => navigateToSurface(item.id)}
                 title={item.label}
                 data-action={`open-${item.id}`}
               >

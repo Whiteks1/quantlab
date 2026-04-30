@@ -220,15 +220,6 @@ async function main() {
       );
     }
 
-    const reactParityGatePassed = renderer !== "react" || Boolean(
-      result.parityGatePassed
-      && result.happyPathSystemReady
-      && result.happyPathExperimentsReady
-      && result.happyPathPaperOpsReady
-      && result.happyPathAssistantReady
-      && result.happyPathLaunchReady
-    );
-
     const passed =
       mode === "real-path"
         ? (
@@ -237,7 +228,14 @@ async function main() {
           && result.domReady
           && result.workbenchReady
           && result.happyPathReady
-          && reactParityGatePassed
+          && (renderer !== "react" || Boolean(
+            result.parityGatePassed
+            && result.happyPathSystemReady
+            && result.happyPathExperimentsReady
+            && result.happyPathPaperOpsReady
+            && result.happyPathAssistantReady
+            && result.happyPathLaunchReady
+          ))
           && result.serverReady
           && result.apiReady
         )
@@ -247,7 +245,14 @@ async function main() {
           && result.domReady
           && result.workbenchReady
           && result.happyPathReady
-          && reactParityGatePassed
+          && (renderer !== "react" || Boolean(
+            result.parityGatePassed
+            && result.happyPathSystemReady
+            && result.happyPathExperimentsReady
+            && result.happyPathPaperOpsReady
+            && result.happyPathAssistantReady
+            && result.happyPathLaunchReady
+          ))
           && result.shellReady
           && result.rendererMode === renderer
         );
